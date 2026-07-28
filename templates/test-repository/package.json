@@ -1,0 +1,20 @@
+{
+  "name": "__PROJECT_NAME__",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "playwright test",
+    "test:list": "playwright test --list",
+    "voidr:scaffold": "voidr scaffold",
+    "voidr:build": "voidr build",
+    "voidr:candidate": "voidr deploy-candidate --json"
+  },
+  "dependencies": {
+    "@playwright/test": "1.48.0",
+    "@voidrco/playwright": "1.25.0"
+  }
+}

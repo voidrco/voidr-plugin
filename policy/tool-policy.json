@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "safeRemoteTools": [
+    "applications_list_applications",
+    "applications_get_application",
+    "applications_list_environments",
+    "test_plans_get_test_counts",
+    "test_plans_list_test_plans",
+    "test_plans_get_test_plan",
+    "test_plans_create_test_plan",
+    "test_plans_update_test_plan",
+    "test_plans_populate_test_plan",
+    "test_plans_create_module",
+    "test_plans_update_module",
+    "test_plans_create_suite",
+    "test_plans_update_suite",
+    "test_plans_get_case",
+    "test_plans_create_case",
+    "test_plans_update_case",
+    "executions_list_executions",
+    "executions_create_execution",
+    "executions_get_execution"
+  ],
+  "writeRemoteTools": [
+    "test_plans_create_test_plan",
+    "test_plans_update_test_plan",
+    "test_plans_populate_test_plan",
+    "test_plans_create_module",
+    "test_plans_update_module",
+    "test_plans_create_suite",
+    "test_plans_update_suite",
+    "test_plans_create_case",
+    "test_plans_update_case",
+    "executions_create_execution"
+  ],
+  "writeLocalTools": [
+    "voidr_release_deploy_merged_pr"
+  ],
+  "localTools": [
+    "voidr_auth_status",
+    "voidr_auth_select_organization",
+    "voidr_workspace_inspect",
+    "voidr_workspace_bootstrap_test_repository",
+    "voidr_workspace_select_test_repository",
+    "voidr_release_deploy_merged_pr"
+  ],
+  "forbiddenTools": [
+    "agent_jobs_trigger_automation",
+    "agent_jobs_trigger_hive_automation",
+    "test_plan_generation_generate_test_plan_draft",
+    "failure_reports_self_healing_trigger",
+    "system_batch_execute"
+  ],
+  "forbiddenShellFragments": [
+    "agent_jobs_trigger_automation",
+    "agent_jobs_trigger_hive_automation",
+    "test_plan_generation_generate_test_plan_draft",
+    "failure_reports_self_healing_trigger",
+    "system_batch_execute",
+    "orchestrator-automation-test",
+    "orchestrator-self-healing",
+    "trigger_hive_automation",
+    "triggerAction(sessionId",
+    "triggerAction(",
+    "createSession('orchestrator",
+    "createSession(\"orchestrator"
+  ],
+  "forbiddenDeployShellFragments": [
+    "voidr deploy-latest",
+    "npm run voidr:deploy",
+    "npm run voidr:deploy-latest"
+  ],
+  "forbiddenRequestFragments": [
+    "/agent-jobs/trigger",
+    "/self-healing/trigger",
+    "/self-healing/trigger-bypass",
+    "/assistant/onboarding/automation"
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "name": "voidrco",
+  "owner": {
+    "name": "Voidr"
+  },
+  "metadata": {
+    "description": "Official Voidr plugins for GitHub Copilot CLI",
+    "version": "0.1.0",
+    "pluginRoot": "."
+  },
+  "plugins": [
+    {
+      "name": "copilot",
+      "source": "./",
+      "description": "Develop, deploy, and execute Voidr Playwright tests with explicit safety gates.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Voidr"
+      },
+      "license": "UNLICENSED",
+      "keywords": [
+        "voidr",
+        "playwright",
+        "testing",
+        "test-plan"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "mcpServers": {
+    "voidr": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "${PLUGIN_ROOT}/scripts/voidr-mcp-bridge.mjs"
+      ],
+      "tools": [
+        "voidr_auth_status",
+        "voidr_auth_select_organization",
+        "voidr_workspace_inspect",
+        "voidr_workspace_bootstrap_test_repository",
+        "voidr_workspace_select_test_repository",
+        "voidr_release_deploy_merged_pr",
+        "applications_list_applications",
+        "applications_get_application",
+        "applications_list_environments",
+        "test_plans_get_test_counts",
+        "test_plans_list_test_plans",
+        "test_plans_get_test_plan",
+        "test_plans_create_test_plan",
+        "test_plans_update_test_plan",
+        "test_plans_populate_test_plan",
+        "test_plans_create_module",
+        "test_plans_update_module",
+        "test_plans_create_suite",
+        "test_plans_update_suite",
+        "test_plans_get_case",
+        "test_plans_create_case",
+        "test_plans_update_case",
+        "executions_list_executions",
+        "executions_create_execution",
+        "executions_get_execution"
+      ],
+      "timeout": 120000,
+      "disableToolCache": true
+    }
+  }
+}

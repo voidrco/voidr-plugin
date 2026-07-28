@@ -1,7 +1,7 @@
 {
   "name": "copilot",
   "description": "Develop, deploy, and execute Voidr Playwright tests with explicit test-plan and repository selection.",
-  "version": "0.1.1",
+  "version": "0.1.3",
   "author": {
     "name": "Voidr"
   },

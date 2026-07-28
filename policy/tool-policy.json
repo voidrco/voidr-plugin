@@ -39,6 +39,8 @@
   "localTools": [
     "voidr_auth_status",
     "voidr_auth_select_organization",
+    "voidr_auth_prepare_service_account",
+    "voidr_auth_import_service_account",
     "voidr_workspace_inspect",
     "voidr_workspace_bootstrap_test_repository",
     "voidr_workspace_select_test_repository",
@@ -75,5 +77,10 @@
     "/self-healing/trigger",
     "/self-healing/trigger-bypass",
     "/assistant/onboarding/automation"
+  ],
+  "protectedCredentialFragments": [
+    ".voidr/service-accounts.json",
+    ".voidr/copilot-service-account.json",
+    "copilot-service-account.json"
   ]
 }

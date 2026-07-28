@@ -113,6 +113,10 @@ const entrySkill = readFileSync(
   join(root, 'skills/voidr-develop-tests/SKILL.md'),
   'utf8'
 )
+const connectSkill = readFileSync(
+  join(root, 'skills/voidr-connect/SKILL.md'),
+  'utf8'
+)
 const questionIndex = entrySkill.indexOf(
   'Você quer criar um novo Test Plan ou trabalhar em um Test Plan existente?'
 )
@@ -148,6 +152,30 @@ assert(
       entrySkill
     ),
   'Entry skill must separate MCP applications from workspace repositories.'
+)
+assert(
+  /If `serviceAccountSelectionRequired` is true, ask which local Service Account/i.test(
+    connectSkill
+  ),
+  'Connect skill must ask which locally available Service Account to use.'
+)
+assert(
+  /If no local Service Account exists, call[\s\S]*?`voidr_auth_prepare_service_account` immediately/i.test(
+    connectSkill
+  ),
+  'Connect skill must prepare the protected credential JSON when none is local.'
+)
+assert(
+  /When the user replies that the file is ready, call[\s\S]*?`voidr_auth_import_service_account`/i.test(
+    connectSkill
+  ),
+  'Connect skill must import the protected credential JSON after confirmation.'
+)
+assert(
+  /Never inspect the JSON with file,[\s\S]*?shell,[\s\S]*?editor,[\s\S]*?workspace tools/i.test(
+    connectSkill
+  ),
+  'Connect skill must keep credential JSON contents hidden from the model.'
 )
 
 const allRepositoryText = findFiles(root)

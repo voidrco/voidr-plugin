@@ -28,6 +28,15 @@ const toolArgs = payload.toolArgs ?? payload.tool_input ?? {}
 const serializedArgs = safelyStringify(toolArgs)
 const searchable = `${rawToolName}\n${toolName}\n${serializedArgs}`.toLowerCase()
 
+const protectedCredential = (policy.protectedCredentialFragments || []).find(
+  fragment => searchable.includes(fragment.toLowerCase())
+)
+if (protectedCredential) {
+  deny(
+    'Blocked by Voidr policy: Service Account credential files can only be handled by the protected local authentication tools.'
+  )
+}
+
 const forbiddenTool = policy.forbiddenTools.find(name =>
   searchable.includes(name.toLowerCase())
 )

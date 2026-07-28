@@ -10,6 +10,10 @@ import {
   validateRepositorySelection
 } from './lib/workspace.mjs'
 import { deployMergedPullRequest } from './lib/release-deploy.mjs'
+import {
+  importServiceAccount,
+  prepareServiceAccountImport
+} from './lib/service-account-import.mjs'
 
 const policy = loadPolicy()
 const safeRemote = new Set(policy.safeRemoteTools)
@@ -35,6 +39,18 @@ const localTools = [
       },
       required: ['organizationId']
     }
+  },
+  {
+    name: 'voidr_auth_prepare_service_account',
+    description:
+      'Create and open a protected local JSON for the user to fill with a Voidr Client ID and Client Secret. Never returns credential values.',
+    inputSchema: { type: 'object', properties: {} }
+  },
+  {
+    name: 'voidr_auth_import_service_account',
+    description:
+      'Validate and import the protected local Service Account JSON without exposing credentials to the model.',
+    inputSchema: { type: 'object', properties: {} }
   },
   {
     name: 'voidr_workspace_inspect',
@@ -209,6 +225,13 @@ async function callLocal(name, args) {
         organizationName: selected.account?.orgName || null,
         scopes: selected.account?.scopes || []
       })
+    }
+    case 'voidr_auth_prepare_service_account':
+      return textResult(await prepareServiceAccountImport())
+    case 'voidr_auth_import_service_account': {
+      const imported = await importServiceAccount()
+      remote.reset()
+      return textResult(imported)
     }
     case 'voidr_workspace_inspect':
       return textResult(

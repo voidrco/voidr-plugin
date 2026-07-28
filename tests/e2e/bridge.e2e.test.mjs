@@ -127,6 +127,8 @@ test('bridge filters discovery, keeps secrets local, and blocks forbidden calls'
   assert.equal(names.includes('applications_list_applications'), true)
   assert.equal(names.includes('test_plans_create_test_plan'), true)
   assert.equal(names.includes('voidr_auth_status'), true)
+  assert.equal(names.includes('voidr_auth_prepare_service_account'), true)
+  assert.equal(names.includes('voidr_auth_import_service_account'), true)
   assert.equal(names.includes('agent_jobs_trigger_hive_automation'), false)
   assert.equal(names.includes('system_batch_execute'), false)
 

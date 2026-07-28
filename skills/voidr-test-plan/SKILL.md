@@ -10,6 +10,19 @@ Never call a tool that starts a Hive process. Draft plans locally from the
 user's answers and repository context; use only Test Plan CRUD tools to
 persist an approved result.
 
+## Authentication gate
+
+Unless the calling workflow already confirmed authentication, call
+`voidr_auth_status` before any application or Test Plan tool.
+
+If it returns `authenticated: false`, stop and reply only:
+
+> A Voidr não está conectada. Execute `/copilot voidr-connect` para conectar
+> uma Service Account. Depois volte e continue este fluxo.
+
+Do not ask for application details or continue drafting until authentication
+is confirmed.
+
 ## Select the owning Voidr application
 
 This step is mandatory for both new and existing plans:

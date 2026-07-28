@@ -154,6 +154,12 @@ assert(
   'Entry skill must separate MCP applications from workspace repositories.'
 )
 assert(
+  /If it returns `authenticated: false`, stop the current workflow and reply[\s\S]*?\/copilot voidr-connect/i.test(
+    entrySkill
+  ),
+  'Entry skill must stop and redirect missing authentication to /copilot voidr-connect.'
+)
+assert(
   /If `serviceAccountSelectionRequired` is true, ask which local Service Account/i.test(
     connectSkill
   ),

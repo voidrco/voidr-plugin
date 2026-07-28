@@ -39,6 +39,29 @@ test('asks new versus existing before any tool action', () => {
   )
 })
 
+test('missing authentication stops and redirects to voidr-connect', () => {
+  let workflow = createWorkflow()
+  workflow = transition(workflow, {
+    type: 'PLAN_MODE_CHOSEN',
+    mode: 'new'
+  })
+  workflow = transition(workflow, {
+    type: 'AUTHENTICATION_MISSING'
+  })
+
+  assert.equal(workflow.state, States.AUTHENTICATION_REQUIRED)
+  assert.deepEqual(workflow.actions, [])
+  assert.match(workflow.prompt, /\/copilot voidr-connect/)
+  assert.throws(
+    () =>
+      transition(workflow, {
+        type: 'AUTHENTICATION_CONFIRMED',
+        organizationId: 'org-voidr'
+      }),
+    /Expected PLAN_MODE_SELECTED/
+  )
+})
+
 test('new plan requires approval before platform mutations', () => {
   let workflow = createWorkflow()
   workflow = transition(workflow, {

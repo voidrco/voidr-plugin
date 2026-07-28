@@ -41,13 +41,21 @@ implementation are performed by the Copilot agent itself.
 
 Call `voidr_auth_status`.
 
+- If it returns `authenticated: false`, stop the current workflow and reply
+  only:
+
+  > A Voidr não está conectada. Execute `/copilot voidr-connect` para conectar
+  > uma Service Account. Depois volte e continue este fluxo.
+
+  Do not explain manual provisioning, suggest `npx voidr login`, ask another
+  question, or call any application, Test Plan, workspace, deploy, or execution
+  tool.
 - If multiple organizations exist and none was explicitly chosen, show their
   names and ask which one to use.
 - Call `voidr_auth_select_organization` only after the user chooses.
-- If the account is missing, stop and explain that a Voidr Service Account
-  must be provisioned. Do not call `npx voidr login`.
 - If `write` is absent, allow read-only discovery but stop before plan,
-  deploy, or execution mutations.
+  deploy, or execution mutations. Direct the user to
+  `/copilot voidr-connect` before a mutation.
 - Never ask the user to paste a client secret into chat.
 
 ## 3. Select the Voidr application through MCP

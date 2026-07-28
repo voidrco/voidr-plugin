@@ -132,6 +132,23 @@ test('natural-language greenfield journey reaches deploy and execution through e
   )
 })
 
+test('greenfield journey without credentials redirects to voidr-connect and stops', () => {
+  let workflow = createWorkflow()
+  workflow = transition(workflow, {
+    type: 'PLAN_MODE_CHOSEN',
+    mode: 'new'
+  })
+  workflow = transition(workflow, {
+    type: 'AUTHENTICATION_MISSING'
+  })
+
+  assert.equal(workflow.state, States.AUTHENTICATION_REQUIRED)
+  assert.deepEqual(workflow.actions, [])
+  assert.equal(workflow.context.organizationId, null)
+  assert.equal(workflow.context.applicationId, null)
+  assert.match(workflow.prompt, /\/copilot voidr-connect/)
+})
+
 test('existing-plan journey does not use project.json as a selector', () => {
   let workflow = createWorkflow()
   workflow = transition(workflow, {

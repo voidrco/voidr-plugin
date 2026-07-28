@@ -10,15 +10,28 @@ Never call a tool that starts a Hive process. Draft plans locally from the
 user's answers and repository context; use only Test Plan CRUD tools to
 persist an approved result.
 
-## Existing plan
+## Select the owning Voidr application
+
+This step is mandatory for both new and existing plans:
 
 1. Call `applications_list_applications`.
-2. Ask the user to select an application if it is not already explicit.
-3. Call `test_plans_list_test_plans` for that application.
-4. Show plan name, ID, status, and test count. Ask the user to select one.
-5. Call `test_plans_get_test_plan` for the selected ID.
-6. Ask whether to implement all pending cases or a named subset.
-7. Repeat the exact selected case slugs and wait for confirmation.
+2. Build choices only from applications returned by MCP. Never use workspace
+   directories, repository names, Git remotes, or local files as application
+   options.
+3. Ask the user to select an application if it is not already explicit and
+   uniquely matched in the MCP response.
+4. Keep the returned application ID as the authoritative `applicationId`.
+
+One application may be implemented by multiple product repositories. Repository
+selection is a later, separate decision and cannot change `applicationId`.
+
+## Existing plan
+
+1. Call `test_plans_list_test_plans` for the selected application.
+2. Show plan name, ID, status, and test count. Ask the user to select one.
+3. Call `test_plans_get_test_plan` for the selected ID.
+4. Ask whether to implement all pending cases or a named subset.
+5. Repeat the exact selected case slugs and wait for confirmation.
 
 Never resolve the plan from `project.json`.
 
@@ -26,11 +39,10 @@ Never resolve the plan from `project.json`.
 
 Ask only the missing questions, preferably in small groups:
 
-1. Which existing Voidr application owns the plan?
-2. Is the target WEB or API, and which environment/base URL is relevant?
-3. Which critical user journeys or business risks must be covered?
-4. Which behavior is explicitly out of scope?
-5. What data, accounts, or preconditions are available?
+1. Is the target WEB or API, and which environment/base URL is relevant?
+2. Which critical user journeys or business risks must be covered?
+3. Which behavior is explicitly out of scope?
+4. What data, accounts, or preconditions are available?
 
 Use product repositories only as read-only supporting context and only after
 the user identifies them.

@@ -19,6 +19,24 @@ test('asks new versus existing before any tool action', () => {
   assert.deepEqual(chosen.actions, [
     { tool: 'voidr_auth_status', mutation: false }
   ])
+
+  const authenticated = transition(chosen, {
+    type: 'AUTHENTICATION_CONFIRMED',
+    organizationId: 'org-voidr'
+  })
+  assert.equal(authenticated.state, States.AUTHENTICATED)
+  assert.deepEqual(authenticated.actions, [
+    { tool: 'applications_list_applications', mutation: false }
+  ])
+  assert.throws(
+    () =>
+      transition(chosen, {
+        type: 'APPLICATION_SELECTED',
+        applicationId: 'workspace-folder',
+        applicationName: 'demo-consulta-pj'
+      }),
+    /Expected AUTHENTICATED/
+  )
 })
 
 test('new plan requires approval before platform mutations', () => {
@@ -27,6 +45,7 @@ test('new plan requires approval before platform mutations', () => {
     type: 'PLAN_MODE_CHOSEN',
     mode: 'new'
   })
+  workflow = selectApplicationFromMcp(workflow)
   workflow = transition(workflow, {
     type: 'NEW_PLAN_DRAFTED',
     caseSlugs: ['LOGIN-001', 'LOGIN-002']
@@ -154,6 +173,7 @@ function existingPlanThroughRepositorySelection() {
     type: 'PLAN_MODE_CHOSEN',
     mode: 'existing'
   })
+  workflow = selectApplicationFromMcp(workflow)
   workflow = transition(workflow, {
     type: 'EXISTING_PLAN_SELECTED',
     planId: 'abcdef0123456789abcdef01',
@@ -165,6 +185,21 @@ function existingPlanThroughRepositorySelection() {
   return transition(workflow, {
     type: 'TEST_REPOSITORY_SELECTED',
     path: '/workspace/checkout-tests'
+  })
+}
+
+function selectApplicationFromMcp(workflow) {
+  workflow = transition(workflow, {
+    type: 'AUTHENTICATION_CONFIRMED',
+    organizationId: 'org-voidr'
+  })
+  assert.deepEqual(workflow.actions, [
+    { tool: 'applications_list_applications', mutation: false }
+  ])
+  return transition(workflow, {
+    type: 'APPLICATION_SELECTED',
+    applicationId: 'app-voidr',
+    applicationName: 'Voidr Monitor'
   })
 }
 

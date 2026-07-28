@@ -126,6 +126,29 @@ assert(
   /Do not inspect `project\.json`[\s\S]*?before the user answers/i.test(entrySkill),
   'Entry skill must prohibit project.json inference before intent.'
 )
+assert(
+  /first response must ask exactly one decision/i.test(entrySkill),
+  'Entry skill must keep plan mode as the only first-turn decision.'
+)
+const applicationDiscoveryIndex = entrySkill.indexOf(
+  'applications_list_applications'
+)
+const workspaceDiscoveryIndex = entrySkill.indexOf('voidr_workspace_inspect')
+assert(
+  applicationDiscoveryIndex >= 0 &&
+    workspaceDiscoveryIndex >= 0 &&
+    applicationDiscoveryIndex < workspaceDiscoveryIndex,
+  'Entry skill must discover Voidr applications before workspace repositories.'
+)
+assert(
+  /Build application choices exclusively from that tool response/i.test(
+    entrySkill
+  ) &&
+    /workspace folder is a repository candidate, never an application candidate/i.test(
+      entrySkill
+    ),
+  'Entry skill must separate MCP applications from workspace repositories.'
+)
 
 const allRepositoryText = findFiles(root)
   .filter(path => !path.includes(`${join(root, 'tests')}/`))

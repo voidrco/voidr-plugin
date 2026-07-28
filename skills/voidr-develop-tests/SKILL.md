@@ -11,12 +11,14 @@ including indirectly through a generic or batch tool.
 
 ## 1. Establish intent before tools
 
-For a new conversation, the first response must ask:
+For a new conversation, the first response must ask exactly one decision:
 
 > Você quer criar um novo Test Plan ou trabalhar em um Test Plan existente?
 
-Do not inspect `project.json`, scan repositories, or call a platform tool
-before the user answers. A local file is not evidence of current intent.
+Do not include application, flow, or repository questions in that first
+question batch. Do not inspect `project.json`, scan repositories, or call a
+platform tool before the user answers. A local file is not evidence of current
+intent.
 
 After the answer, keep these values explicit and separate:
 
@@ -26,6 +28,11 @@ After the answer, keep these values explicit and separate:
 - selected writable test repository;
 - optional product repositories used as read-only context;
 - selected test-case slugs.
+
+An application is a Voidr platform entity identified by `applicationId`. A
+workspace folder is a repository candidate, never an application candidate.
+One Voidr application may use multiple product repositories and a separate test
+repository, so never infer or rank applications from directory names.
 
 Never call a tool that starts a Hive process. Plan drafting and Playwright
 implementation are performed by the Copilot agent itself.
@@ -43,7 +50,27 @@ Call `voidr_auth_status`.
   deploy, or execution mutations.
 - Never ask the user to paste a client secret into chat.
 
-## 3. Route by Test Plan mode
+## 3. Select the Voidr application through MCP
+
+After authentication and organization selection:
+
+1. Call `applications_list_applications`.
+2. Build application choices exclusively from that tool response. Show each
+   returned application name and ID.
+3. Ask the user to select one when there is more than one result or the target
+   remains ambiguous.
+4. If the user named an application, match it only against the MCP response.
+   Ask on multiple matches and stop if no match exists.
+5. Optionally call `applications_get_application` for the selected ID when
+   details are needed.
+
+Never use `voidr_workspace_inspect`, Explorer folders, Git remotes,
+`package.json`, or `project.json` to populate the application question. Do not
+offer a generic “application or flow” choice based on workspace directories.
+
+Keep the selected `applicationId` authoritative for all Test Plan calls.
+
+## 4. Route by Test Plan mode
 
 For a new Test Plan, follow `/voidr-test-plan` in create mode.
 
@@ -52,7 +79,7 @@ For an existing Test Plan, follow `/voidr-test-plan` in select mode.
 Do not proceed until the plan ID, application ID, organization ID, and exact
 case scope are visible to the user.
 
-## 4. Choose the repository only after the plan
+## 5. Choose repositories only after the plan
 
 Ask:
 
@@ -80,7 +107,11 @@ For a new repository:
 Product repositories remain read-only. Never write to a repository merely
 because it contains product code or a `project.json`.
 
-## 5. Continue through the gates
+After selecting the test repository, ask separately whether the user wants to
+attach zero, one, or multiple product repositories as read-only context. Do not
+change the selected application when product repositories are added.
+
+## 6. Continue through the gates
 
 Use `/voidr-implement-tests` for repository validation, scaffolding,
 implementation, and local validation.

@@ -27,6 +27,20 @@ test('natural-language greenfield journey reaches deploy and execution through e
   ])
 
   workflow = transition(workflow, {
+    type: 'AUTHENTICATION_CONFIRMED',
+    organizationId: 'org-blip'
+  })
+  assert.deepEqual(workflow.actions, [
+    { tool: 'applications_list_applications', mutation: false }
+  ])
+  workflow = transition(workflow, {
+    type: 'APPLICATION_SELECTED',
+    applicationId: 'app-monitor',
+    applicationName: 'Blip Monitor'
+  })
+  assert.equal(workflow.context.applicationId, 'app-monitor')
+
+  workflow = transition(workflow, {
     type: 'NEW_PLAN_DRAFTED',
     caseSlugs: ['AUTH-001', 'AUTH-002']
   })
@@ -123,6 +137,18 @@ test('existing-plan journey does not use project.json as a selector', () => {
   workflow = transition(workflow, {
     type: 'PLAN_MODE_CHOSEN',
     mode: 'existing'
+  })
+  workflow = transition(workflow, {
+    type: 'AUTHENTICATION_CONFIRMED',
+    organizationId: 'org-blip'
+  })
+  assert.deepEqual(workflow.actions, [
+    { tool: 'applications_list_applications', mutation: false }
+  ])
+  workflow = transition(workflow, {
+    type: 'APPLICATION_SELECTED',
+    applicationId: 'app-monitor',
+    applicationName: 'Blip Monitor'
   })
   workflow = transition(workflow, {
     type: 'EXISTING_PLAN_SELECTED',

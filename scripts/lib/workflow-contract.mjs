@@ -1,6 +1,8 @@
 export const States = Object.freeze({
   INTAKE: 'INTAKE',
   PLAN_MODE_SELECTED: 'PLAN_MODE_SELECTED',
+  AUTHENTICATED: 'AUTHENTICATED',
+  APPLICATION_SELECTED: 'APPLICATION_SELECTED',
   PLAN_DRAFTED: 'PLAN_DRAFTED',
   PLAN_LOADED: 'PLAN_LOADED',
   PLAN_APPROVED: 'PLAN_APPROVED',
@@ -21,6 +23,9 @@ export function createWorkflow() {
     state: States.INTAKE,
     context: {
       planMode: null,
+      organizationId: null,
+      applicationId: null,
+      applicationName: null,
       planId: null,
       selectedCases: [],
       testRepository: null,
@@ -55,8 +60,33 @@ export function transition(workflow, event) {
       next.actions.push({ tool: 'voidr_auth_status', mutation: false })
       return next
 
-    case 'NEW_PLAN_DRAFTED':
+    case 'AUTHENTICATION_CONFIRMED':
       requireState(next, States.PLAN_MODE_SELECTED)
+      if (!event.organizationId) {
+        throw new Error('An explicit organization ID is required.')
+      }
+      next.context.organizationId = event.organizationId
+      next.state = States.AUTHENTICATED
+      next.actions.push({
+        tool: 'applications_list_applications',
+        mutation: false
+      })
+      return next
+
+    case 'APPLICATION_SELECTED':
+      requireState(next, States.AUTHENTICATED)
+      if (!event.applicationId || !event.applicationName) {
+        throw new Error(
+          'Application must be selected from applications_list_applications.'
+        )
+      }
+      next.context.applicationId = event.applicationId
+      next.context.applicationName = event.applicationName
+      next.state = States.APPLICATION_SELECTED
+      return next
+
+    case 'NEW_PLAN_DRAFTED':
+      requireState(next, States.APPLICATION_SELECTED)
       if (next.context.planMode !== 'new') throw new Error('Not in new-plan mode.')
       next.state = States.PLAN_DRAFTED
       next.context.selectedCases = [...event.caseSlugs]
@@ -77,7 +107,7 @@ export function transition(workflow, event) {
       return next
 
     case 'EXISTING_PLAN_SELECTED':
-      requireState(next, States.PLAN_MODE_SELECTED)
+      requireState(next, States.APPLICATION_SELECTED)
       if (next.context.planMode !== 'existing') {
         throw new Error('Not in existing-plan mode.')
       }

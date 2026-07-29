@@ -1,97 +1,28 @@
 #!/usr/bin/env node
 
 import { emitKeypressEvents } from 'node:readline'
-import { upsertOrganizationAccount } from './lib/credentials.mjs'
+import { validateAndStoreServiceAccount } from './lib/service-account-import.mjs'
 
 const options = parseArgs(process.argv.slice(2))
-if (!options['client-id']) fail('Missing required option --client-id')
+const clientId =
+  options['client-id'] || (await readVisibleValue('Client ID: '))
+if (!clientId) fail('Client ID is required.')
 
 const clientSecret =
   process.env.VOIDR_CLIENT_SECRET || (await readHiddenSecret('Client secret: '))
 if (!clientSecret) fail('Client secret is required.')
 
-const tokenUrl =
-  options['token-url'] ||
-  process.env.VOIDR_TOKEN_URL ||
-  'https://api.voidr.co/v1/service-accounts/token'
-
-let response
 try {
-  response = await fetch(tokenUrl, {
-    method: 'POST',
-    headers: {
-      accept: 'application/json',
-      'content-type': 'application/json'
-    },
-    body: JSON.stringify({
-      grantType: 'client_credentials',
-      clientId: options['client-id'],
-      clientSecret
-    })
+  const result = await validateAndStoreServiceAccount({
+    clientId,
+    clientSecret,
+    organizationId: options['org-id'],
+    organizationName: options['org-name'],
+    tokenUrl: options['token-url']
   })
-} catch {
-  fail('Could not reach the Voidr token endpoint.')
-}
-
-if (!response.ok) {
-  fail(
-    response.status === 401 || response.status === 403
-      ? 'Voidr rejected the Service Account.'
-      : `Voidr token validation failed with HTTP ${response.status}.`
-  )
-}
-
-let tokenResponse
-try {
-  tokenResponse = await response.json()
-} catch {
-  fail('Voidr returned an invalid token response.')
-}
-const accessToken = tokenResponse.access_token
-if (!accessToken) fail('Voidr returned no access token.')
-
-const claims = decodeJwtPayload(accessToken)
-const organizationId = options['org-id'] || claims.organizationId
-if (!organizationId) {
-  fail('The token does not identify an organization; pass --org-id explicitly.')
-}
-if (options['org-id'] && claims.organizationId !== options['org-id']) {
-  fail('The Service Account belongs to a different organization.')
-}
-
-const scopes = Array.isArray(claims.scopes) ? claims.scopes.map(String) : []
-if (!scopes.map(scope => scope.toLowerCase()).includes('write')) {
-  fail(
-    'The Service Account is read-only. Create or rotate one with read and write scopes.'
-  )
-}
-
-const status = upsertOrganizationAccount(organizationId, {
-  clientId: options['client-id'],
-  clientSecret,
-  orgName: options['org-name'] || claims.name || null,
-  scopes
-})
-
-process.stdout.write(
-  `${JSON.stringify({
-    connected: true,
-    organizationId: status.organizationId,
-    organizationName: status.organizationName,
-    clientIdHint: status.clientIdHint,
-    scopes: status.scopes,
-    credentialStore: status.credentialStore
-  })}\n`
-)
-
-function decodeJwtPayload(token) {
-  const parts = String(token).split('.')
-  if (parts.length !== 3) fail('Voidr returned a malformed access token.')
-  try {
-    return JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'))
-  } catch {
-    fail('Voidr returned a token with an invalid payload.')
-  }
+  process.stdout.write(`${JSON.stringify(result)}\n`)
+} catch (error) {
+  fail(error instanceof Error ? error.message : 'Voidr connection failed.')
 }
 
 async function readHiddenSecret(prompt) {
@@ -147,6 +78,23 @@ function parseArgs(args) {
     index += 1
   }
   return parsed
+}
+
+function readVisibleValue(prompt) {
+  if (!process.stdin.isTTY) {
+    fail(
+      'A terminal is required for Client ID input. Run this command directly in a terminal.'
+    )
+  }
+  process.stdout.write(prompt)
+  process.stdin.setEncoding('utf8')
+  process.stdin.resume()
+  return new Promise(resolveValue => {
+    process.stdin.once('data', chunk => {
+      process.stdin.pause()
+      resolveValue(String(chunk).trim())
+    })
+  })
 }
 
 function fail(message) {

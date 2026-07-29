@@ -12,8 +12,10 @@ This plugin guides a developer from “I want to develop tests in Voidr” throu
 
 It reuses existing Voidr Service Accounts from
 `~/.voidr/service-accounts.json`. It does not call `npx voidr login` and never
-returns a client secret to Copilot. `/voidr-connect` provides a one-time,
-terminal-only connector when a writable account still needs to be installed.
+returns a client secret to Copilot. `/voidr-connect` opens a protected local
+JSON when a writable account still needs to be installed. The user fills the
+Client ID and Client Secret, saves, and replies `pronto`; a local MCP tool
+validates and imports the account without showing either value to the model.
 
 ## Local development
 
@@ -47,7 +49,7 @@ deployment-related synchronization, and execution creation. If it is absent
 or read-only, the plugin stops before a mutation.
 
 Never paste a Service Account secret into the chat. Provision or rotate it in
-the Voidr platform, then store it through an approved local onboarding flow.
+the Voidr platform, then use the protected JSON opened by `/voidr-connect`.
 
 ## Security
 

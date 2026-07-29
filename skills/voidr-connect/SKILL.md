@@ -1,6 +1,6 @@
 ---
 name: voidr-connect
-description: Checks or securely connects a Voidr Service Account for the Copilot plugin without using npx voidr login or exposing a secret to the model. Use when Voidr authentication is missing or read-only.
+description: Checks or securely connects a Voidr Service Account through a protected local JSON without using npx voidr login or exposing a secret to the model. Use when Voidr authentication is missing, read-only, or needs another local account.
 argument-hint: "[organization]"
 ---
 
@@ -8,32 +8,45 @@ argument-hint: "[organization]"
 
 Never call a tool that starts a Hive process.
 
-Call `voidr_auth_status` first.
+## Connect
 
-- If the intended organization is already selected and `canWrite` is true,
-  report that no login is required.
-- If several organizations exist, ask which organization the user intends to
-  use. Do not choose from an active `project.json`.
-- If the account is read-only, explain that a new or rotated Service Account
-  with `read` and `write` scopes is required.
+1. Call `voidr_auth_status`.
+2. Treat `serviceAccounts` as the complete list available on this machine,
+   never as a platform listing.
+3. If no local Service Account exists, call
+   `voidr_auth_prepare_service_account` immediately.
+4. Tell the user to fill `clientId` and `clientSecret` in the JSON that opened,
+   save it, and reply `pronto`. If `opened` is false, give only the returned
+   file path so the user can open it manually.
+5. End the response. Do not ask for either credential in chat.
+6. When the user replies that the file is ready, call
+   `voidr_auth_import_service_account`. Never inspect the JSON with file,
+   shell, editor, or workspace tools.
+7. On successful import, call `voidr_auth_status` again and confirm the
+   organization, Service Account name, and write access. The import tool
+   removes the temporary JSON after validation.
+8. On import failure, report only the returned safe error. Do not read or
+   reproduce the file contents.
 
-Never ask for a client secret in chat and never pass it as a shell argument.
+## Select an existing local account
 
-The user must create or select the scoped Service Account in the Voidr
-platform, copy the one-time secret, and run the connector directly in a
-regular terminal:
+- If `serviceAccountSelectionRequired` is true, ask which local Service Account
+  to use before judging the active one. Show account name when present,
+  organization name/ID, masked Client ID, and scopes. End the response.
+- After the user chooses, call `voidr_auth_select_organization` with that
+  entry's organization ID, then call `voidr_auth_status` again.
+- If exactly one local Service Account exists, use it without asking.
+- If the selected account has `canWrite: true`, report that no connection is
+  required.
+- If it is read-only, first offer another local account with write access. If
+  none exists, call `voidr_auth_prepare_service_account` to connect a new or
+  rotated credential through the protected JSON.
 
-```sh
-node "${COPILOT_HOME:-$HOME/.copilot}/installed-plugins/voidrco/copilot/scripts/connect-service-account.mjs" \
-  --client-id <client-id> \
-  --org-id <organization-id> \
-  --org-name "<organization-name>"
-```
+## Safety
 
-The connector prompts for the secret without echo, validates it against the
-Voidr token endpoint, verifies the organization and `write` scope, and only
-then updates `~/.voidr/service-accounts.json` with mode `0600` where
-supported.
-
-After the user says the connector completed, call `voidr_auth_status` again.
-Do not continue to a platform mutation unless `canWrite` is true.
+- Never ask for or accept a Client Secret in chat.
+- Never place credentials in a command, tool argument, or response.
+- Never read the protected JSON through model-visible tools.
+- Never choose an account from `project.json`, repository names, or workspace
+  folders.
+- Do not continue to a platform mutation unless `canWrite` is true.

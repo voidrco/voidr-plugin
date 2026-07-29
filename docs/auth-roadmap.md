@@ -7,13 +7,15 @@ valid account in `~/.voidr/service-accounts.json`. This is the same credential
 store used by the Playwright framework, so no repository-specific MCP file and
 no second browser callback are needed.
 
-For a new or read-only developer, `/voidr-connect` uses a terminal-only helper:
+For a new or read-only developer, `/voidr-connect` uses a protected local JSON:
 
 1. the user creates or rotates a `read` + `write` Service Account in Voidr;
-2. the helper reads the one-time secret without echo;
-3. it exchanges the credentials at the token endpoint;
-4. it verifies organization and scope claims;
-5. it persists only after validation.
+2. the plugin creates and opens `~/.voidr/copilot-service-account.json` with
+   mode `0600`;
+3. the user fills Client ID and Client Secret and saves the file;
+4. a local MCP tool exchanges the credentials at the token endpoint;
+5. it verifies organization and scope claims, persists only after validation,
+   and removes the temporary JSON.
 
 The model never receives the secret or access token.
 

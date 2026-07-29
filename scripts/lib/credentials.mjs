@@ -71,8 +71,11 @@ export function resolveCredential() {
     accounts: orgIds.map(id => ({
       orgId: id,
       orgName: store.accounts[id]?.orgName || null,
+      accountName: store.accounts[id]?.accountName || null,
       scopes: normalizeScopes(store.accounts[id]?.scopes),
-      clientIdHint: maskClientId(store.accounts[id]?.clientId)
+      clientIdHint: maskClientId(store.accounts[id]?.clientId),
+      selected: id === orgId,
+      canWrite: normalizeScopes(store.accounts[id]?.scopes).includes('write')
     }))
   }
 }
@@ -117,6 +120,8 @@ export function upsertOrganizationAccount(orgId, account) {
       clientId: account.clientId,
       clientSecret: account.clientSecret,
       orgName: account.orgName || store.accounts[orgId]?.orgName || null,
+      accountName:
+        account.accountName || store.accounts[orgId]?.accountName || null,
       scopes: normalizeScopes(account.scopes),
       createdAt: account.createdAt || Date.now()
     }
@@ -138,6 +143,7 @@ export function upsertOrganizationAccount(orgId, account) {
 export function authStatus() {
   const resolved = resolveCredential()
   const scopes = normalizeScopes(resolved.account?.scopes)
+  const serviceAccounts = resolved.accounts || []
   const authenticated = Boolean(
     resolved.account?.clientId && resolved.account?.clientSecret
   )
@@ -154,7 +160,10 @@ export function authStatus() {
     canRead: authenticated,
     canWrite: authenticated && scopes.includes('write'),
     scopeStatus: scopes.length ? 'known' : 'legacy-read-only',
-    accounts: resolved.accounts || [],
+    // `accounts` is preserved for compatibility with the Playwright framework.
+    accounts: serviceAccounts,
+    serviceAccounts,
+    serviceAccountSelectionRequired: serviceAccounts.length > 1,
     credentialStore: resolved.path || null,
     credentialStoreInvalid: resolved.invalid === true
   }

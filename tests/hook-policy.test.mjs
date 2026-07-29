@@ -133,6 +133,31 @@ test('denies direct HTTP calls to process-dispatch endpoints', () => {
   }
 })
 
+test('denies model-visible access to Voidr credential files', () => {
+  for (const payload of [
+    {
+      toolName: 'read_file',
+      toolArgs: {
+        path: '/Users/test/.voidr/copilot-service-account.json'
+      }
+    },
+    {
+      toolName: 'bash',
+      toolArgs: {
+        command: 'cat ~/.voidr/service-accounts.json'
+      }
+    }
+  ]) {
+    const output = runHook({
+      sessionId: 'protected-credentials',
+      cwd: process.cwd(),
+      ...payload
+    })
+    assert.equal(output.permissionDecision, 'deny')
+    assert.match(output.permissionDecisionReason, /credential files/i)
+  }
+})
+
 test('restricts edit paths after a test repository is selected', () => {
   const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
   const workspace = mkdtempSync(join(tmpdir(), 'voidr-workspace-'))

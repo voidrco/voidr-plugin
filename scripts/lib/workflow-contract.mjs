@@ -1,6 +1,7 @@
 export const States = Object.freeze({
   INTAKE: 'INTAKE',
   PLAN_MODE_SELECTED: 'PLAN_MODE_SELECTED',
+  AUTHENTICATION_REQUIRED: 'AUTHENTICATION_REQUIRED',
   AUTHENTICATED: 'AUTHENTICATED',
   APPLICATION_SELECTED: 'APPLICATION_SELECTED',
   PLAN_DRAFTED: 'PLAN_DRAFTED',
@@ -71,6 +72,13 @@ export function transition(workflow, event) {
         tool: 'applications_list_applications',
         mutation: false
       })
+      return next
+
+    case 'AUTHENTICATION_MISSING':
+      requireState(next, States.PLAN_MODE_SELECTED)
+      next.state = States.AUTHENTICATION_REQUIRED
+      next.prompt =
+        'A Voidr não está conectada. Execute `/copilot voidr-connect` para conectar uma Service Account. Depois volte e continue este fluxo.'
       return next
 
     case 'APPLICATION_SELECTED':

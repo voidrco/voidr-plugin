@@ -22,6 +22,7 @@ test('reuses the framework Service Account store without exposing secrets', () =
           clientId: 'sa_synthetic_org_a',
           clientSecret: secret,
           orgName: 'Acme QA',
+          accountName: 'Copilot Writer',
           scopes: ['read', 'write']
         },
         'org-b': {
@@ -41,6 +42,11 @@ test('reuses the framework Service Account store without exposing secrets', () =
     assert.equal(status.authenticated, true)
     assert.equal(status.organizationId, 'org-a')
     assert.equal(status.canWrite, true)
+    assert.equal(status.serviceAccountSelectionRequired, true)
+    assert.equal(status.serviceAccounts.length, 2)
+    assert.equal(status.serviceAccounts[0].accountName, 'Copilot Writer')
+    assert.equal(status.serviceAccounts[0].selected, true)
+    assert.equal(status.serviceAccounts[0].canWrite, true)
     assert.equal(JSON.stringify(status).includes(secret), false)
 
     const header = basicAuthorizationHeader()
@@ -57,6 +63,32 @@ test('reuses the framework Service Account store without exposing secrets', () =
   } finally {
     if (previous === undefined) delete process.env.VOIDR_SERVICE_ACCOUNTS_PATH
     else process.env.VOIDR_SERVICE_ACCOUNTS_PATH = previous
+  }
+})
+
+test('reports an empty isolated store as no configured Service Account', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'voidr-auth-empty-'))
+  const storePath = join(dir, 'missing-service-accounts.json')
+  const previous = process.env.VOIDR_SERVICE_ACCOUNTS_PATH
+  const previousClientId = process.env.VOIDR_CLIENT_ID
+  const previousClientSecret = process.env.VOIDR_CLIENT_SECRET
+  process.env.VOIDR_SERVICE_ACCOUNTS_PATH = storePath
+  delete process.env.VOIDR_CLIENT_ID
+  delete process.env.VOIDR_CLIENT_SECRET
+  try {
+    const status = authStatus()
+    assert.equal(status.authenticated, false)
+    assert.equal(status.canRead, false)
+    assert.equal(status.canWrite, false)
+    assert.deepEqual(status.serviceAccounts, [])
+    assert.equal(status.serviceAccountSelectionRequired, false)
+  } finally {
+    if (previous === undefined) delete process.env.VOIDR_SERVICE_ACCOUNTS_PATH
+    else process.env.VOIDR_SERVICE_ACCOUNTS_PATH = previous
+    if (previousClientId === undefined) delete process.env.VOIDR_CLIENT_ID
+    else process.env.VOIDR_CLIENT_ID = previousClientId
+    if (previousClientSecret === undefined) delete process.env.VOIDR_CLIENT_SECRET
+    else process.env.VOIDR_CLIENT_SECRET = previousClientSecret
   }
 })
 

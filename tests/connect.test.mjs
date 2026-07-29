@@ -14,7 +14,7 @@ test('validates and persists a writable Service Account without logging secrets'
   const secret = 'synthetic-connector-secret'
   const token = jwt({
     organizationId: 'org-connected',
-    name: 'Connected Organization',
+    name: 'Copilot Writer',
     scopes: ['read', 'write']
   })
   const server = tokenServer({ secret, token })
@@ -47,6 +47,7 @@ test('validates and persists a writable Service Account without logging secrets'
   assert.equal(result.stdout.includes(token), false)
   const publicResult = JSON.parse(result.stdout)
   assert.equal(publicResult.connected, true)
+  assert.equal(publicResult.serviceAccountName, 'Copilot Writer')
   assert.deepEqual(publicResult.scopes, ['read', 'write'])
 
   const stored = JSON.parse(readFileSync(storePath, 'utf8'))
@@ -54,6 +55,14 @@ test('validates and persists a writable Service Account without logging secrets'
   assert.equal(
     stored.accounts['org-connected'].clientSecret,
     secret
+  )
+  assert.equal(
+    stored.accounts['org-connected'].accountName,
+    'Copilot Writer'
+  )
+  assert.equal(
+    stored.accounts['org-connected'].orgName,
+    'Connected Organization'
   )
 })
 

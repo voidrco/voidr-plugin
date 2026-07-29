@@ -80,10 +80,11 @@ authenticated: a unique Service Account must first be provisioned.
 
 An empty legacy scope list remains read-only under the current MCP contract.
 If no account exists, or if its scopes do not explicitly include `write`, the
-plugin stops before any platform mutation. The `/voidr-connect` skill offers a
-terminal-only connector: it accepts the secret through a hidden TTY prompt,
-validates the Service Account and its scopes, and only then writes the existing
-store format. The secret never passes through the model.
+plugin stops before any platform mutation. The `/voidr-connect` skill opens a
+protected local JSON outside the workspace. A local MCP tool reads that file,
+validates the Service Account and its scopes, writes the existing store format,
+and removes the temporary JSON. The skill prohibits model-visible file tools
+from reading the file, so the secret never passes through the model.
 
 A future zero-copy onboarding flow should use a device authorization endpoint
 that creates a scoped Service Account and writes it to the same store. The

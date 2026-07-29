@@ -185,6 +185,22 @@ assert(
   'Entry skill must use MCP-backed selectable application and Test Plan choices.'
 )
 assert(
+  /applications_list_environments[\s\S]*?name[\s\S]*?slug[\s\S]*?applicationUrl/i.test(
+    entrySkill
+  ) &&
+    /A single[\s\S]*?environment must still be confirmed/i.test(entrySkill),
+  'Entry skill must select and confirm a Voidr environment from MCP.'
+)
+assert(
+  /platform environment and local smoke target are different values/i.test(
+    entrySkill
+  ) &&
+    /Usar ambiente Voidr[\s\S]*?Usar localhost[\s\S]*?localSmokeBaseUrl/i.test(
+      entrySkill
+    ),
+  'Entry skill must keep the platform environment separate from local smoke.'
+)
+assert(
   /Before calling any Test Plan mutation tool, explicitly load the[\s\S]*?`\/voidr-test-plan` skill/i.test(
     entrySkill
   ) &&

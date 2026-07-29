@@ -30,10 +30,20 @@ test('asks new versus existing before any tool action', () => {
   ])
   assert.throws(
     () =>
+      transition(authenticated, {
+        type: 'APPLICATION_SELECTED',
+        applicationId: 'app-voidr',
+        applicationName: 'Voidr Monitor'
+      }),
+    /explicitly confirmed by the user/i
+  )
+  assert.throws(
+    () =>
       transition(chosen, {
         type: 'APPLICATION_SELECTED',
         applicationId: 'workspace-folder',
-        applicationName: 'demo-consulta-pj'
+        applicationName: 'demo-consulta-pj',
+        confirmedByUser: true
       }),
     /Expected AUTHENTICATED/
   )
@@ -123,6 +133,61 @@ test('new plan cannot infer a different feature from application or repository c
       }),
     /preserve the user-selected feature/i
   )
+})
+
+test('platform environment and localhost smoke remain separate confirmed targets', () => {
+  let workflow = createWorkflow()
+  workflow = transition(workflow, {
+    type: 'PLAN_MODE_CHOSEN',
+    mode: 'new'
+  })
+  workflow = transition(workflow, {
+    type: 'AUTHENTICATION_CONFIRMED',
+    organizationId: 'org-voidr'
+  })
+  workflow = transition(workflow, {
+    type: 'APPLICATION_SELECTED',
+    applicationId: 'app-voidr',
+    applicationName: 'Voidr Monitor',
+    confirmedByUser: true
+  })
+  assert.throws(
+    () =>
+      transition(workflow, {
+        type: 'ENVIRONMENT_SELECTED',
+        environmentName: 'produção',
+        environmentSlug: 'producao',
+        applicationUrl: 'https://prod.example.test',
+        fromMcp: true
+      }),
+    /explicitly confirmed/i
+  )
+  workflow = transition(workflow, {
+    type: 'ENVIRONMENT_SELECTED',
+    environmentName: 'produção',
+    environmentSlug: 'producao',
+    applicationUrl: 'https://prod.example.test',
+    fromMcp: true,
+    confirmedByUser: true
+  })
+  workflow = transition(workflow, {
+    type: 'FEATURE_SELECTED',
+    feature: 'Login'
+  })
+  workflow = transition(workflow, {
+    type: 'TEST_TARGET_SELECTED',
+    testTarget: 'WEB'
+  })
+  workflow = transition(workflow, {
+    type: 'LOCAL_SMOKE_TARGET_SELECTED',
+    mode: 'localhost',
+    baseUrl: 'http://localhost:5173'
+  })
+
+  assert.equal(workflow.context.platformEnvironmentSlug, 'producao')
+  assert.equal(workflow.context.platformEnvironmentUrl, 'https://prod.example.test')
+  assert.equal(workflow.context.localSmokeMode, 'localhost')
+  assert.equal(workflow.context.localSmokeBaseUrl, 'http://localhost:5173')
 })
 
 test('project.json mismatch cannot silently change the selected plan', () => {
@@ -252,10 +317,26 @@ function selectApplicationFromMcp(workflow) {
   assert.deepEqual(workflow.actions, [
     { tool: 'applications_list_applications', mutation: false }
   ])
-  return transition(workflow, {
+  workflow = transition(workflow, {
     type: 'APPLICATION_SELECTED',
     applicationId: 'app-voidr',
-    applicationName: 'Voidr Monitor'
+    applicationName: 'Voidr Monitor',
+    confirmedByUser: true
+  })
+  assert.deepEqual(workflow.actions, [
+    {
+      tool: 'applications_list_environments',
+      mutation: false,
+      applicationId: 'app-voidr'
+    }
+  ])
+  return transition(workflow, {
+    type: 'ENVIRONMENT_SELECTED',
+    environmentName: 'staging',
+    environmentSlug: 'staging',
+    applicationUrl: 'https://staging.example.test',
+    fromMcp: true,
+    confirmedByUser: true
   })
 }
 
@@ -266,10 +347,20 @@ function collectNewPlanScope(workflow, feature) {
   })
   assert.equal(workflow.state, States.FEATURE_SELECTED)
   assert.deepEqual(workflow.actions, [])
+  workflow = transition(workflow, {
+    type: 'TEST_TARGET_SELECTED',
+    testTarget: 'WEB'
+  })
+  assert.equal(workflow.state, States.TEST_TARGET_SELECTED)
+  workflow = transition(workflow, {
+    type: 'LOCAL_SMOKE_TARGET_SELECTED',
+    mode: 'localhost',
+    baseUrl: 'http://localhost:3000'
+  })
+  assert.equal(workflow.context.platformEnvironmentUrl, 'https://staging.example.test')
+  assert.equal(workflow.context.localSmokeBaseUrl, 'http://localhost:3000')
   return transition(workflow, {
     type: 'NEW_PLAN_CONTEXT_COLLECTED',
-    testTarget: 'WEB',
-    environment: 'staging — https://example.test',
     criticalScenarios: ['happy path', 'invalid credentials'],
     expectedBehavior: 'The user reaches the authenticated home page.',
     outOfScope: 'Social login',

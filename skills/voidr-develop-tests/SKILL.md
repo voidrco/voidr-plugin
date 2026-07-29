@@ -1,6 +1,6 @@
 ---
 name: voidr-develop-tests
-description: Inicia e orquestra o desenvolvimento de testes na Voidr. Use SEMPRE quando o usuário disser "quero desenvolver testes na Voidr", "quero criar testes na Voidr", "automatizar testes na Voidr", "criar um Test Plan", "usar um Test Plan existente" ou pedir para implementar, publicar ou executar testes Playwright pela Voidr. O fluxo começa escolhendo Test Plan novo ou existente e carrega aplicações e planos exclusivamente pelo MCP da Voidr antes de inspecionar o workspace.
+description: Inicia e orquestra o desenvolvimento de testes na Voidr. Use SEMPRE quando o usuário disser "quero desenvolver testes na Voidr", "quero criar testes na Voidr", "automatizar testes na Voidr", "criar um Test Plan", "usar um Test Plan existente" ou pedir para implementar, publicar ou executar testes Playwright pela Voidr. Antes de qualquer tool, pergunta se o Test Plan é novo ou existente; depois exige seleção humana de aplicação e ambiente via MCP, feature, alvo WEB/API, smoke local, draft e aprovação.
 argument-hint: "[objetivo de teste]"
 ---
 
@@ -31,7 +31,9 @@ After the answer, keep these values explicit and separate:
 
 - selected organization;
 - selected application;
+- selected Voidr platform environment and its `applicationUrl`;
 - user-selected feature or journey;
+- separate local smoke target and base URL;
 - selected Test Plan;
 - selected writable test repository;
 - optional product repositories used as read-only context;
@@ -76,6 +78,8 @@ After authentication and organization selection:
    as selectable options and ask the user to choose one. Keep each returned ID
    internally, but do not require the user to copy or type an `applicationId`.
    Even when there is only one application, ask the user to confirm it.
+   A single result is not user confirmation; a native question and answer are
+   still required.
 4. If the user named an application, match it only against the MCP response.
    Ask on multiple matches and stop if no match exists.
 5. Optionally call `applications_get_application` for the selected ID when
@@ -88,7 +92,27 @@ Never ask the user to provide an `applicationId` manually.
 
 Keep the selected `applicationId` authoritative for all Test Plan calls.
 
-## 4. Route by Test Plan mode
+## 4. Select the Voidr platform environment through MCP
+
+Only after the user confirms the application:
+
+1. Call `applications_list_environments` with the selected `applicationId`.
+2. Build choices exclusively from that response. Show `name`, `slug`, and
+   `applicationUrl`.
+3. Use `ask_user` to select or confirm one returned environment. A single
+   environment must still be confirmed.
+4. Keep the selected `name`, `slug`, and `applicationUrl` as the platform
+   execution target.
+
+Do not ask for a platform environment or base URL as free text. Do not use
+localhost as the platform environment unless localhost was actually returned
+by `applications_list_environments`. If no environment is returned, stop and
+tell the user to configure one in the selected Voidr application.
+
+The platform environment and local smoke target are different values. Never
+overwrite the selected platform `applicationUrl` with localhost.
+
+## 5. Route by Test Plan mode
 
 Before calling any Test Plan mutation tool, explicitly load the
 `/voidr-test-plan` skill and follow its full instructions. Mentioning that skill
@@ -104,13 +128,25 @@ For a new Test Plan, use this mandatory sequence:
    Use a free-text `ask_user` field. Offer selectable features only when their
    names came from the Voidr MCP response or the user; never invent options from
    the application name or a repository. End the response and wait.
-2. After the feature answer, collect WEB/API and environment/base URL, critical
-   scenarios, expected behavior, out-of-scope behavior, and test data or
-   preconditions.
-3. Present a complete Test Plan draft containing at least one case with
+2. Ask whether the feature is WEB or API using selectable options.
+3. Ask:
+
+   > Para o smoke local, deseja usar a URL do ambiente Voidr selecionado ou
+   > localhost?
+
+   Present exactly:
+
+   - `Usar ambiente Voidr — <applicationUrl>`
+   - `Usar localhost`
+
+   If localhost is selected, ask for the exact local URL including port. Do not
+   guess it. Keep this URL only as `localSmokeBaseUrl`.
+4. Collect critical scenarios, expected behavior, out-of-scope behavior, and
+   test data or preconditions.
+5. Present a complete Test Plan draft containing at least one case with
    Arrange/Act/Assert.
-4. Ask the user to approve or revise that exact draft. End the response.
-5. Only after explicit approval may the agent call
+6. Ask the user to approve or revise that exact draft. End the response.
+7. Only after explicit approval may the agent call
    `test_plans_create_test_plan` and `test_plans_populate_test_plan`.
 
 Do not infer a feature from the application name, product repository, route,
@@ -126,7 +162,7 @@ the selected ID internally and never ask the user to type a `testPlanId`.
 Do not proceed until the plan ID, application ID, organization ID, and exact
 case scope are visible to the user.
 
-## 5. Choose repositories only after the plan
+## 6. Choose repositories only after the plan
 
 Ask:
 
@@ -158,7 +194,7 @@ After selecting the test repository, ask separately whether the user wants to
 attach zero, one, or multiple product repositories as read-only context. Do not
 change the selected application when product repositories are added.
 
-## 6. Continue through the gates
+## 7. Continue through the gates
 
 Before scaffolding, reading product code, or editing a test, explicitly load
 the `/voidr-implement-tests` skill. If it cannot be loaded, stop. Use it for

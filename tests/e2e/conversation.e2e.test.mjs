@@ -36,9 +36,25 @@ test('natural-language greenfield journey reaches deploy and execution through e
   workflow = transition(workflow, {
     type: 'APPLICATION_SELECTED',
     applicationId: 'app-monitor',
-    applicationName: 'Blip Monitor'
+    applicationName: 'Blip Monitor',
+    confirmedByUser: true
   })
   assert.equal(workflow.context.applicationId, 'app-monitor')
+  assert.deepEqual(workflow.actions, [
+    {
+      tool: 'applications_list_environments',
+      mutation: false,
+      applicationId: 'app-monitor'
+    }
+  ])
+  workflow = transition(workflow, {
+    type: 'ENVIRONMENT_SELECTED',
+    environmentName: 'staging',
+    environmentSlug: 'staging',
+    applicationUrl: 'https://monitor.staging.example.test',
+    fromMcp: true,
+    confirmedByUser: true
+  })
   assert.match(workflow.prompt, /qual feature ou jornada/i)
   assert.deepEqual(workflow.actions, [])
 
@@ -49,9 +65,20 @@ test('natural-language greenfield journey reaches deploy and execution through e
   assert.equal(workflow.state, States.FEATURE_SELECTED)
   assert.equal(workflow.context.feature, 'Monitoramento de indisponibilidade')
   workflow = transition(workflow, {
+    type: 'TEST_TARGET_SELECTED',
+    testTarget: 'API'
+  })
+  assert.match(workflow.prompt, /smoke local/i)
+  workflow = transition(workflow, {
+    type: 'LOCAL_SMOKE_TARGET_SELECTED',
+    mode: 'platform'
+  })
+  assert.equal(
+    workflow.context.localSmokeBaseUrl,
+    'https://monitor.staging.example.test'
+  )
+  workflow = transition(workflow, {
     type: 'NEW_PLAN_CONTEXT_COLLECTED',
-    testTarget: 'API',
-    environment: 'staging — https://api.example.test',
     criticalScenarios: ['endpoint indisponível', 'latência acima do limite'],
     expectedBehavior: 'A plataforma registra e alerta a indisponibilidade.',
     outOfScope: 'Falhas de infraestrutura da própria Voidr',
@@ -183,7 +210,16 @@ test('existing-plan journey does not use project.json as a selector', () => {
   workflow = transition(workflow, {
     type: 'APPLICATION_SELECTED',
     applicationId: 'app-monitor',
-    applicationName: 'Blip Monitor'
+    applicationName: 'Blip Monitor',
+    confirmedByUser: true
+  })
+  workflow = transition(workflow, {
+    type: 'ENVIRONMENT_SELECTED',
+    environmentName: 'produção',
+    environmentSlug: 'producao',
+    applicationUrl: 'https://monitor.example.test',
+    fromMcp: true,
+    confirmedByUser: true
   })
   workflow = transition(workflow, {
     type: 'EXISTING_PLAN_SELECTED',

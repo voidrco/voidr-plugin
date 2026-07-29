@@ -15,8 +15,10 @@ Require all of:
 
 - organization ID;
 - application ID;
+- selected Voidr environment name, slug, and `applicationUrl`;
 - Test Plan ID;
 - exact user-selected feature or journey;
+- local smoke mode and `localSmokeBaseUrl`;
 - exact selected case slugs;
 - test repository selected through
   `voidr_workspace_select_test_repository`.
@@ -31,6 +33,10 @@ Never call `test_plans_create_test_plan`, `test_plans_create_module`,
 `test_plans_create_suite`, `test_plans_create_case`, or
 `test_plans_populate_test_plan` from this skill. Never invent a case because a
 scaffold command reports that the plan is empty.
+
+Use `localSmokeBaseUrl` only for local Playwright validation. Preserve the
+selected Voidr environment and `applicationUrl` for platform execution. Never
+replace platform configuration with localhost.
 
 ## Validate the repository link
 

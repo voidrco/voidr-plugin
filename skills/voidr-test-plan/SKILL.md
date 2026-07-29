@@ -34,10 +34,24 @@ This step is mandatory for both new and existing plans:
 3. Use `ask_user` when available to present application names as selectable
    options. Keep IDs internally; never ask the user to type an `applicationId`.
    Confirm the application even when the MCP returns only one.
+   Never auto-select a single result.
 4. Keep the returned application ID as the authoritative `applicationId`.
 
 One application may be implemented by multiple product repositories. Repository
 selection is a later, separate decision and cannot change `applicationId`.
+
+## Select the Voidr platform environment
+
+After the application is explicitly confirmed:
+
+1. Call `applications_list_environments` with its `applicationId`.
+2. Present only environments returned by MCP, using `name`, `slug`, and
+   `applicationUrl`.
+3. Ask the user to select or confirm one, even when only one is returned.
+4. Preserve that environment separately from the local smoke target.
+
+Never ask the user to type a platform URL when MCP returned environments.
+Never substitute localhost for the selected Voidr `applicationUrl`.
 
 ## Existing plan
 
@@ -73,26 +87,38 @@ Never infer the feature from:
 
 If the user already named a feature, repeat it and ask for confirmation.
 
-### Gate 2: test context
+### Gate 2: target and local smoke
+
+After the feature is confirmed:
+
+1. Ask whether it is WEB or API with selectable options.
+2. Ask whether the local smoke should use:
+   - the selected Voidr `applicationUrl`; or
+   - localhost.
+3. If localhost is chosen, ask for the exact URL and port. Store it as
+   `localSmokeBaseUrl`, never as the platform environment.
+
+### Gate 3: test context
 
 After the feature is confirmed, ask only the missing questions, preferably in
 one small group:
 
-1. Is the target WEB or API, and which environment/base URL is relevant?
-2. Which scenarios inside the selected feature are critical?
-3. What is the expected behavior or acceptance criterion?
-4. Which behavior is explicitly out of scope?
-5. What data, accounts, or preconditions are available?
+1. Which scenarios inside the selected feature are critical?
+2. What is the expected behavior or acceptance criterion?
+3. Which behavior is explicitly out of scope?
+4. What data, accounts, or preconditions are available?
 
 Use product repositories only as read-only supporting context and only after
 the user identifies them.
 
-### Gate 3: visible draft and approval
+### Gate 4: visible draft and approval
 
 Create a visible draft with:
 
 - plan name and objective;
 - the exact user-selected feature or journey;
+- selected Voidr environment name, slug, and `applicationUrl`;
+- local smoke mode and `localSmokeBaseUrl`;
 - assumptions and open questions;
 - modules and suites;
 - cases with stable proposed slugs;

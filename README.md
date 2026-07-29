@@ -8,7 +8,8 @@ This plugin guides a developer from “I want to develop tests in Voidr” throu
 4. requiring a PR already merged into the repository default branch;
 5. deploying that exact commit as an immutable release after confirmation;
 6. verifying `latest` and platform sync independently;
-7. creating an execution after a second confirmation.
+7. creating an execution after a second confirmation;
+8. analyzing a failed execution from ClickHouse-backed Playwright evidence.
 
 It reuses existing Voidr Service Accounts from
 `~/.voidr/service-accounts.json`. It does not call `npx voidr login` and never
@@ -53,9 +54,10 @@ the Voidr platform, then use the protected JSON opened by `/voidr-connect`.
 
 ## Security
 
-The local MCP bridge exposes a small allowlist of application, Test Plan, and
-execution tools. A `preToolUse` hook independently blocks direct, nested, and
-shell-based attempts to dispatch Hive processes.
+The local MCP bridge exposes a small allowlist of application, Test Plan,
+execution, Playwright analytics, defect, and governance-tag tools. A
+`preToolUse` hook independently blocks direct, nested, and shell-based
+attempts to dispatch Hive processes.
 
 See [architecture](docs/architecture.md) and
 [E2E strategy](docs/e2e-strategy.md). The path from the secure MVP connector

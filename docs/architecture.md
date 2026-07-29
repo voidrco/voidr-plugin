@@ -93,9 +93,10 @@ not called by this plugin.
 
 ## Security boundaries
 
-The MCP bridge exposes only the allowlisted application, Test Plan, and
-execution tools in `policy/tool-policy.json`. It rejects every other remote
-tool before any network request.
+The MCP bridge exposes only the allowlisted application, Test Plan, execution,
+Playwright analytics, defect, and governance-tag tools in
+`policy/tool-policy.json`. It rejects every other remote tool before any
+network request.
 
 The plugin hook independently denies:
 
@@ -173,6 +174,8 @@ Included:
 - verify that `latest` points to that release;
 - verify automation sync;
 - create and observe a platform execution.
+- analyze one failed test from ClickHouse-backed Playwright evidence;
+- optionally create a confirmed defect or change a confirmed governance tag.
 
 Not included:
 
@@ -182,4 +185,4 @@ Not included:
 - automatic repository creation;
 - creating or merging pull requests;
 - automatic deploy or execution;
-- diagnosis and repair after execution failure.
+- automatic diagnosis, repair, or failure grouping after execution failure.

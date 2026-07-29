@@ -50,6 +50,27 @@ assert(
   server?.args?.[0] === '${PLUGIN_ROOT}/scripts/voidr-mcp-bridge.mjs',
   'Voidr MCP bridge path must be plugin-relative.'
 )
+assert(
+  !server?.env?.VOIDR_CREDENTIAL_PROFILE,
+  'Production must reuse the default Voidr Service Account store.'
+)
+assert(
+  server?.env?.VOIDR_PLATFORM_URL === 'https://platform.voidr.co',
+  'Voidr platform links must use production.'
+)
+assert(
+  server?.env?.VOIDR_AUTH_CALLBACK_URL ===
+    'https://platform.voidr.co/auth/cli-connect',
+  'Browser authentication must use the Auth0-allowlisted production callback.'
+)
+assert(
+  server?.env?.VOIDR_API_URL === 'https://api.voidr.co/v1' &&
+    server?.env?.VOIDR_MCP_URL === 'https://api.voidr.co/v1/mcp' &&
+    server?.env?.VOIDR_MCP_ORIGIN === 'https://platform.voidr.co' &&
+    server?.env?.VOIDR_TOKEN_URL ===
+      'https://api.voidr.co/v1/service-accounts/token',
+  'Voidr API, MCP, origin, and token endpoints must use production.'
+)
 
 const configuredTools = new Set(server?.tools || [])
 const policyTools = new Set([...policy.localTools, ...policy.safeRemoteTools])
@@ -82,6 +103,26 @@ assert(
   ),
   'The Hive guard must run on preToolUse.'
 )
+const guardScript = readFileSync(
+  join(root, 'scripts/guard-hive-tools.mjs'),
+  'utf8'
+)
+assert(
+  /enforcePlanModeGate/.test(guardScript) &&
+    /enforceTestPlanWriteApproval/.test(guardScript) &&
+    /Aprovo este Test Plan/.test(guardScript),
+  'The runtime hook must enforce plan-mode and explicit Test Plan approval gates.'
+)
+const promptHooks = hooks.hooks?.userPromptTransformed
+assert(
+  Array.isArray(promptHooks) &&
+    promptHooks.some(item =>
+      String(item.bash || item.command || '').includes(
+        'route-voidr-prompt.mjs'
+      )
+    ),
+  'Natural Voidr testing requests must be routed before model execution.'
+)
 
 const skillFiles = findFiles(join(root, 'skills'), 'SKILL.md')
 assert(skillFiles.length >= 4, 'Expected the four MVP skills.')
@@ -113,8 +154,13 @@ const entrySkill = readFileSync(
   join(root, 'skills/voidr-develop-tests/SKILL.md'),
   'utf8'
 )
+const entryFrontmatter = parseFrontmatter(entrySkill)
 const connectSkill = readFileSync(
   join(root, 'skills/voidr-connect/SKILL.md'),
+  'utf8'
+)
+const testPlanSkill = readFileSync(
+  join(root, 'skills/voidr-test-plan/SKILL.md'),
   'utf8'
 )
 const questionIndex = entrySkill.indexOf(
@@ -133,6 +179,23 @@ assert(
 assert(
   /first response must ask exactly one decision/i.test(entrySkill),
   'Entry skill must keep plan mode as the only first-turn decision.'
+)
+assert(
+  /selects either option, immediately call `voidr_auth_status`[\s\S]*?requires no confirmation[\s\S]*?Do not ask\s+whether to validate authentication/i.test(
+    entrySkill
+  ),
+  'Entry skill must continue directly to the read-only auth check after plan-mode selection.'
+)
+assert(
+  /quero desenvolver testes na Voidr/i.test(entryFrontmatter.description || '') &&
+    /automatizar testes na Voidr/i.test(entryFrontmatter.description || ''),
+  'Entry skill description must include natural Portuguese routing triggers.'
+)
+assert(
+  /native `ask_user` question UI[\s\S]*?Criar novo Test Plan[\s\S]*?Usar Test Plan existente/i.test(
+    entrySkill
+  ),
+  'Entry skill must render new-versus-existing as selectable options.'
 )
 const applicationDiscoveryIndex = entrySkill.indexOf(
   'applications_list_applications'
@@ -154,6 +217,104 @@ assert(
   'Entry skill must separate MCP applications from workspace repositories.'
 )
 assert(
+  /Always use `ask_user`[\s\S]*?returned application name[\s\S]*?`type`[\s\S]*?never ask the user to provide an `applicationId` manually/i.test(
+    entrySkill
+  ) &&
+    /test_plans_list_test_plans[\s\S]*?selectable options[\s\S]*?never ask the user to type a `testPlanId`/i.test(
+      entrySkill
+    ),
+  'Entry skill must use MCP-backed selectable application and Test Plan choices.'
+)
+assert(
+  /selected application's MCP `type` as authoritative[\s\S]*?Never ask the user to decide WEB versus API/i.test(
+    entrySkill
+  ),
+  'Entry skill must derive WEB/API from the selected Voidr application.'
+)
+assert(
+  /applications_list_environments[\s\S]*?name[\s\S]*?slug[\s\S]*?applicationUrl/i.test(
+    entrySkill
+  ) &&
+    /A single[\s\S]*?environment must still be confirmed/i.test(entrySkill),
+  'Entry skill must select and confirm a Voidr environment from MCP.'
+)
+assert(
+  /platform environment and local smoke target are different values/i.test(
+    entrySkill
+  ) &&
+    /Usar ambiente Voidr[\s\S]*?Usar localhost[\s\S]*?localSmokeBaseUrl/i.test(
+      entrySkill
+    ),
+  'Entry skill must keep the platform environment separate from local smoke.'
+)
+assert(
+  /Before calling any Test Plan mutation tool, explicitly load the[\s\S]*?`\/voidr-test-plan` skill/i.test(
+    entrySkill
+  ) &&
+    /Qual feature ou jornada da aplicação selecionada você quer testar[\s\S]*?primeiro/i.test(
+      entrySkill
+    ) &&
+    /Do not infer a feature from the application name, product repository, route,[\s\S]*?README/i.test(
+      entrySkill
+    ),
+  'Entry skill must explicitly load the Test Plan skill and require a user-selected feature.'
+)
+assert(
+  /Only after explicit approval may the agent call[\s\S]*?test_plans_create_test_plan[\s\S]*?test_plans_populate_test_plan/i.test(
+    entrySkill
+  ),
+  'Entry skill must block Test Plan writes until feature-scoped draft approval.'
+)
+assert(
+  /repository returned by[\s\S]*?test_plans_create_test_plan[\s\S]*?authoritative/i.test(
+    entrySkill
+  ) &&
+    /allowExistingGitRepository: true[\s\S]*?server-returned[\s\S]*?repositoryUrl/i.test(
+      entrySkill
+    ),
+  'Entry skill must consume the repository provisioned by the Voidr MCP.'
+)
+assert(
+  /gitProviderConfig\.repositoryUrl[\s\S]*?equals[\s\S]*?repository\.url/i.test(
+    testPlanSkill
+  ) &&
+    /Repositório vinculado:\s*\[<owner>\/<repository-name>\]\(<repository\.url>\)/i.test(
+      testPlanSkill
+    ) &&
+    /has not completed successfully until this clickable repository link/i.test(
+      testPlanSkill
+    ),
+  'Test Plan skill must verify and return the linked repository as a clickable URL.'
+)
+assert(
+  /exact approval[\s\S]*?Aprovar este Test Plan[\s\S]*?generic `Sim` is not[\s\S]*?new user message/i.test(
+    entrySkill
+  ),
+  'Entry skill must require the exact post-draft approval message.'
+)
+assert(
+  /explicitly names a product repository and asks to analyze[\s\S]*?authorization for immediate\s+read-only\s+inspection[\s\S]*?Do not ask permission again/i.test(
+    entrySkill
+  ) &&
+    /Ask only for material business decisions[\s\S]*?code cannot\s+establish/i.test(
+      entrySkill
+    ),
+  'Entry skill must analyze an explicitly authorized product repository before asking only unresolved business questions.'
+)
+assert(
+  /Present this question[\s\S]*?immediately after the feature answer[\s\S]*?do not ask whether the user wants to[\s\S]*?see the options/i.test(
+    entrySkill
+  ) &&
+    /Do not ask whether to present the next[\s\S]*?questions or whether the user wants to answer now/i.test(
+      entrySkill
+    ),
+  'Entry skill must not insert meta-confirmations before smoke or context questions.'
+)
+assert(
+  /explicitly load[\s\S]*?`\/voidr-implement-tests` skill/i.test(entrySkill),
+  'Entry skill must explicitly load the implementation skill before code work.'
+)
+assert(
   /If it returns `authenticated: false`, stop the current workflow and reply[\s\S]*?\/copilot voidr-connect/i.test(
     entrySkill
   ),
@@ -166,22 +327,49 @@ assert(
   'Connect skill must ask which locally available Service Account to use.'
 )
 assert(
-  /If no local Service Account exists, call[\s\S]*?`voidr_auth_prepare_service_account` immediately/i.test(
+  /If `authenticated` is false,[\s\S]*?call `voidr_auth_login`/i.test(
     connectSkill
   ),
-  'Connect skill must prepare the protected credential JSON when none is local.'
+  'Connect skill must start the official browser login when authentication is unavailable.'
 )
 assert(
-  /When the user replies that the file is ready, call[\s\S]*?`voidr_auth_import_service_account`/i.test(
+  /browser flow handles user login and explicit organization selection/i.test(
     connectSkill
   ),
-  'Connect skill must import the protected credential JSON after confirmation.'
+  'Connect skill must delegate organization selection to the browser flow.'
 )
 assert(
-  /Never inspect the JSON with file,[\s\S]*?shell,[\s\S]*?editor,[\s\S]*?workspace tools/i.test(
+  /Never ask the user to create or edit a credential JSON/i.test(
     connectSkill
   ),
-  'Connect skill must keep credential JSON contents hidden from the model.'
+  'Connect skill must prohibit the legacy credential JSON flow.'
+)
+assert(
+  /If this status call fails,[\s\S]*?call `voidr_auth_login` directly/i.test(
+    connectSkill
+  ) &&
+    /Never pass `default`[\s\S]*?not returned[\s\S]*?`serviceAccounts`/i.test(
+      connectSkill
+    ),
+  'Connect skill must not invent an organization when status fails.'
+)
+assert(
+  /first operational action must be a direct MCP call to[\s\S]*?`voidr_auth_status` with `\{\}`/i.test(
+    connectSkill
+  ) &&
+    /Do not search, read, or inspect workspace files[\s\S]*?MCP bridge implementation/i.test(
+      connectSkill
+    ) &&
+    /Never use a shell, terminal, `node`, `npx`, `curl`[\s\S]*?`voidr-mcp-bridge\.mjs`/i.test(
+      connectSkill
+    ),
+  'Connect skill must force MCP-first authentication without filesystem or shell fallbacks.'
+)
+assert(
+  /voidr_auth_status` is not available as an MCP tool[\s\S]*?reload the plugin and start a new chat[\s\S]*?Do not investigate through\s+files or the terminal/i.test(
+    connectSkill
+  ),
+  'Connect skill must stop cleanly when its MCP tools are unavailable.'
 )
 
 const allRepositoryText = findFiles(root)

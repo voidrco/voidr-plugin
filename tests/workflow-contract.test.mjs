@@ -30,10 +30,22 @@ test('asks new versus existing before any tool action', () => {
   ])
   assert.throws(
     () =>
+      transition(authenticated, {
+        type: 'APPLICATION_SELECTED',
+        applicationId: 'app-voidr',
+        applicationName: 'Voidr Monitor',
+        applicationType: 'WEB'
+      }),
+    /explicitly confirmed/i
+  )
+  assert.throws(
+    () =>
       transition(chosen, {
         type: 'APPLICATION_SELECTED',
         applicationId: 'workspace-folder',
-        applicationName: 'demo-consulta-pj'
+        applicationName: 'demo-consulta-pj',
+        applicationType: 'WEB',
+        confirmedByUser: true
       }),
     /Expected AUTHENTICATED/
   )
@@ -69,8 +81,21 @@ test('new plan requires approval before platform mutations', () => {
     mode: 'new'
   })
   workflow = selectApplicationFromMcp(workflow)
+  assert.match(workflow.prompt, /qual feature ou jornada/i)
+  assert.deepEqual(workflow.actions, [])
+  assert.throws(
+    () =>
+      transition(workflow, {
+        type: 'NEW_PLAN_DRAFTED',
+        feature: 'Login',
+        caseSlugs: ['LOGIN-001']
+      }),
+    /Expected PLAN_CONTEXT_COLLECTED/
+  )
+  workflow = collectNewPlanScope(workflow, 'Login com MFA')
   workflow = transition(workflow, {
     type: 'NEW_PLAN_DRAFTED',
+    feature: 'Login com MFA',
     caseSlugs: ['LOGIN-001', 'LOGIN-002']
   })
   assert.equal(workflow.state, States.PLAN_DRAFTED)
@@ -90,6 +115,119 @@ test('new plan requires approval before platform mutations', () => {
       'test_plans_get_test_plan'
     ]
   )
+})
+
+test('new plan cannot infer a different feature from application or repository context', () => {
+  let workflow = createWorkflow()
+  workflow = transition(workflow, {
+    type: 'PLAN_MODE_CHOSEN',
+    mode: 'new'
+  })
+  workflow = selectApplicationFromMcp(workflow)
+  workflow = collectNewPlanScope(workflow, 'Recuperação de senha')
+
+  assert.throws(
+    () =>
+      transition(workflow, {
+        type: 'NEW_PLAN_DRAFTED',
+        feature: 'Login com dados válidos',
+        caseSlugs: ['LOGIN-001']
+      }),
+    /preserve the user-selected feature/i
+  )
+})
+
+test('platform environment and localhost smoke remain separate confirmed targets', () => {
+  let workflow = createWorkflow()
+  workflow = transition(workflow, {
+    type: 'PLAN_MODE_CHOSEN',
+    mode: 'new'
+  })
+  workflow = transition(workflow, {
+    type: 'AUTHENTICATION_CONFIRMED',
+    organizationId: 'org-voidr'
+  })
+  workflow = transition(workflow, {
+    type: 'APPLICATION_SELECTED',
+    applicationId: 'app-voidr',
+    applicationName: 'Voidr Monitor',
+    applicationType: 'WEB',
+    confirmedByUser: true
+  })
+  assert.throws(
+    () =>
+      transition(workflow, {
+        type: 'ENVIRONMENT_SELECTED',
+        environmentName: 'produção',
+        environmentSlug: 'producao',
+        applicationUrl: 'https://prod.example.test',
+        fromMcp: true
+      }),
+    /explicitly confirmed/i
+  )
+  workflow = transition(workflow, {
+    type: 'ENVIRONMENT_SELECTED',
+    environmentName: 'produção',
+    environmentSlug: 'producao',
+    applicationUrl: 'https://prod.example.test',
+    fromMcp: true,
+    confirmedByUser: true
+  })
+  workflow = transition(workflow, {
+    type: 'FEATURE_SELECTED',
+    feature: 'Login'
+  })
+  assert.equal(workflow.context.applicationType, 'WEB')
+  assert.match(workflow.prompt, /aplicação selecionada é WEB/i)
+  workflow = transition(workflow, {
+    type: 'LOCAL_SMOKE_TARGET_SELECTED',
+    mode: 'localhost',
+    baseUrl: 'http://localhost:5173'
+  })
+
+  assert.equal(workflow.context.platformEnvironmentSlug, 'producao')
+  assert.equal(workflow.context.platformEnvironmentUrl, 'https://prod.example.test')
+  assert.equal(workflow.context.localSmokeMode, 'localhost')
+  assert.equal(workflow.context.localSmokeBaseUrl, 'http://localhost:5173')
+})
+
+test('explicit product repository analysis can supply evidence-backed plan context', () => {
+  let workflow = createWorkflow()
+  workflow = transition(workflow, {
+    type: 'PLAN_MODE_CHOSEN',
+    mode: 'new'
+  })
+  workflow = selectApplicationFromMcp(workflow)
+  workflow = transition(workflow, {
+    type: 'FEATURE_SELECTED',
+    feature: 'Login'
+  })
+  workflow = transition(workflow, {
+    type: 'LOCAL_SMOKE_TARGET_SELECTED',
+    mode: 'platform'
+  })
+  workflow = transition(workflow, {
+    type: 'NEW_PLAN_CONTEXT_COLLECTED',
+    source: 'codebase',
+    productRepositories: ['/workspace/demo-consulta-pj'],
+    evidence: [
+      'src/routes/login.ts validates credentials and redirects authenticated users'
+    ],
+    criticalScenarios: ['valid credentials', 'invalid credentials'],
+    expectedBehavior:
+      'Valid credentials create a session; invalid credentials show an error.',
+    preconditions: ['Synthetic credentials are supplied through environment variables']
+  })
+
+  assert.equal(workflow.state, States.PLAN_CONTEXT_COLLECTED)
+  assert.equal(workflow.context.contextSource, 'codebase')
+  assert.deepEqual(workflow.context.productRepositories, [
+    '/workspace/demo-consulta-pj'
+  ])
+  assert.equal(workflow.context.contextEvidence.length, 1)
+  assert.match(workflow.context.outOfScope, /não determinado pela codebase/i)
+  assert.match(workflow.prompt, /draft do Test Plan/i)
+  assert.deepEqual(workflow.actions, [])
 })
 
 test('project.json mismatch cannot silently change the selected plan', () => {
@@ -219,10 +357,52 @@ function selectApplicationFromMcp(workflow) {
   assert.deepEqual(workflow.actions, [
     { tool: 'applications_list_applications', mutation: false }
   ])
-  return transition(workflow, {
+  workflow = transition(workflow, {
     type: 'APPLICATION_SELECTED',
     applicationId: 'app-voidr',
-    applicationName: 'Voidr Monitor'
+    applicationName: 'Voidr Monitor',
+    applicationType: 'WEB',
+    confirmedByUser: true
+  })
+  assert.deepEqual(workflow.actions, [
+    {
+      tool: 'applications_list_environments',
+      mutation: false,
+      applicationId: 'app-voidr'
+    }
+  ])
+  return transition(workflow, {
+    type: 'ENVIRONMENT_SELECTED',
+    environmentName: 'staging',
+    environmentSlug: 'staging',
+    applicationUrl: 'https://staging.example.test',
+    fromMcp: true,
+    confirmedByUser: true
+  })
+}
+
+function collectNewPlanScope(workflow, feature) {
+  workflow = transition(workflow, {
+    type: 'FEATURE_SELECTED',
+    feature
+  })
+  assert.equal(workflow.state, States.FEATURE_SELECTED)
+  assert.deepEqual(workflow.actions, [])
+  assert.equal(workflow.context.applicationType, 'WEB')
+  assert.match(workflow.prompt, /smoke local/i)
+  workflow = transition(workflow, {
+    type: 'LOCAL_SMOKE_TARGET_SELECTED',
+    mode: 'localhost',
+    baseUrl: 'http://localhost:3000'
+  })
+  assert.equal(workflow.context.platformEnvironmentUrl, 'https://staging.example.test')
+  assert.equal(workflow.context.localSmokeBaseUrl, 'http://localhost:3000')
+  return transition(workflow, {
+    type: 'NEW_PLAN_CONTEXT_COLLECTED',
+    criticalScenarios: ['happy path', 'invalid credentials'],
+    expectedBehavior: 'The user reaches the authenticated home page.',
+    outOfScope: 'Social login',
+    preconditions: ['A writable synthetic test account exists']
   })
 }
 

@@ -4,6 +4,10 @@ export const States = Object.freeze({
   AUTHENTICATION_REQUIRED: 'AUTHENTICATION_REQUIRED',
   AUTHENTICATED: 'AUTHENTICATED',
   APPLICATION_SELECTED: 'APPLICATION_SELECTED',
+  ENVIRONMENT_SELECTED: 'ENVIRONMENT_SELECTED',
+  FEATURE_SELECTED: 'FEATURE_SELECTED',
+  LOCAL_SMOKE_TARGET_SELECTED: 'LOCAL_SMOKE_TARGET_SELECTED',
+  PLAN_CONTEXT_COLLECTED: 'PLAN_CONTEXT_COLLECTED',
   PLAN_DRAFTED: 'PLAN_DRAFTED',
   PLAN_LOADED: 'PLAN_LOADED',
   PLAN_APPROVED: 'PLAN_APPROVED',
@@ -27,6 +31,20 @@ export function createWorkflow() {
       organizationId: null,
       applicationId: null,
       applicationName: null,
+      applicationType: null,
+      platformEnvironmentName: null,
+      platformEnvironmentSlug: null,
+      platformEnvironmentUrl: null,
+      feature: null,
+      localSmokeMode: null,
+      localSmokeBaseUrl: null,
+      contextSource: null,
+      productRepositories: [],
+      contextEvidence: [],
+      criticalScenarios: [],
+      expectedBehavior: null,
+      outOfScope: null,
+      preconditions: [],
       planId: null,
       selectedCases: [],
       testRepository: null,
@@ -83,22 +101,117 @@ export function transition(workflow, event) {
 
     case 'APPLICATION_SELECTED':
       requireState(next, States.AUTHENTICATED)
-      if (!event.applicationId || !event.applicationName) {
+      if (
+        !event.applicationId ||
+        !event.applicationName ||
+        !['WEB', 'API'].includes(event.applicationType) ||
+        event.confirmedByUser !== true
+      ) {
         throw new Error(
-          'Application must be selected from applications_list_applications.'
+          'Application and its WEB/API type must be explicitly confirmed from applications_list_applications.'
         )
       }
       next.context.applicationId = event.applicationId
       next.context.applicationName = event.applicationName
+      next.context.applicationType = event.applicationType
       next.state = States.APPLICATION_SELECTED
+      next.actions.push({
+        tool: 'applications_list_environments',
+        mutation: false,
+        applicationId: event.applicationId
+      })
+      return next
+
+    case 'ENVIRONMENT_SELECTED':
+      requireState(next, States.APPLICATION_SELECTED)
+      if (
+        !event.environmentName ||
+        !event.environmentSlug ||
+        !isHttpUrl(event.applicationUrl) ||
+        event.confirmedByUser !== true ||
+        event.fromMcp !== true
+      ) {
+        throw new Error(
+          'Platform environment must be explicitly confirmed from applications_list_environments.'
+        )
+      }
+      next.context.platformEnvironmentName = event.environmentName
+      next.context.platformEnvironmentSlug = event.environmentSlug
+      next.context.platformEnvironmentUrl = event.applicationUrl
+      next.state = States.ENVIRONMENT_SELECTED
+      if (next.context.planMode === 'new') {
+        next.prompt = `Qual feature ou jornada da aplicação ${next.context.applicationName} você quer testar primeiro?`
+      } else {
+        next.actions.push({
+          tool: 'test_plans_list_test_plans',
+          mutation: false
+        })
+      }
+      return next
+
+    case 'FEATURE_SELECTED':
+      requireState(next, States.ENVIRONMENT_SELECTED)
+      if (next.context.planMode !== 'new') throw new Error('Not in new-plan mode.')
+      if (!String(event.feature || '').trim()) {
+        throw new Error('A user-selected feature or journey is required.')
+      }
+      next.context.feature = String(event.feature).trim()
+      next.state = States.FEATURE_SELECTED
+      next.prompt = `A aplicação selecionada é ${next.context.applicationType}. Para o smoke local, deseja usar a URL do ambiente Voidr (${next.context.platformEnvironmentUrl}) ou localhost?`
+      return next
+
+    case 'LOCAL_SMOKE_TARGET_SELECTED':
+      requireState(next, States.FEATURE_SELECTED)
+      if (!['platform', 'localhost'].includes(event.mode)) {
+        throw new Error('Local smoke mode must be platform or localhost.')
+      }
+      if (
+        event.mode === 'localhost' &&
+        !/^https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?(?:\/|$)/i.test(
+          String(event.baseUrl || '')
+        )
+      ) {
+        throw new Error('An explicit localhost or 127.0.0.1 URL is required.')
+      }
+      next.context.localSmokeMode = event.mode
+      next.context.localSmokeBaseUrl =
+        event.mode === 'platform'
+          ? next.context.platformEnvironmentUrl
+          : event.baseUrl
+      next.state = States.LOCAL_SMOKE_TARGET_SELECTED
+      next.prompt =
+        'Informe os cenários críticos, o comportamento esperado, o que fica fora do escopo e os dados ou pré-condições disponíveis.'
+      return next
+
+    case 'NEW_PLAN_CONTEXT_COLLECTED':
+      requireState(next, States.LOCAL_SMOKE_TARGET_SELECTED)
+      requireNewPlanContext(event)
+      next.context.contextSource = event.source || 'user'
+      next.context.productRepositories = [...(event.productRepositories || [])]
+      next.context.contextEvidence = [...(event.evidence || [])]
+      next.context.criticalScenarios = [...event.criticalScenarios]
+      next.context.expectedBehavior = event.expectedBehavior
+      next.context.outOfScope =
+        event.outOfScope ||
+        'Não determinado pela codebase; validar como premissa no draft.'
+      next.context.preconditions = [...event.preconditions]
+      next.state = States.PLAN_CONTEXT_COLLECTED
+      next.prompt =
+        'Apresente um draft do Test Plan para a feature selecionada, incluindo módulos, suites, casos e Arrange/Act/Assert. Não persista nada antes da aprovação.'
       return next
 
     case 'NEW_PLAN_DRAFTED':
-      requireState(next, States.APPLICATION_SELECTED)
+      requireState(next, States.PLAN_CONTEXT_COLLECTED)
       if (next.context.planMode !== 'new') throw new Error('Not in new-plan mode.')
+      if (event.feature !== next.context.feature) {
+        throw new Error('The draft must preserve the user-selected feature.')
+      }
+      if (!Array.isArray(event.caseSlugs) || event.caseSlugs.length === 0) {
+        throw new Error('The approved draft must contain at least one case.')
+      }
       next.state = States.PLAN_DRAFTED
       next.context.selectedCases = [...event.caseSlugs]
-      next.prompt = 'Aprova este Test Plan para criação na Voidr?'
+      next.prompt = `Aprova este Test Plan para a feature "${next.context.feature}" e estes casos para criação na Voidr?`
       return next
 
     case 'NEW_PLAN_APPROVED':
@@ -115,7 +228,7 @@ export function transition(workflow, event) {
       return next
 
     case 'EXISTING_PLAN_SELECTED':
-      requireState(next, States.APPLICATION_SELECTED)
+      requireState(next, States.ENVIRONMENT_SELECTED)
       if (next.context.planMode !== 'existing') {
         throw new Error('Not in existing-plan mode.')
       }
@@ -278,5 +391,35 @@ function requireMergedPullRequest(event) {
     throw new Error(
       'Deploy requires a clean repository at the exact PR commit already merged into the default branch.'
     )
+  }
+}
+
+function requireNewPlanContext(event) {
+  const source = event.source || 'user'
+  if (
+    !['user', 'codebase'].includes(source) ||
+    !Array.isArray(event.criticalScenarios) ||
+    event.criticalScenarios.length === 0 ||
+    !String(event.expectedBehavior || '').trim() ||
+    !Array.isArray(event.preconditions) ||
+    (source === 'user' && !String(event.outOfScope || '').trim()) ||
+    (source === 'codebase' &&
+      (!Array.isArray(event.productRepositories) ||
+        event.productRepositories.length === 0 ||
+        !Array.isArray(event.evidence) ||
+        event.evidence.length === 0))
+  ) {
+    throw new Error(
+      'New Test Plan context requires scenarios, expected behavior, preconditions, and either user scope or codebase repository evidence.'
+    )
+  }
+}
+
+function isHttpUrl(value) {
+  try {
+    const url = new URL(String(value || ''))
+    return ['http:', 'https:'].includes(url.protocol)
+  } catch {
+    return false
   }
 }

@@ -6,14 +6,23 @@
       "args": [
         "${PLUGIN_ROOT}/scripts/voidr-mcp-bridge.mjs"
       ],
+      "env": {
+        "VOIDR_PLATFORM_URL": "https://platform.voidr.co",
+        "VOIDR_AUTH_CALLBACK_URL": "https://platform.voidr.co/auth/cli-connect",
+        "VOIDR_API_URL": "https://api.voidr.co/v1",
+        "VOIDR_MCP_URL": "https://api.voidr.co/v1/mcp",
+        "VOIDR_MCP_ORIGIN": "https://platform.voidr.co",
+        "VOIDR_TOKEN_URL": "https://api.voidr.co/v1/service-accounts/token"
+      },
       "tools": [
         "voidr_auth_status",
         "voidr_auth_select_organization",
-        "voidr_auth_prepare_service_account",
-        "voidr_auth_import_service_account",
+        "voidr_auth_login",
         "voidr_workspace_inspect",
         "voidr_workspace_bootstrap_test_repository",
         "voidr_workspace_select_test_repository",
+        "voidr_workspace_scaffold_test_cases",
+        "voidr_workspace_build_test_repository",
         "voidr_release_deploy_merged_pr",
         "applications_list_applications",
         "applications_get_application",
@@ -47,7 +56,7 @@
         "defects_list_defects",
         "defects_create_defect"
       ],
-      "timeout": 120000,
+      "timeout": 360000,
       "disableToolCache": true
     }
   }

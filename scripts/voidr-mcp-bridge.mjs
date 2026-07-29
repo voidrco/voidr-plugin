@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 
 import { createInterface } from 'node:readline'
-import { authStatus, selectOrganization } from './lib/credentials.mjs'
+import {
+  authStatus,
+  selectOrganization,
+  validatedAuthStatus
+} from './lib/credentials.mjs'
 import { canonicalToolName, isWriteTool, loadPolicy } from './lib/policy.mjs'
 import { RemoteMcpClient } from './lib/remote-mcp.mjs'
 import { bootstrapTestRepository } from './lib/bootstrap.mjs'
@@ -10,10 +14,11 @@ import {
   validateRepositorySelection
 } from './lib/workspace.mjs'
 import { deployMergedPullRequest } from './lib/release-deploy.mjs'
+import { connectWithBrowser } from './lib/browser-auth.mjs'
 import {
-  importServiceAccount,
-  prepareServiceAccountImport
-} from './lib/service-account-import.mjs'
+  buildTestRepository,
+  scaffoldTestCases
+} from './lib/scaffold.mjs'
 
 const policy = loadPolicy()
 const safeRemote = new Set(policy.safeRemoteTools)
@@ -25,7 +30,7 @@ const localTools = [
   {
     name: 'voidr_auth_status',
     description:
-      'Inspect local Voidr Service Account availability, organization, and scopes without exposing credentials.',
+      'Validate the selected local Voidr Service Account against the platform and report organization and scopes without exposing credentials.',
     inputSchema: { type: 'object', properties: {} }
   },
   {
@@ -41,15 +46,9 @@ const localTools = [
     }
   },
   {
-    name: 'voidr_auth_prepare_service_account',
+    name: 'voidr_auth_login',
     description:
-      'Create and open a protected local JSON for the user to fill with a Voidr Client ID and Client Secret. Never returns credential values.',
-    inputSchema: { type: 'object', properties: {} }
-  },
-  {
-    name: 'voidr_auth_import_service_account',
-    description:
-      'Validate and import the protected local Service Account JSON without exposing credentials to the model.',
+      'Open the official Voidr browser login, let the user choose an organization, then create, validate, and store a dedicated Copilot Service Account without exposing credentials.',
     inputSchema: { type: 'object', properties: {} }
   },
   {
@@ -71,7 +70,7 @@ const localTools = [
   {
     name: 'voidr_workspace_bootstrap_test_repository',
     description:
-      'Create a minimal Voidr Playwright test repository at an explicitly confirmed empty destination inside the current workspace.',
+      'Create a minimal Voidr Playwright test repository at an explicitly confirmed empty destination, or initialize an explicitly confirmed Git checkout whose origin matches the repository provisioned by Voidr.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -79,7 +78,14 @@ const localTools = [
         name: { type: 'string' },
         organizationId: { type: 'string' },
         applicationId: { type: 'string' },
-        testPlanId: { type: 'string' }
+        testPlanId: { type: 'string' },
+        allowExistingGitRepository: {
+          type: 'boolean',
+          default: false
+        },
+        repositoryUrl: {
+          type: 'string'
+        }
       },
       required: [
         'path',
@@ -99,6 +105,43 @@ const localTools = [
         path: { type: 'string' }
       },
       required: ['path']
+    }
+  },
+  {
+    name: 'voidr_workspace_scaffold_test_cases',
+    description:
+      'Run the Voidr CLI scaffold for explicitly selected Test Plan case slugs inside the selected repository while injecting the selected Service Account and the plugin environment without exposing credentials.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        repositoryPath: { type: 'string' },
+        testPlanId: {
+          type: 'string',
+          pattern: '^[a-fA-F0-9]{24}$'
+        },
+        cases: {
+          type: 'array',
+          minItems: 1,
+          items: { type: 'string' }
+        }
+      },
+      required: ['repositoryPath', 'testPlanId', 'cases']
+    }
+  },
+  {
+    name: 'voidr_workspace_build_test_repository',
+    description:
+      'Build the explicitly selected Voidr test repository while injecting the selected Service Account and the plugin environment without exposing credentials.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        repositoryPath: { type: 'string' },
+        testPlanId: {
+          type: 'string',
+          pattern: '^[a-fA-F0-9]{24}$'
+        }
+      },
+      required: ['repositoryPath', 'testPlanId']
     }
   },
   {
@@ -157,10 +200,10 @@ async function dispatch(method, params) {
         params.protocolVersion || params.protocol_version || negotiatedProtocol
       return {
         protocolVersion: negotiatedProtocol,
-        capabilities: { tools: { listChanged: false } },
+        capabilities: { tools: { listChanged: true } },
         serverInfo: {
           name: 'voidr-safe-bridge',
-          version: '0.1.0'
+          version: '0.2.16'
         }
       }
     case 'ping':
@@ -215,10 +258,11 @@ async function callTool(params) {
 async function callLocal(name, args) {
   switch (name) {
     case 'voidr_auth_status':
-      return textResult(authStatus())
+      return textResult(await validatedAuthStatus())
     case 'voidr_auth_select_organization': {
       const selected = selectOrganization(String(args.organizationId || ''))
       remote.reset()
+      announceToolsChanged()
       return textResult({
         selected: true,
         organizationId: selected.orgId,
@@ -226,11 +270,10 @@ async function callLocal(name, args) {
         scopes: selected.account?.scopes || []
       })
     }
-    case 'voidr_auth_prepare_service_account':
-      return textResult(await prepareServiceAccountImport())
-    case 'voidr_auth_import_service_account': {
-      const imported = await importServiceAccount()
+    case 'voidr_auth_login': {
+      const imported = await connectWithBrowser()
       remote.reset()
+      announceToolsChanged()
       return textResult(imported)
     }
     case 'voidr_workspace_inspect':
@@ -248,6 +291,11 @@ async function callLocal(name, args) {
           organizationId: String(args.organizationId || ''),
           applicationId: String(args.applicationId || ''),
           testPlanId: String(args.testPlanId || ''),
+          allowExistingGitRepository:
+            args.allowExistingGitRepository === true,
+          repositoryUrl: args.repositoryUrl
+            ? String(args.repositoryUrl)
+            : undefined,
           workspaceRoot: process.env.VOIDR_WORKSPACE_ROOT || process.cwd()
         })
       )
@@ -257,6 +305,23 @@ async function callLocal(name, args) {
           String(args.path || ''),
           process.env.VOIDR_WORKSPACE_ROOT || process.cwd()
         )
+      )
+    case 'voidr_workspace_scaffold_test_cases':
+      return textResult(
+        await scaffoldTestCases({
+          repositoryPath: String(args.repositoryPath || ''),
+          testPlanId: String(args.testPlanId || ''),
+          cases: Array.isArray(args.cases) ? args.cases : [],
+          workspaceRoot: process.env.VOIDR_WORKSPACE_ROOT || process.cwd()
+        })
+      )
+    case 'voidr_workspace_build_test_repository':
+      return textResult(
+        await buildTestRepository({
+          repositoryPath: String(args.repositoryPath || ''),
+          testPlanId: String(args.testPlanId || ''),
+          workspaceRoot: process.env.VOIDR_WORKSPACE_ROOT || process.cwd()
+        })
       )
     case 'voidr_release_deploy_merged_pr':
       return textResult(
@@ -297,4 +362,15 @@ function writeError(id, code, message) {
       error: { code, message }
     })}\n`
   )
+}
+
+function announceToolsChanged() {
+  setImmediate(() => {
+    process.stdout.write(
+      `${JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'notifications/tools/list_changed'
+      })}\n`
+    )
+  })
 }

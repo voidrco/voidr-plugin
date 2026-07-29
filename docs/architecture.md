@@ -80,16 +80,13 @@ authenticated: a unique Service Account must first be provisioned.
 
 An empty legacy scope list remains read-only under the current MCP contract.
 If no account exists, or if its scopes do not explicitly include `write`, the
-plugin stops before any platform mutation. The `/voidr-connect` skill opens a
-protected local JSON outside the workspace. A local MCP tool reads that file,
-validates the Service Account and its scopes, writes the existing store format,
-and removes the temporary JSON. The skill prohibits model-visible file tools
-from reading the file, so the secret never passes through the model.
-
-A future zero-copy onboarding flow should use a device authorization endpoint
-that creates a scoped Service Account and writes it to the same store. The
-current browser/callback implementation of `npx voidr login` is deliberately
-not called by this plugin.
+plugin stops before any platform mutation. The `/voidr-connect` skill starts a
+one-shot loopback callback and opens the official browser authentication route
+already used by the CLI. After explicit organization selection, the temporary
+user token is delivered directly to the local process. That process creates
+and validates a dedicated, role-scoped Copilot Service Account, writes the
+existing store format, and discards the user token. Neither token nor secret
+passes through the model.
 
 ## Security boundaries
 

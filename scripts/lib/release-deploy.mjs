@@ -9,6 +9,7 @@ import {
   latestCodebaseVersion
 } from './release-contract.mjs'
 import { VoidrRestClient } from './voidr-rest.mjs'
+import { voidrCliEnvironment } from './credentials.mjs'
 
 const execFileAsync = promisify(execFile)
 
@@ -18,6 +19,7 @@ export async function deployMergedPullRequest({
   testPlanId,
   workspaceRoot = process.cwd(),
   restClient = new VoidrRestClient(),
+  cliEnvironment,
   run = runCommand
 }) {
   if (!Number.isInteger(Number(pullRequestNumber)) || Number(pullRequestNumber) < 1) {
@@ -49,10 +51,13 @@ export async function deployMergedPullRequest({
     run
   })
   const merged = assertMergedPullRequestEvidence(source)
+  const effectiveCliEnvironment =
+    cliEnvironment || voidrCliEnvironment()
 
   await run('npm', ['run', 'voidr:build'], {
     cwd: selected.path,
-    timeout: 180_000
+    timeout: 180_000,
+    env: effectiveCliEnvironment
   })
   assertSameMergedSource(
     merged,
@@ -65,7 +70,11 @@ export async function deployMergedPullRequest({
   const candidateOutput = await run(
     'npx',
     ['--no-install', 'voidr', 'deploy-candidate', '--json'],
-    { cwd: selected.path, timeout: 180_000 }
+    {
+      cwd: selected.path,
+      timeout: 180_000,
+      env: effectiveCliEnvironment
+    }
   )
   const candidate = parseCandidateOutput(candidateOutput.stdout)
   const manifest = JSON.parse(
@@ -229,7 +238,7 @@ async function runCommand(file, args, options = {}) {
       cwd: options.cwd,
       timeout: options.timeout || 30_000,
       maxBuffer: 10 * 1024 * 1024,
-      env: process.env
+      env: options.env || process.env
     })
   } catch (error) {
     const code = Number.isInteger(error?.code) ? ` (exit ${error.code})` : ''

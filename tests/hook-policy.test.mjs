@@ -1,15 +1,29 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 
 const root = resolve(import.meta.dirname, '..')
 const guard = join(root, 'scripts/guard-hive-tools.mjs')
+const promptHook = join(root, 'scripts/route-voidr-prompt.mjs')
 
 function runHook(payload, dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-'))) {
   const result = spawnSync(process.execPath, [guard], {
+    input: JSON.stringify(payload),
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      COPILOT_PLUGIN_DATA: dataRoot
+    }
+  })
+  assert.equal(result.status, 0, result.stderr)
+  return JSON.parse(result.stdout || '{}')
+}
+
+function submitPrompt(payload, dataRoot) {
+  const result = spawnSync(process.execPath, [promptHook], {
     input: JSON.stringify(payload),
     encoding: 'utf8',
     env: {
@@ -29,6 +43,252 @@ test('falls through for a safe Voidr read tool', () => {
     toolArgs: { testPlanId: '0123456789abcdef01234567' }
   })
   assert.deepEqual(output, {})
+})
+
+test('blocks platform and codebase tools until plan mode is selected', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
+  const now = Date.now()
+  submitPrompt(
+    {
+      sessionId: 'plan-mode-gate',
+      timestamp: now,
+      prompt:
+        'Quero desenvolver testes na Voidr usando o repositório do produto.',
+      transformedPrompt:
+        'Quero desenvolver testes na Voidr usando o repositório do produto.'
+    },
+    dataRoot
+  )
+
+  for (const toolName of ['voidr-voidr_auth_status', 'view']) {
+    const output = runHook(
+      {
+        sessionId: 'plan-mode-gate',
+        cwd: process.cwd(),
+        toolName,
+        toolArgs: {}
+      },
+      dataRoot
+    )
+    assert.equal(output.permissionDecision, 'deny')
+    assert.match(output.permissionDecisionReason, /Criar novo Test Plan/i)
+  }
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId: 'plan-mode-gate',
+        cwd: process.cwd(),
+        toolName: 'ask_user',
+        toolArgs: {}
+      },
+      dataRoot
+    ),
+    {}
+  )
+
+  submitPrompt(
+    {
+      sessionId: 'plan-mode-gate',
+      timestamp: now + 1,
+      prompt: 'Criar novo Test Plan',
+      transformedPrompt: 'Criar novo Test Plan'
+    },
+    dataRoot
+  )
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId: 'plan-mode-gate',
+        cwd: process.cwd(),
+        toolName: 'voidr-voidr_auth_status',
+        toolArgs: {}
+      },
+      dataRoot
+    ),
+    {}
+  )
+})
+
+test('forces voidr_auth_status as the first operational connect action', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
+  const sessionId = 'connect-first-tool'
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: Date.now() - 1,
+      prompt: '/copilot voidr-develop-tests',
+      transformedPrompt: '/copilot voidr-develop-tests'
+    },
+    dataRoot
+  )
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: Date.now(),
+      prompt: '/copilot voidr-connect',
+      transformedPrompt: '/copilot voidr-connect'
+    },
+    dataRoot
+  )
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId,
+        cwd: process.cwd(),
+        toolName: 'skill',
+        toolArgs: { name: 'voidr-connect' }
+      },
+      dataRoot
+    ),
+    {}
+  )
+
+  for (const request of [
+    {
+      toolName: 'read_file',
+      toolArgs: { path: 'skills/voidr-connect/SKILL.md' }
+    },
+    {
+      toolName: 'bash',
+      toolArgs: { command: 'find . -iname "*auth*"' }
+    },
+    {
+      toolName: 'skill',
+      toolArgs: { name: 'unrelated-skill' }
+    }
+  ]) {
+    const output = runHook(
+      {
+        sessionId,
+        cwd: process.cwd(),
+        ...request
+      },
+      dataRoot
+    )
+    assert.equal(output.permissionDecision, 'deny')
+    assert.match(output.permissionDecisionReason, /first operational action/i)
+  }
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId,
+        cwd: process.cwd(),
+        toolName: 'voidr-voidr_auth_status',
+        toolArgs: {}
+      },
+      dataRoot
+    ),
+    {}
+  )
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId,
+        cwd: process.cwd(),
+        toolName: 'read_file',
+        toolArgs: { path: 'README.md' }
+      },
+      dataRoot
+    ),
+    {}
+  )
+})
+
+test('blocks Test Plan writes until the user explicitly approves the draft', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
+  const sessionId = 'test-plan-approval-gate'
+  const now = Date.now()
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now,
+      prompt: '/copilot voidr-develop-tests',
+      transformedPrompt: '/copilot voidr-develop-tests'
+    },
+    dataRoot
+  )
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 1,
+      prompt: 'Criar novo Test Plan',
+      transformedPrompt: 'Criar novo Test Plan'
+    },
+    dataRoot
+  )
+
+  const mutation = {
+    sessionId,
+    cwd: process.cwd(),
+    toolName: 'voidr-test_plans_update_case',
+    toolArgs: JSON.stringify({ caseId: 'case-1', title: 'Login válido' })
+  }
+  let output = runHook(mutation, dataRoot)
+  assert.equal(output.permissionDecision, 'deny')
+  assert.match(output.permissionDecisionReason, /Aprovo este Test Plan/i)
+
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 2,
+      prompt: 'Sim',
+      transformedPrompt: 'Sim'
+    },
+    dataRoot
+  )
+  output = runHook(mutation, dataRoot)
+  assert.equal(output.permissionDecision, 'deny')
+
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 3,
+      prompt: 'Aprovo este Test Plan',
+      transformedPrompt: 'Aprovo este Test Plan'
+    },
+    dataRoot
+  )
+  assert.deepEqual(runHook(mutation, dataRoot), {})
+
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 4,
+      prompt: 'Faça mais uma alteração',
+      transformedPrompt: 'Faça mais uma alteração'
+    },
+    dataRoot
+  )
+  output = runHook(mutation, dataRoot)
+  assert.equal(output.permissionDecision, 'deny')
+})
+
+test('plugin hook resolves its script when VS Code omits PLUGIN_ROOT', () => {
+  const hooks = JSON.parse(readFileSync(join(root, 'hooks.json'), 'utf8'))
+  const command = hooks.hooks.preToolUse[0].bash
+  const result = spawnSync('/bin/bash', ['-lc', command], {
+    input: JSON.stringify({
+      hook_event_name: 'PreToolUse',
+      session_id: 'vscode-hook',
+      cwd: process.cwd(),
+      tool_name: 'mcp_voidr-agent_jobs_trigger_hive_automation',
+      tool_input: '{}'
+    }),
+    encoding: 'utf8',
+    env: {
+      HOME: process.env.HOME,
+      PATH: process.env.PATH,
+      VOIDR_PLUGIN_ROOT: root
+    }
+  })
+  assert.equal(result.status, 0, result.stderr)
+  const output = JSON.parse(result.stdout)
+  assert.equal(output.permissionDecision, 'deny')
+  assert.match(output.permissionDecisionReason, /Hive process/i)
 })
 
 for (const forbidden of [
@@ -85,6 +345,20 @@ test('denies shell-based Hive dispatch but permits normal test commands', () => 
     toolArgs: { command: 'npm run voidr:build' }
   })
   assert.deepEqual(allowed, {})
+})
+
+test('denies manual terminal execution of the Voidr MCP bridge', () => {
+  const output = runHook({
+    sessionId: 'manual-mcp-bridge',
+    cwd: process.cwd(),
+    toolName: 'bash',
+    toolArgs: {
+      command:
+        'printf "%s" \'{"jsonrpc":"2.0","method":"tools/list"}\' | node scripts/voidr-mcp-bridge.mjs'
+    }
+  })
+  assert.equal(output.permissionDecision, 'deny')
+  assert.match(output.permissionDecisionReason, /MCP bridge/i)
 })
 
 test('denies legacy mutable deploy commands but permits immutable candidates', () => {

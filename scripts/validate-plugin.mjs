@@ -13,6 +13,7 @@ import { loadPolicy } from './lib/policy.mjs'
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const errors = []
 const manifest = readJson('plugin.json')
+const packageManifest = readJson('package.json')
 const mcp = readJson('.mcp.json')
 const hooks = readJson('hooks.json')
 const marketplace = readJson('.github/plugin/marketplace.json')
@@ -37,6 +38,11 @@ const marketplaceEntry = marketplace.plugins?.find(
 assert(
   marketplaceEntry?.version === manifest.version,
   'Marketplace plugin version must match plugin.json.'
+)
+assert(
+  packageManifest.version === manifest.version &&
+    marketplace.metadata?.version === manifest.version,
+  'Package and marketplace metadata versions must match plugin.json.'
 )
 assert(
   marketplaceEntry?.source === './',
@@ -123,6 +129,26 @@ assert(
       )
     ),
   'Natural Voidr testing requests must be routed before model execution.'
+)
+const postToolHooks = hooks.hooks?.postToolUse
+assert(
+  Array.isArray(postToolHooks) &&
+    postToolHooks.some(item =>
+      String(item.bash || item.command || '').includes(
+        'post-tool-execution-links.mjs'
+      )
+    ),
+  'Execution evidence must be propagated after tool use.'
+)
+const stopHooks = hooks.hooks?.stop
+assert(
+  Array.isArray(stopHooks) &&
+    stopHooks.some(item =>
+      String(item.bash || item.command || '').includes(
+        'require-execution-links.mjs'
+      )
+    ),
+  'Responses backed by executions must be blocked until they include links.'
 )
 
 const skillFiles = findFiles(join(root, 'skills'), 'SKILL.md')

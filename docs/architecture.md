@@ -172,7 +172,9 @@ Included:
 - verify automation sync;
 - create and observe a platform execution.
 - analyze one failed test from ClickHouse-backed Playwright evidence;
-- optionally create a confirmed defect or change a confirmed governance tag.
+- always link the exact platform execution that supports the analysis;
+- optionally create a confirmed defect with that execution linked in its
+  description and relations, or change a confirmed governance tag.
 
 Not included:
 

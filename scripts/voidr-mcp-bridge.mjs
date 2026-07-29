@@ -19,6 +19,9 @@ import {
   buildTestRepository,
   scaffoldTestCases
 } from './lib/scaffold.mjs'
+import {
+  enrichToolResultWithExecutionLinks
+} from './lib/execution-links.mjs'
 
 const policy = loadPolicy()
 const safeRemote = new Set(policy.safeRemoteTools)
@@ -203,7 +206,7 @@ async function dispatch(method, params) {
         capabilities: { tools: { listChanged: true } },
         serverInfo: {
           name: 'voidr-safe-bridge',
-          version: '0.2.17'
+          version: '0.2.20'
         }
       }
     case 'ping':
@@ -252,7 +255,13 @@ async function callTool(params) {
     throw new Error(`Tool ${rawName} is not allowed by the Voidr plugin policy.`)
   }
 
-  return remote.callTool(name, args)
+  const result = await remote.callTool(name, args)
+  return enrichToolResultWithExecutionLinks(
+    name,
+    args,
+    result,
+    process.env.VOIDR_PLATFORM_URL
+  )
 }
 
 async function callLocal(name, args) {

@@ -83,5 +83,9 @@ execution, Playwright analytics, defect, and governance-tag tools. A
 `preToolUse` hook independently blocks direct, nested, and shell-based
 attempts to dispatch Hive processes.
 
+Failure analysis always links the exact platform execution used as evidence.
+Confirmed defects persist that link in their description and execution
+relation.
+
 See [architecture](docs/architecture.md), [E2E strategy](docs/e2e-strategy.md),
 and [authentication flow](docs/auth-roadmap.md).

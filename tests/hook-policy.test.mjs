@@ -1,6 +1,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs'
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -8,6 +13,8 @@ import { spawnSync } from 'node:child_process'
 const root = resolve(import.meta.dirname, '..')
 const guard = join(root, 'scripts/guard-hive-tools.mjs')
 const promptHook = join(root, 'scripts/route-voidr-prompt.mjs')
+const postToolHook = join(root, 'scripts/post-tool-execution-links.mjs')
+const stopHook = join(root, 'scripts/require-execution-links.mjs')
 
 function runHook(payload, dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-'))) {
   const result = spawnSync(process.execPath, [guard], {
@@ -29,6 +36,20 @@ function submitPrompt(payload, dataRoot) {
     env: {
       ...process.env,
       COPILOT_PLUGIN_DATA: dataRoot
+    }
+  })
+  assert.equal(result.status, 0, result.stderr)
+  return JSON.parse(result.stdout || '{}')
+}
+
+function runScript(script, payload, dataRoot) {
+  const result = spawnSync(process.execPath, [script], {
+    input: JSON.stringify(payload),
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      COPILOT_PLUGIN_DATA: dataRoot,
+      VOIDR_PLATFORM_URL: 'https://platform.voidr.co'
     }
   })
   assert.equal(result.status, 0, result.stderr)
@@ -318,6 +339,123 @@ test('plugin hook resolves its script when VS Code omits PLUGIN_ROOT', () => {
   assert.match(output.permissionDecisionReason, /Hive process/i)
 })
 
+test('execution evidence blocks a response without its link', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
+  const transcriptPath = join(dataRoot, 'transcript.jsonl')
+  const sessionId = 'execution-link-stop'
+  const executionId = '6a6a839850a27b89d2d7df2b'
+
+  const postOutput = runScript(
+    postToolHook,
+    {
+      session_id: sessionId,
+      tool_name:
+        'mcp_voidr-safe-br_playwright_list_execution_failures',
+      tool_input: { executionId },
+      tool_response: { content: [] }
+    },
+    dataRoot
+  )
+  assert.match(
+    postOutput.hookSpecificOutput.additionalContext,
+    new RegExp(executionId)
+  )
+
+  writeFileSync(
+    transcriptPath,
+    [
+      transcriptEntry('user.message', { content: 'Analise POLAR-182' }),
+      transcriptEntry('tool.execution_start', {
+        toolName:
+          'mcp_voidr-safe-br_playwright_list_execution_failures',
+        arguments: { executionId }
+      }),
+      transcriptEntry('assistant.message', {
+        content: 'A falha é intermitente.'
+      })
+    ].join('\n')
+  )
+
+  const blocked = runScript(
+    stopHook,
+    {
+      session_id: sessionId,
+      transcript_path: transcriptPath
+    },
+    dataRoot
+  )
+  assert.equal(blocked.hookSpecificOutput.decision, 'block')
+  assert.match(blocked.hookSpecificOutput.reason, new RegExp(executionId))
+
+  writeFileSync(
+    transcriptPath,
+    `${readFileSync(transcriptPath, 'utf8')}\n${transcriptEntry(
+      'assistant.message',
+      {
+        content:
+          `Execution: [Open execution](https://platform.voidr.co/execution/${executionId})`
+      }
+    )}`
+  )
+  assert.deepEqual(
+    runScript(
+      stopHook,
+      {
+        session_id: sessionId,
+        transcript_path: transcriptPath
+      },
+      dataRoot
+    ),
+    {}
+  )
+})
+
+test('defect creation receives execution relations from analyzed evidence', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
+  const sessionId = 'defect-execution-link'
+  const executionId = '6a6a814011024018378d4e19'
+
+  runScript(
+    postToolHook,
+    {
+      session_id: sessionId,
+      tool_name: 'mcp_voidr-safe-br_playwright_get_test_timeline',
+      tool_input: { executionId, testCaseSlug: 'SAUDE-02' },
+      tool_response: { content: [] }
+    },
+    dataRoot
+  )
+
+  const output = runHook(
+    {
+      session_id: sessionId,
+      cwd: process.cwd(),
+      tool_name: 'mcp_voidr-safe-br_defects_create_defect',
+      tool_input: {
+        title: 'SAUDE-02 timeout',
+        applicationId: 'app-serasa',
+        severity: 'high',
+        priority: 'p2',
+        sessions: [executionId]
+      }
+    },
+    dataRoot
+  )
+
+  assert.equal(
+    output.hookSpecificOutput.updatedInput.relations.executions[0],
+    executionId
+  )
+  assert.deepEqual(
+    output.hookSpecificOutput.updatedInput.relations.testCases,
+    ['SAUDE-02']
+  )
+  assert.match(
+    output.hookSpecificOutput.updatedInput.description,
+    new RegExp(`https://platform\\.voidr\\.co/execution/${executionId}`)
+  )
+})
+
 for (const forbidden of [
   'agent_jobs_trigger_automation',
   'agent_jobs_trigger_hive_automation',
@@ -519,3 +657,7 @@ test('restricts edit paths after a test repository is selected', () => {
   )
   assert.equal(patchOutside.permissionDecision, 'deny')
 })
+
+function transcriptEntry(type, data) {
+  return JSON.stringify({ type, data })
+}

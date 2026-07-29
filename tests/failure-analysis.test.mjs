@@ -51,3 +51,18 @@ test('failure analysis mutations are explicit and write-scoped', () => {
   assert.match(skill, /Never create a bug-report video/)
   assert.match(skill, /Never change a tag automatically/)
 })
+
+test('failure analysis always links the evidence execution', () => {
+  assert.match(
+    skill,
+    /executionUrl = <VOIDR_PLATFORM_URL>\/execution\/<executionId>/
+  )
+  assert.match(skill, /Never finish a test-case failure analysis without/)
+  assert.match(skill, /clickable `Execution` URL/)
+  assert.match(skill, /Execution: \[Open execution\]\(<executionUrl>\)/)
+  assert.match(skill, /`relations\.executions: \[executionId\]`/)
+  assert.match(skill, /`relations\.testCases: \[testCaseSlug\]`/)
+  assert.match(skill, /description under `Evidence execution`/)
+  assert.match(skill, /show it and the required\s+`Execution` link/)
+  assert.match(skill, /Return the created defect and end with the same required/)
+})

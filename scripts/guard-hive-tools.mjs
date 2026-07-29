@@ -11,6 +11,11 @@ import {
   readSessionState,
   updateSessionState
 } from './lib/session-state.mjs'
+import {
+  buildExecutionUrl,
+  executionIdsFromToolInput,
+  uniqueExecutionIds
+} from './lib/execution-links.mjs'
 
 const input = await readStdin()
 let payload
@@ -100,6 +105,8 @@ if (toolName === 'voidr_workspace_select_test_repository') {
 }
 
 enforceSelectedRepositoryBoundary(payload, rawToolName, toolArgs)
+const updatedToolArgs = addDefectExecutionEvidence(payload, toolName, toolArgs)
+if (updatedToolArgs) allowUpdatedInput(updatedToolArgs)
 process.stdout.write('{}\n')
 
 function recordSelection(hookPayload, args) {
@@ -288,6 +295,44 @@ function enforceTestPlanWriteApproval(hookPayload, canonicalName) {
   }
 }
 
+function addDefectExecutionEvidence(hookPayload, canonicalName, args) {
+  if (canonicalName !== 'defects_create_defect') return null
+
+  const state = readSessionState(hookPayload)
+  const knownIds = state.latestEvidenceExecutionIds || []
+  const inputIds = executionIdsFromToolInput(canonicalName, args, knownIds)
+  const executionIds = uniqueExecutionIds([
+    ...inputIds,
+    ...(inputIds.length === 0 && knownIds.length === 1 ? knownIds : [])
+  ])
+  if (executionIds.length === 0) return null
+
+  const executionId = executionIds[0]
+  const executionUrl = buildExecutionUrl(executionId)
+  const description = String(args.description || '')
+  const evidenceLine = `Evidence execution: ${executionUrl}`
+  const testCases = args.relations?.testCases?.length
+    ? args.relations.testCases
+    : state.latestEvidenceTestCaseSlugs?.length === 1
+      ? state.latestEvidenceTestCaseSlugs
+      : undefined
+
+  return {
+    ...args,
+    description: description.includes(executionUrl)
+      ? description
+      : `${description}${description ? '\n\n' : ''}${evidenceLine}`,
+    relations: {
+      ...(args.relations || {}),
+      ...(testCases ? { testCases } : {}),
+      executions: uniqueExecutionIds([
+        ...(args.relations?.executions || []),
+        executionId
+      ])
+    }
+  }
+}
+
 function normalizeToolArgs(value) {
   if (typeof value !== 'string') return value || {}
   try {
@@ -298,12 +343,30 @@ function normalizeToolArgs(value) {
 }
 
 function deny(reason) {
-  process.stdout.write(
-    `${JSON.stringify({
+  const output = {
+    permissionDecision: 'deny',
+    permissionDecisionReason: reason,
+    hookSpecificOutput: {
+      hookEventName: 'PreToolUse',
       permissionDecision: 'deny',
       permissionDecisionReason: reason
-    })}\n`
-  )
+    }
+  }
+  process.stdout.write(`${JSON.stringify(output)}\n`)
+  process.exit(0)
+}
+
+function allowUpdatedInput(updatedInput) {
+  const output = {
+    permissionDecision: 'allow',
+    updatedInput,
+    hookSpecificOutput: {
+      hookEventName: 'PreToolUse',
+      permissionDecision: 'allow',
+      updatedInput
+    }
+  }
+  process.stdout.write(`${JSON.stringify(output)}\n`)
   process.exit(0)
 }
 

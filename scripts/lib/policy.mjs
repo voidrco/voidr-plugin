@@ -26,6 +26,7 @@ export function canonicalToolName(value) {
     return (
       name === candidate ||
       name.endsWith(`-${candidate}`) ||
+      name.endsWith(`_${candidate}`) ||
       name.endsWith(`__${candidate}`) ||
       name.endsWith(`/${candidate}`) ||
       name.endsWith(`(${candidate})`)

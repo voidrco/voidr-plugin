@@ -40,6 +40,24 @@ If analytics are still indexing, retry once. If they remain unavailable,
 report that detailed analysis is incomplete and stop. Never infer a cause
 from execution status alone.
 
+## Resolve the execution URL
+
+After analytics resolves the canonical execution ID, build:
+
+`executionUrl = <VOIDR_PLATFORM_URL>/execution/<executionId>`
+
+Use the configured `VOIDR_PLATFORM_URL`, without a trailing slash. If that
+configuration is unavailable, use `https://platform.voidr.co`. Never use the
+API URL, execution code, test result ID, or failure signature in this route.
+
+Keep this URL attached to the selected execution and test throughout the
+workflow. Never finish a test-case failure analysis without a clickable
+`Execution` link to this URL. If the canonical execution ID is unavailable,
+report that the analysis is incomplete and do not create a defect.
+Render the link on its own line as:
+
+`Execution: [Open execution](<executionUrl>)`
+
 ## Select one failed test
 
 Call every required page of `playwright_list_execution_failures` for the
@@ -99,7 +117,7 @@ the same behavior across executions; mention intervening passes when present.
 
 Return:
 
-- selected execution and test;
+- selected execution and test, including the clickable `Execution` URL;
 - cause and confidence;
 - observed evidence with step, URL, status code, console message, DOM element,
   or file/line where available;
@@ -113,11 +131,17 @@ Return:
 Creating a defect is a separate mutation:
 
 1. Call `defects_list_defects` with the selected test slug.
-2. If a non-closed defect already exists, show it instead of creating another.
+2. If a non-closed defect already exists, show it and the required
+   `Execution` link instead of creating another.
 3. Otherwise draft title, severity, priority, application, environment,
    description, reproducibility, and relations to the execution and test.
+   The draft must show the clickable `Execution` URL. Include that URL in the
+   description under `Evidence execution`, set
+   `relations.executions: [executionId]`, and set
+   `relations.testCases: [testCaseSlug]`.
 4. Show the complete draft and ask for explicit confirmation.
 5. Confirm `canWrite: true`, then call `defects_create_defect` once.
+6. Return the created defect and end with the same required `Execution` link.
 
 Never create a bug-report video from this skill.
 

@@ -1,7 +1,7 @@
 {
   "name": "copilot",
   "description": "Develop, deploy, execute, and analyze Voidr Playwright tests with MCP-backed workflows and explicit safety gates.",
-  "version": "0.2.18",
+  "version": "0.2.20",
   "author": {
     "name": "Voidr"
   },

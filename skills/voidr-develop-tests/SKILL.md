@@ -1,6 +1,6 @@
 ---
 name: voidr-develop-tests
-description: Orchestrates Voidr test development from a natural-language request such as "quero desenvolver testes na Voidr". Use when the user wants to create or continue a Test Plan, implement Playwright tests, deploy them, or execute them on the Voidr platform.
+description: Inicia e orquestra o desenvolvimento de testes na Voidr. Use SEMPRE quando o usuário disser "quero desenvolver testes na Voidr", "quero criar testes na Voidr", "automatizar testes na Voidr", "criar um Test Plan", "usar um Test Plan existente" ou pedir para implementar, publicar ou executar testes Playwright pela Voidr. O fluxo começa escolhendo Test Plan novo ou existente e carrega aplicações e planos exclusivamente pelo MCP da Voidr antes de inspecionar o workspace.
 argument-hint: "[objetivo de teste]"
 ---
 
@@ -15,6 +15,13 @@ For a new conversation, the first response must ask exactly one decision:
 
 > Você quer criar um novo Test Plan ou trabalhar em um Test Plan existente?
 
+Use the native `ask_user` question UI when available, with exactly these
+selectable options:
+
+1. `Criar novo Test Plan`
+2. `Usar Test Plan existente`
+
+End the response after this question. Do not answer it on the user's behalf.
 Do not include application, flow, or repository questions in that first
 question batch. Do not inspect `project.json`, scan repositories, or call a
 platform tool before the user answers. A local file is not evidence of current
@@ -63,10 +70,11 @@ Call `voidr_auth_status`.
 After authentication and organization selection:
 
 1. Call `applications_list_applications`.
-2. Build application choices exclusively from that tool response. Show each
-   returned application name and ID.
-3. Ask the user to select one when there is more than one result or the target
-   remains ambiguous.
+2. Build application choices exclusively from that tool response.
+3. Always use `ask_user` when available to show the returned application names
+   as selectable options and ask the user to choose one. Keep each returned ID
+   internally, but do not require the user to copy or type an `applicationId`.
+   Even when there is only one application, ask the user to confirm it.
 4. If the user named an application, match it only against the MCP response.
    Ask on multiple matches and stop if no match exists.
 5. Optionally call `applications_get_application` for the selected ID when
@@ -75,14 +83,19 @@ After authentication and organization selection:
 Never use `voidr_workspace_inspect`, Explorer folders, Git remotes,
 `package.json`, or `project.json` to populate the application question. Do not
 offer a generic “application or flow” choice based on workspace directories.
+Never ask the user to provide an `applicationId` manually.
 
 Keep the selected `applicationId` authoritative for all Test Plan calls.
 
 ## 4. Route by Test Plan mode
 
-For a new Test Plan, follow `/voidr-test-plan` in create mode.
+For a new Test Plan, follow `/voidr-test-plan` in create mode. Do not ask for a
+`testPlanId`; Voidr creates it only after the user approves the visible draft.
 
-For an existing Test Plan, follow `/voidr-test-plan` in select mode.
+For an existing Test Plan, follow `/voidr-test-plan` in select mode. Call
+`test_plans_list_test_plans` for the selected application, then use `ask_user`
+when available to present the returned plan names as selectable options. Keep
+the selected ID internally and never ask the user to type a `testPlanId`.
 
 Do not proceed until the plan ID, application ID, organization ID, and exact
 case scope are visible to the user.

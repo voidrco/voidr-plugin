@@ -152,10 +152,10 @@ async function dispatch(method, params) {
         params.protocolVersion || params.protocol_version || negotiatedProtocol
       return {
         protocolVersion: negotiatedProtocol,
-        capabilities: { tools: { listChanged: false } },
+        capabilities: { tools: { listChanged: true } },
         serverInfo: {
           name: 'voidr-safe-bridge',
-          version: '0.2.1'
+          version: '0.2.2'
         }
       }
     case 'ping':
@@ -214,6 +214,7 @@ async function callLocal(name, args) {
     case 'voidr_auth_select_organization': {
       const selected = selectOrganization(String(args.organizationId || ''))
       remote.reset()
+      announceToolsChanged()
       return textResult({
         selected: true,
         organizationId: selected.orgId,
@@ -224,6 +225,7 @@ async function callLocal(name, args) {
     case 'voidr_auth_login': {
       const imported = await connectWithBrowser()
       remote.reset()
+      announceToolsChanged()
       return textResult(imported)
     }
     case 'voidr_workspace_inspect':
@@ -290,4 +292,15 @@ function writeError(id, code, message) {
       error: { code, message }
     })}\n`
   )
+}
+
+function announceToolsChanged() {
+  setImmediate(() => {
+    process.stdout.write(
+      `${JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'notifications/tools/list_changed'
+      })}\n`
+    )
+  })
 }

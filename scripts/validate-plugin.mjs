@@ -82,6 +82,16 @@ assert(
   ),
   'The Hive guard must run on preToolUse.'
 )
+const promptHooks = hooks.hooks?.userPromptTransformed
+assert(
+  Array.isArray(promptHooks) &&
+    promptHooks.some(item =>
+      String(item.bash || item.command || '').includes(
+        'route-voidr-prompt.mjs'
+      )
+    ),
+  'Natural Voidr testing requests must be routed before model execution.'
+)
 
 const skillFiles = findFiles(join(root, 'skills'), 'SKILL.md')
 assert(skillFiles.length >= 4, 'Expected the four MVP skills.')
@@ -113,6 +123,7 @@ const entrySkill = readFileSync(
   join(root, 'skills/voidr-develop-tests/SKILL.md'),
   'utf8'
 )
+const entryFrontmatter = parseFrontmatter(entrySkill)
 const connectSkill = readFileSync(
   join(root, 'skills/voidr-connect/SKILL.md'),
   'utf8'
@@ -134,6 +145,17 @@ assert(
   /first response must ask exactly one decision/i.test(entrySkill),
   'Entry skill must keep plan mode as the only first-turn decision.'
 )
+assert(
+  /quero desenvolver testes na Voidr/i.test(entryFrontmatter.description || '') &&
+    /automatizar testes na Voidr/i.test(entryFrontmatter.description || ''),
+  'Entry skill description must include natural Portuguese routing triggers.'
+)
+assert(
+  /native `ask_user` question UI[\s\S]*?Criar novo Test Plan[\s\S]*?Usar Test Plan existente/i.test(
+    entrySkill
+  ),
+  'Entry skill must render new-versus-existing as selectable options.'
+)
 const applicationDiscoveryIndex = entrySkill.indexOf(
   'applications_list_applications'
 )
@@ -152,6 +174,15 @@ assert(
       entrySkill
     ),
   'Entry skill must separate MCP applications from workspace repositories.'
+)
+assert(
+  /Always use `ask_user`[\s\S]*?returned application names[\s\S]*?never ask the user to provide an `applicationId` manually/i.test(
+    entrySkill
+  ) &&
+    /test_plans_list_test_plans[\s\S]*?selectable options[\s\S]*?never ask the user to type a `testPlanId`/i.test(
+      entrySkill
+    ),
+  'Entry skill must use MCP-backed selectable application and Test Plan choices.'
 )
 assert(
   /If it returns `authenticated: false`, stop the current workflow and reply[\s\S]*?\/copilot voidr-connect/i.test(

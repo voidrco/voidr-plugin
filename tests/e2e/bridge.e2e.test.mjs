@@ -135,6 +135,7 @@ test('bridge filters discovery, keeps secrets local, and blocks forbidden calls'
     clientInfo: { name: 'e2e', version: '1.0.0' }
   })
   assert.equal(initialized.serverInfo.name, 'voidr-safe-bridge')
+  assert.equal(initialized.capabilities.tools.listChanged, true)
 
   const listed = await client.request('tools/list', {})
   const names = listed.tools.map(tool => tool.name)
@@ -197,6 +198,10 @@ test('bridge filters discovery, keeps secrets local, and blocks forbidden calls'
     name: 'voidr_auth_select_organization',
     arguments: { organizationId: 'org-second' }
   })
+  const toolsChanged = await client.waitForNotification(
+    'notifications/tools/list_changed'
+  )
+  assert.equal(toolsChanged.method, 'notifications/tools/list_changed')
   await client.request('tools/call', {
     name: 'applications_list_applications',
     arguments: {}
@@ -302,12 +307,21 @@ test('bridge blocks writes for an account without write scope before network', a
 function jsonRpcClient(child) {
   let nextId = 1
   const pending = new Map()
+  const notifications = []
+  const notificationWaiters = new Map()
   let stdout = ''
   let stderr = ''
   const lines = createInterface({ input: child.stdout, crlfDelay: Infinity })
   lines.on('line', line => {
     stdout += `${line}\n`
     const message = JSON.parse(line)
+    if (!Object.hasOwn(message, 'id')) {
+      notifications.push(message)
+      const waiters = notificationWaiters.get(message.method) || []
+      notificationWaiters.delete(message.method)
+      for (const resolve of waiters) resolve(message)
+      return
+    }
     const waiter = pending.get(message.id)
     if (waiter) {
       pending.delete(message.id)
@@ -340,6 +354,27 @@ function jsonRpcClient(child) {
             resolve(value)
           }
         })
+      })
+    },
+    waitForNotification(method) {
+      const existing = notifications.find(item => item.method === method)
+      if (existing) return Promise.resolve(existing)
+      return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          const waiters = notificationWaiters.get(method) || []
+          notificationWaiters.set(
+            method,
+            waiters.filter(waiter => waiter !== onNotification)
+          )
+          reject(new Error(`Timed out waiting for notification ${method}`))
+        }, 5000)
+        const onNotification = value => {
+          clearTimeout(timeout)
+          resolve(value)
+        }
+        const waiters = notificationWaiters.get(method) || []
+        waiters.push(onNotification)
+        notificationWaiters.set(method, waiters)
       })
     },
     stdoutText: () => stdout,

@@ -31,8 +31,9 @@ This step is mandatory for both new and existing plans:
 2. Build choices only from applications returned by MCP. Never use workspace
    directories, repository names, Git remotes, or local files as application
    options.
-3. Ask the user to select an application if it is not already explicit and
-   uniquely matched in the MCP response.
+3. Use `ask_user` when available to present application names as selectable
+   options. Keep IDs internally; never ask the user to type an `applicationId`.
+   Confirm the application even when the MCP returns only one.
 4. Keep the returned application ID as the authoritative `applicationId`.
 
 One application may be implemented by multiple product repositories. Repository
@@ -41,7 +42,9 @@ selection is a later, separate decision and cannot change `applicationId`.
 ## Existing plan
 
 1. Call `test_plans_list_test_plans` for the selected application.
-2. Show plan name, ID, status, and test count. Ask the user to select one.
+2. Use `ask_user` when available to show each returned plan name, status, and
+   test count as selectable options. Keep IDs internally and never ask the user
+   to type a `testPlanId`.
 3. Call `test_plans_get_test_plan` for the selected ID.
 4. Ask whether to implement all pending cases or a named subset.
 5. Repeat the exact selected case slugs and wait for confirmation.

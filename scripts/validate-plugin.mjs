@@ -146,6 +146,12 @@ assert(
   'Entry skill must keep plan mode as the only first-turn decision.'
 )
 assert(
+  /selects either option, immediately call `voidr_auth_status`[\s\S]*?requires no confirmation[\s\S]*?Do not ask\s+whether to validate authentication/i.test(
+    entrySkill
+  ),
+  'Entry skill must continue directly to the read-only auth check after plan-mode selection.'
+)
+assert(
   /quero desenvolver testes na Voidr/i.test(entryFrontmatter.description || '') &&
     /automatizar testes na Voidr/i.test(entryFrontmatter.description || ''),
   'Entry skill description must include natural Portuguese routing triggers.'

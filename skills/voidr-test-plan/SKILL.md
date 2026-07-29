@@ -13,7 +13,9 @@ persist an approved result.
 ## Authentication gate
 
 Unless the calling workflow already confirmed authentication, call
-`voidr_auth_status` before any application or Test Plan tool.
+`voidr_auth_status` before any application or Test Plan tool. It is read-only:
+call it immediately without asking the user for permission to validate
+authentication or continue.
 
 If it returns `authenticated: false`, stop and reply only:
 

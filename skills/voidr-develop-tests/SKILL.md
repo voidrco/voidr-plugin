@@ -27,6 +27,12 @@ question batch. Do not inspect `project.json`, scan repositories, or call a
 platform tool before the user answers. A local file is not evidence of current
 intent.
 
+When the user selects either option, immediately call `voidr_auth_status` in
+that same turn. This read-only check requires no confirmation. Do not ask
+whether to validate authentication, whether to proceed, or what the user wants
+to do next. The plan-mode answer already authorizes this mandatory discovery
+step.
+
 After the answer, keep these values explicit and separate:
 
 - selected organization;
@@ -50,7 +56,8 @@ implementation are performed by the Copilot agent itself.
 
 ## 2. Check authentication
 
-Call `voidr_auth_status`.
+Call `voidr_auth_status` immediately after the plan-mode answer without an
+additional user gate.
 
 - If it returns `authenticated: false`, stop the current workflow and reply
   only:

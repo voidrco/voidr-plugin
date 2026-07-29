@@ -31,6 +31,7 @@ After the answer, keep these values explicit and separate:
 
 - selected organization;
 - selected application;
+- user-selected feature or journey;
 - selected Test Plan;
 - selected writable test repository;
 - optional product repositories used as read-only context;
@@ -89,8 +90,33 @@ Keep the selected `applicationId` authoritative for all Test Plan calls.
 
 ## 4. Route by Test Plan mode
 
-For a new Test Plan, follow `/voidr-test-plan` in create mode. Do not ask for a
-`testPlanId`; Voidr creates it only after the user approves the visible draft.
+Before calling any Test Plan mutation tool, explicitly load the
+`/voidr-test-plan` skill and follow its full instructions. Mentioning that skill
+is not enough. If it cannot be loaded, stop.
+
+For a new Test Plan, use this mandatory sequence:
+
+1. Ask exactly:
+
+   > Qual feature ou jornada da aplicação selecionada você quer testar
+   > primeiro?
+
+   Use a free-text `ask_user` field. Offer selectable features only when their
+   names came from the Voidr MCP response or the user; never invent options from
+   the application name or a repository. End the response and wait.
+2. After the feature answer, collect WEB/API and environment/base URL, critical
+   scenarios, expected behavior, out-of-scope behavior, and test data or
+   preconditions.
+3. Present a complete Test Plan draft containing at least one case with
+   Arrange/Act/Assert.
+4. Ask the user to approve or revise that exact draft. End the response.
+5. Only after explicit approval may the agent call
+   `test_plans_create_test_plan` and `test_plans_populate_test_plan`.
+
+Do not infer a feature from the application name, product repository, route,
+README, or existing source code. Do not create an empty DRAFT and fill it later.
+Do not ask for a `testPlanId`; Voidr returns it after the approved plan is
+created.
 
 For an existing Test Plan, follow `/voidr-test-plan` in select mode. Call
 `test_plans_list_test_plans` for the selected application, then use `ask_user`
@@ -134,8 +160,9 @@ change the selected application when product repositories are added.
 
 ## 6. Continue through the gates
 
-Use `/voidr-implement-tests` for repository validation, scaffolding,
-implementation, and local validation.
+Before scaffolding, reading product code, or editing a test, explicitly load
+the `/voidr-implement-tests` skill. If it cannot be loaded, stop. Use it for
+repository validation, scaffolding, implementation, and local validation.
 
 Use `/voidr-deploy-run` only after local validation passes.
 

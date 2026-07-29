@@ -16,11 +16,21 @@ Require all of:
 - organization ID;
 - application ID;
 - Test Plan ID;
+- exact user-selected feature or journey;
 - exact selected case slugs;
 - test repository selected through
   `voidr_workspace_select_test_repository`.
 
 If any value is missing, return to the relevant selection step.
+
+Read the persisted plan with `test_plans_get_test_plan` before scaffolding.
+Every selected case must already exist in that approved plan. If the plan is
+empty or a case is missing, stop and return to `/voidr-test-plan`.
+
+Never call `test_plans_create_test_plan`, `test_plans_create_module`,
+`test_plans_create_suite`, `test_plans_create_case`, or
+`test_plans_populate_test_plan` from this skill. Never invent a case because a
+scaffold command reports that the plan is empty.
 
 ## Validate the repository link
 

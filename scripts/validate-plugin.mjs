@@ -185,6 +185,28 @@ assert(
   'Entry skill must use MCP-backed selectable application and Test Plan choices.'
 )
 assert(
+  /Before calling any Test Plan mutation tool, explicitly load the[\s\S]*?`\/voidr-test-plan` skill/i.test(
+    entrySkill
+  ) &&
+    /Qual feature ou jornada da aplicação selecionada você quer testar[\s\S]*?primeiro/i.test(
+      entrySkill
+    ) &&
+    /Do not infer a feature from the application name, product repository, route,[\s\S]*?README/i.test(
+      entrySkill
+    ),
+  'Entry skill must explicitly load the Test Plan skill and require a user-selected feature.'
+)
+assert(
+  /Only after explicit approval may the agent call[\s\S]*?test_plans_create_test_plan[\s\S]*?test_plans_populate_test_plan/i.test(
+    entrySkill
+  ),
+  'Entry skill must block Test Plan writes until feature-scoped draft approval.'
+)
+assert(
+  /explicitly load[\s\S]*?`\/voidr-implement-tests` skill/i.test(entrySkill),
+  'Entry skill must explicitly load the implementation skill before code work.'
+)
+assert(
   /If it returns `authenticated: false`, stop the current workflow and reply[\s\S]*?\/copilot voidr-connect/i.test(
     entrySkill
   ),

@@ -69,8 +69,21 @@ test('new plan requires approval before platform mutations', () => {
     mode: 'new'
   })
   workflow = selectApplicationFromMcp(workflow)
+  assert.match(workflow.prompt, /qual feature ou jornada/i)
+  assert.deepEqual(workflow.actions, [])
+  assert.throws(
+    () =>
+      transition(workflow, {
+        type: 'NEW_PLAN_DRAFTED',
+        feature: 'Login',
+        caseSlugs: ['LOGIN-001']
+      }),
+    /Expected PLAN_CONTEXT_COLLECTED/
+  )
+  workflow = collectNewPlanScope(workflow, 'Login com MFA')
   workflow = transition(workflow, {
     type: 'NEW_PLAN_DRAFTED',
+    feature: 'Login com MFA',
     caseSlugs: ['LOGIN-001', 'LOGIN-002']
   })
   assert.equal(workflow.state, States.PLAN_DRAFTED)
@@ -89,6 +102,26 @@ test('new plan requires approval before platform mutations', () => {
       'test_plans_populate_test_plan',
       'test_plans_get_test_plan'
     ]
+  )
+})
+
+test('new plan cannot infer a different feature from application or repository context', () => {
+  let workflow = createWorkflow()
+  workflow = transition(workflow, {
+    type: 'PLAN_MODE_CHOSEN',
+    mode: 'new'
+  })
+  workflow = selectApplicationFromMcp(workflow)
+  workflow = collectNewPlanScope(workflow, 'Recuperação de senha')
+
+  assert.throws(
+    () =>
+      transition(workflow, {
+        type: 'NEW_PLAN_DRAFTED',
+        feature: 'Login com dados válidos',
+        caseSlugs: ['LOGIN-001']
+      }),
+    /preserve the user-selected feature/i
   )
 })
 
@@ -223,6 +256,24 @@ function selectApplicationFromMcp(workflow) {
     type: 'APPLICATION_SELECTED',
     applicationId: 'app-voidr',
     applicationName: 'Voidr Monitor'
+  })
+}
+
+function collectNewPlanScope(workflow, feature) {
+  workflow = transition(workflow, {
+    type: 'FEATURE_SELECTED',
+    feature
+  })
+  assert.equal(workflow.state, States.FEATURE_SELECTED)
+  assert.deepEqual(workflow.actions, [])
+  return transition(workflow, {
+    type: 'NEW_PLAN_CONTEXT_COLLECTED',
+    testTarget: 'WEB',
+    environment: 'staging — https://example.test',
+    criticalScenarios: ['happy path', 'invalid credentials'],
+    expectedBehavior: 'The user reaches the authenticated home page.',
+    outOfScope: 'Social login',
+    preconditions: ['A writable synthetic test account exists']
   })
 }
 

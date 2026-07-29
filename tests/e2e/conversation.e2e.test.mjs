@@ -39,10 +39,28 @@ test('natural-language greenfield journey reaches deploy and execution through e
     applicationName: 'Blip Monitor'
   })
   assert.equal(workflow.context.applicationId, 'app-monitor')
+  assert.match(workflow.prompt, /qual feature ou jornada/i)
+  assert.deepEqual(workflow.actions, [])
 
   workflow = transition(workflow, {
+    type: 'FEATURE_SELECTED',
+    feature: 'Monitoramento de indisponibilidade'
+  })
+  assert.equal(workflow.state, States.FEATURE_SELECTED)
+  assert.equal(workflow.context.feature, 'Monitoramento de indisponibilidade')
+  workflow = transition(workflow, {
+    type: 'NEW_PLAN_CONTEXT_COLLECTED',
+    testTarget: 'API',
+    environment: 'staging — https://api.example.test',
+    criticalScenarios: ['endpoint indisponível', 'latência acima do limite'],
+    expectedBehavior: 'A plataforma registra e alerta a indisponibilidade.',
+    outOfScope: 'Falhas de infraestrutura da própria Voidr',
+    preconditions: ['Endpoint sintético controlado']
+  })
+  workflow = transition(workflow, {
     type: 'NEW_PLAN_DRAFTED',
-    caseSlugs: ['AUTH-001', 'AUTH-002']
+    feature: 'Monitoramento de indisponibilidade',
+    caseSlugs: ['MONITOR-001', 'MONITOR-002']
   })
   assert.equal(workflow.state, States.PLAN_DRAFTED)
   assert.equal(workflow.actions.length, 0)

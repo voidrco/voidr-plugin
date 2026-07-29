@@ -1,6 +1,6 @@
 ---
 name: voidr-test-plan
-description: Creates or selects a Voidr Test Plan with an explicit human approval gate. Use after the user has said whether the plan is new or existing.
+description: Creates or selects a Voidr Test Plan with mandatory user-selected feature, scope collection, visible draft, and explicit human approval gates. Use after the user has said whether the plan is new or existing.
 argument-hint: "[novo|existente] [objetivo]"
 ---
 
@@ -53,19 +53,46 @@ Never resolve the plan from `project.json`.
 
 ## New plan
 
-Ask only the missing questions, preferably in small groups:
+### Gate 1: user-selected feature
+
+Before reading a product repository or calling any Test Plan mutation, ask
+exactly:
+
+> Qual feature ou jornada da aplicação selecionada você quer testar primeiro?
+
+Use `ask_user` with free-text input and end the response. If the Voidr MCP
+response contains real feature names, they may be selectable options. Otherwise
+do not invent feature options.
+
+Never infer the feature from:
+
+- the application name;
+- a repository or directory name;
+- routes, README files, or source code;
+- a generic happy path.
+
+If the user already named a feature, repeat it and ask for confirmation.
+
+### Gate 2: test context
+
+After the feature is confirmed, ask only the missing questions, preferably in
+one small group:
 
 1. Is the target WEB or API, and which environment/base URL is relevant?
-2. Which critical user journeys or business risks must be covered?
-3. Which behavior is explicitly out of scope?
-4. What data, accounts, or preconditions are available?
+2. Which scenarios inside the selected feature are critical?
+3. What is the expected behavior or acceptance criterion?
+4. Which behavior is explicitly out of scope?
+5. What data, accounts, or preconditions are available?
 
 Use product repositories only as read-only supporting context and only after
 the user identifies them.
 
+### Gate 3: visible draft and approval
+
 Create a visible draft with:
 
 - plan name and objective;
+- the exact user-selected feature or journey;
 - assumptions and open questions;
 - modules and suites;
 - cases with stable proposed slugs;
@@ -75,7 +102,10 @@ Create a visible draft with:
 - total case count.
 
 Ask the user to approve or revise the draft. Do not persist a partial or
-unapproved plan.
+unapproved plan. Do not call `test_plans_create_test_plan`,
+`test_plans_create_module`, `test_plans_create_suite`,
+`test_plans_create_case`, or `test_plans_populate_test_plan` before this
+approval.
 
 After approval:
 
@@ -86,6 +116,9 @@ After approval:
 5. Compare the persisted modules, suites, and case slugs to the approved
    draft.
 6. Stop on any mismatch and report it. Do not silently add missing cases.
+
+Never create an empty DRAFT to complete later. The approved draft must contain
+at least one case before the first mutation.
 
 Do not create automation, generate code remotely, deploy, or execute from
 this skill.

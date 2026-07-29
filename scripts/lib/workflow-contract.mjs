@@ -4,6 +4,8 @@ export const States = Object.freeze({
   AUTHENTICATION_REQUIRED: 'AUTHENTICATION_REQUIRED',
   AUTHENTICATED: 'AUTHENTICATED',
   APPLICATION_SELECTED: 'APPLICATION_SELECTED',
+  FEATURE_SELECTED: 'FEATURE_SELECTED',
+  PLAN_CONTEXT_COLLECTED: 'PLAN_CONTEXT_COLLECTED',
   PLAN_DRAFTED: 'PLAN_DRAFTED',
   PLAN_LOADED: 'PLAN_LOADED',
   PLAN_APPROVED: 'PLAN_APPROVED',
@@ -27,6 +29,13 @@ export function createWorkflow() {
       organizationId: null,
       applicationId: null,
       applicationName: null,
+      feature: null,
+      testTarget: null,
+      environment: null,
+      criticalScenarios: [],
+      expectedBehavior: null,
+      outOfScope: null,
+      preconditions: [],
       planId: null,
       selectedCases: [],
       testRepository: null,
@@ -91,14 +100,54 @@ export function transition(workflow, event) {
       next.context.applicationId = event.applicationId
       next.context.applicationName = event.applicationName
       next.state = States.APPLICATION_SELECTED
+      if (next.context.planMode === 'new') {
+        next.prompt = `Qual feature ou jornada da aplicação ${event.applicationName} você quer testar primeiro?`
+      } else {
+        next.actions.push({
+          tool: 'test_plans_list_test_plans',
+          mutation: false
+        })
+      }
+      return next
+
+    case 'FEATURE_SELECTED':
+      requireState(next, States.APPLICATION_SELECTED)
+      if (next.context.planMode !== 'new') throw new Error('Not in new-plan mode.')
+      if (!String(event.feature || '').trim()) {
+        throw new Error('A user-selected feature or journey is required.')
+      }
+      next.context.feature = String(event.feature).trim()
+      next.state = States.FEATURE_SELECTED
+      next.prompt =
+        'Para essa feature, informe: WEB ou API e ambiente/base URL; cenários críticos; comportamento esperado; o que fica fora do escopo; e dados ou pré-condições disponíveis.'
+      return next
+
+    case 'NEW_PLAN_CONTEXT_COLLECTED':
+      requireState(next, States.FEATURE_SELECTED)
+      requireNewPlanContext(event)
+      next.context.testTarget = event.testTarget
+      next.context.environment = event.environment
+      next.context.criticalScenarios = [...event.criticalScenarios]
+      next.context.expectedBehavior = event.expectedBehavior
+      next.context.outOfScope = event.outOfScope
+      next.context.preconditions = [...event.preconditions]
+      next.state = States.PLAN_CONTEXT_COLLECTED
+      next.prompt =
+        'Apresente um draft do Test Plan para a feature selecionada, incluindo módulos, suites, casos e Arrange/Act/Assert. Não persista nada antes da aprovação.'
       return next
 
     case 'NEW_PLAN_DRAFTED':
-      requireState(next, States.APPLICATION_SELECTED)
+      requireState(next, States.PLAN_CONTEXT_COLLECTED)
       if (next.context.planMode !== 'new') throw new Error('Not in new-plan mode.')
+      if (event.feature !== next.context.feature) {
+        throw new Error('The draft must preserve the user-selected feature.')
+      }
+      if (!Array.isArray(event.caseSlugs) || event.caseSlugs.length === 0) {
+        throw new Error('The approved draft must contain at least one case.')
+      }
       next.state = States.PLAN_DRAFTED
       next.context.selectedCases = [...event.caseSlugs]
-      next.prompt = 'Aprova este Test Plan para criação na Voidr?'
+      next.prompt = `Aprova este Test Plan para a feature "${next.context.feature}" e estes casos para criação na Voidr?`
       return next
 
     case 'NEW_PLAN_APPROVED':
@@ -277,6 +326,22 @@ function requireMergedPullRequest(event) {
   ) {
     throw new Error(
       'Deploy requires a clean repository at the exact PR commit already merged into the default branch.'
+    )
+  }
+}
+
+function requireNewPlanContext(event) {
+  if (
+    !['WEB', 'API'].includes(event.testTarget) ||
+    !String(event.environment || '').trim() ||
+    !Array.isArray(event.criticalScenarios) ||
+    event.criticalScenarios.length === 0 ||
+    !String(event.expectedBehavior || '').trim() ||
+    !String(event.outOfScope || '').trim() ||
+    !Array.isArray(event.preconditions)
+  ) {
+    throw new Error(
+      'New Test Plan context requires target, environment, scenarios, expected behavior, out-of-scope, and preconditions.'
     )
   }
 }

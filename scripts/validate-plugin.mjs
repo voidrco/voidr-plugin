@@ -176,13 +176,19 @@ assert(
   'Entry skill must separate MCP applications from workspace repositories.'
 )
 assert(
-  /Always use `ask_user`[\s\S]*?returned application names[\s\S]*?never ask the user to provide an `applicationId` manually/i.test(
+  /Always use `ask_user`[\s\S]*?returned application name[\s\S]*?`type`[\s\S]*?never ask the user to provide an `applicationId` manually/i.test(
     entrySkill
   ) &&
     /test_plans_list_test_plans[\s\S]*?selectable options[\s\S]*?never ask the user to type a `testPlanId`/i.test(
       entrySkill
     ),
   'Entry skill must use MCP-backed selectable application and Test Plan choices.'
+)
+assert(
+  /selected application's MCP `type` as authoritative[\s\S]*?Never ask the user to decide WEB versus API/i.test(
+    entrySkill
+  ),
+  'Entry skill must derive WEB/API from the selected Voidr application.'
 )
 assert(
   /applications_list_environments[\s\S]*?name[\s\S]*?slug[\s\S]*?applicationUrl/i.test(

@@ -37,9 +37,11 @@ test('natural-language greenfield journey reaches deploy and execution through e
     type: 'APPLICATION_SELECTED',
     applicationId: 'app-monitor',
     applicationName: 'Blip Monitor',
+    applicationType: 'API',
     confirmedByUser: true
   })
   assert.equal(workflow.context.applicationId, 'app-monitor')
+  assert.equal(workflow.context.applicationType, 'API')
   assert.deepEqual(workflow.actions, [
     {
       tool: 'applications_list_environments',
@@ -64,10 +66,6 @@ test('natural-language greenfield journey reaches deploy and execution through e
   })
   assert.equal(workflow.state, States.FEATURE_SELECTED)
   assert.equal(workflow.context.feature, 'Monitoramento de indisponibilidade')
-  workflow = transition(workflow, {
-    type: 'TEST_TARGET_SELECTED',
-    testTarget: 'API'
-  })
   assert.match(workflow.prompt, /smoke local/i)
   workflow = transition(workflow, {
     type: 'LOCAL_SMOKE_TARGET_SELECTED',
@@ -211,6 +209,7 @@ test('existing-plan journey does not use project.json as a selector', () => {
     type: 'APPLICATION_SELECTED',
     applicationId: 'app-monitor',
     applicationName: 'Blip Monitor',
+    applicationType: 'WEB',
     confirmedByUser: true
   })
   workflow = transition(workflow, {

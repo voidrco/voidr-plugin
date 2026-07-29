@@ -33,9 +33,10 @@ test('asks new versus existing before any tool action', () => {
       transition(authenticated, {
         type: 'APPLICATION_SELECTED',
         applicationId: 'app-voidr',
-        applicationName: 'Voidr Monitor'
+        applicationName: 'Voidr Monitor',
+        applicationType: 'WEB'
       }),
-    /explicitly confirmed by the user/i
+    /explicitly confirmed/i
   )
   assert.throws(
     () =>
@@ -43,6 +44,7 @@ test('asks new versus existing before any tool action', () => {
         type: 'APPLICATION_SELECTED',
         applicationId: 'workspace-folder',
         applicationName: 'demo-consulta-pj',
+        applicationType: 'WEB',
         confirmedByUser: true
       }),
     /Expected AUTHENTICATED/
@@ -149,6 +151,7 @@ test('platform environment and localhost smoke remain separate confirmed targets
     type: 'APPLICATION_SELECTED',
     applicationId: 'app-voidr',
     applicationName: 'Voidr Monitor',
+    applicationType: 'WEB',
     confirmedByUser: true
   })
   assert.throws(
@@ -174,10 +177,8 @@ test('platform environment and localhost smoke remain separate confirmed targets
     type: 'FEATURE_SELECTED',
     feature: 'Login'
   })
-  workflow = transition(workflow, {
-    type: 'TEST_TARGET_SELECTED',
-    testTarget: 'WEB'
-  })
+  assert.equal(workflow.context.applicationType, 'WEB')
+  assert.match(workflow.prompt, /aplicação selecionada é WEB/i)
   workflow = transition(workflow, {
     type: 'LOCAL_SMOKE_TARGET_SELECTED',
     mode: 'localhost',
@@ -321,6 +322,7 @@ function selectApplicationFromMcp(workflow) {
     type: 'APPLICATION_SELECTED',
     applicationId: 'app-voidr',
     applicationName: 'Voidr Monitor',
+    applicationType: 'WEB',
     confirmedByUser: true
   })
   assert.deepEqual(workflow.actions, [
@@ -347,11 +349,8 @@ function collectNewPlanScope(workflow, feature) {
   })
   assert.equal(workflow.state, States.FEATURE_SELECTED)
   assert.deepEqual(workflow.actions, [])
-  workflow = transition(workflow, {
-    type: 'TEST_TARGET_SELECTED',
-    testTarget: 'WEB'
-  })
-  assert.equal(workflow.state, States.TEST_TARGET_SELECTED)
+  assert.equal(workflow.context.applicationType, 'WEB')
+  assert.match(workflow.prompt, /smoke local/i)
   workflow = transition(workflow, {
     type: 'LOCAL_SMOKE_TARGET_SELECTED',
     mode: 'localhost',

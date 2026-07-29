@@ -6,7 +6,6 @@ export const States = Object.freeze({
   APPLICATION_SELECTED: 'APPLICATION_SELECTED',
   ENVIRONMENT_SELECTED: 'ENVIRONMENT_SELECTED',
   FEATURE_SELECTED: 'FEATURE_SELECTED',
-  TEST_TARGET_SELECTED: 'TEST_TARGET_SELECTED',
   LOCAL_SMOKE_TARGET_SELECTED: 'LOCAL_SMOKE_TARGET_SELECTED',
   PLAN_CONTEXT_COLLECTED: 'PLAN_CONTEXT_COLLECTED',
   PLAN_DRAFTED: 'PLAN_DRAFTED',
@@ -32,11 +31,11 @@ export function createWorkflow() {
       organizationId: null,
       applicationId: null,
       applicationName: null,
+      applicationType: null,
       platformEnvironmentName: null,
       platformEnvironmentSlug: null,
       platformEnvironmentUrl: null,
       feature: null,
-      testTarget: null,
       localSmokeMode: null,
       localSmokeBaseUrl: null,
       criticalScenarios: [],
@@ -102,14 +101,16 @@ export function transition(workflow, event) {
       if (
         !event.applicationId ||
         !event.applicationName ||
+        !['WEB', 'API'].includes(event.applicationType) ||
         event.confirmedByUser !== true
       ) {
         throw new Error(
-          'Application must be explicitly confirmed by the user from applications_list_applications.'
+          'Application and its WEB/API type must be explicitly confirmed from applications_list_applications.'
         )
       }
       next.context.applicationId = event.applicationId
       next.context.applicationName = event.applicationName
+      next.context.applicationType = event.applicationType
       next.state = States.APPLICATION_SELECTED
       next.actions.push({
         tool: 'applications_list_environments',
@@ -153,22 +154,11 @@ export function transition(workflow, event) {
       }
       next.context.feature = String(event.feature).trim()
       next.state = States.FEATURE_SELECTED
-      next.prompt =
-        'A feature selecionada é um fluxo WEB ou API?'
-      return next
-
-    case 'TEST_TARGET_SELECTED':
-      requireState(next, States.FEATURE_SELECTED)
-      if (!['WEB', 'API'].includes(event.testTarget)) {
-        throw new Error('Test target must be WEB or API.')
-      }
-      next.context.testTarget = event.testTarget
-      next.state = States.TEST_TARGET_SELECTED
-      next.prompt = `Para o smoke local, deseja usar a URL do ambiente Voidr (${next.context.platformEnvironmentUrl}) ou localhost?`
+      next.prompt = `A aplicação selecionada é ${next.context.applicationType}. Para o smoke local, deseja usar a URL do ambiente Voidr (${next.context.platformEnvironmentUrl}) ou localhost?`
       return next
 
     case 'LOCAL_SMOKE_TARGET_SELECTED':
-      requireState(next, States.TEST_TARGET_SELECTED)
+      requireState(next, States.FEATURE_SELECTED)
       if (!['platform', 'localhost'].includes(event.mode)) {
         throw new Error('Local smoke mode must be platform or localhost.')
       }

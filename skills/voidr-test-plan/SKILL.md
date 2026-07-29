@@ -31,11 +31,18 @@ This step is mandatory for both new and existing plans:
 2. Build choices only from applications returned by MCP. Never use workspace
    directories, repository names, Git remotes, or local files as application
    options.
-3. Use `ask_user` when available to present application names as selectable
-   options. Keep IDs internally; never ask the user to type an `applicationId`.
+3. Use `ask_user` when available to present application names and their
+   returned `type` as selectable options. Keep IDs and types internally; never
+   ask the user to type an `applicationId`.
    Confirm the application even when the MCP returns only one.
    Never auto-select a single result.
-4. Keep the returned application ID as the authoritative `applicationId`.
+4. Keep the returned application ID as the authoritative `applicationId` and
+   its `type` as the authoritative WEB/API classification.
+5. If the list response omits `type`, call `applications_get_application` for
+   the selected ID. Stop if a supported `WEB` or `API` type is still absent.
+
+Never ask the user whether the selected application or feature is WEB or API.
+That decision belongs to the Voidr product configuration.
 
 One application may be implemented by multiple product repositories. Repository
 selection is a later, separate decision and cannot change `applicationId`.
@@ -87,11 +94,12 @@ Never infer the feature from:
 
 If the user already named a feature, repeat it and ask for confirmation.
 
-### Gate 2: target and local smoke
+### Gate 2: local smoke
 
 After the feature is confirmed:
 
-1. Ask whether it is WEB or API with selectable options.
+1. Carry the selected application's MCP `type` into the plan without asking
+   the user to classify it.
 2. Ask whether the local smoke should use:
    - the selected Voidr `applicationUrl`; or
    - localhost.
@@ -117,6 +125,7 @@ Create a visible draft with:
 
 - plan name and objective;
 - the exact user-selected feature or journey;
+- selected application `type` returned by Voidr;
 - selected Voidr environment name, slug, and `applicationUrl`;
 - local smoke mode and `localSmokeBaseUrl`;
 - assumptions and open questions;

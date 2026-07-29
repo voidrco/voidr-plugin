@@ -15,6 +15,7 @@ Require all of:
 
 - organization ID;
 - application ID;
+- application `type` (`WEB` or `API`) returned by Voidr;
 - selected Voidr environment name, slug, and `applicationUrl`;
 - Test Plan ID;
 - exact user-selected feature or journey;

@@ -1,6 +1,6 @@
 ---
 name: voidr-develop-tests
-description: Inicia e orquestra o desenvolvimento de testes na Voidr. Use SEMPRE quando o usuário disser "quero desenvolver testes na Voidr", "quero criar testes na Voidr", "automatizar testes na Voidr", "criar um Test Plan", "usar um Test Plan existente" ou pedir para implementar, publicar ou executar testes Playwright pela Voidr. Antes de qualquer tool, pergunta se o Test Plan é novo ou existente; depois exige seleção humana de aplicação e ambiente via MCP, feature, alvo WEB/API, smoke local, draft e aprovação.
+description: Inicia e orquestra o desenvolvimento de testes na Voidr. Use SEMPRE quando o usuário disser "quero desenvolver testes na Voidr", "quero criar testes na Voidr", "automatizar testes na Voidr", "criar um Test Plan", "usar um Test Plan existente" ou pedir para implementar, publicar ou executar testes Playwright pela Voidr. Antes de qualquer tool, pergunta se o Test Plan é novo ou existente; depois exige seleção humana de aplicação e ambiente via MCP, usa o tipo WEB/API do produto, coleta feature e smoke local, apresenta draft e exige aprovação.
 argument-hint: "[objetivo de teste]"
 ---
 
@@ -31,6 +31,7 @@ After the answer, keep these values explicit and separate:
 
 - selected organization;
 - selected application;
+- selected application `type` (`WEB` or `API`) returned by Voidr;
 - selected Voidr platform environment and its `applicationUrl`;
 - user-selected feature or journey;
 - separate local smoke target and base URL;
@@ -74,23 +75,28 @@ After authentication and organization selection:
 
 1. Call `applications_list_applications`.
 2. Build application choices exclusively from that tool response.
-3. Always use `ask_user` when available to show the returned application names
-   as selectable options and ask the user to choose one. Keep each returned ID
-   internally, but do not require the user to copy or type an `applicationId`.
+3. Always use `ask_user` when available to show each returned application name
+   and `type` as selectable options and ask the user to choose one. Keep each
+   returned ID and `type` internally, but do not require the user to copy or
+   type an `applicationId`.
    Even when there is only one application, ask the user to confirm it.
    A single result is not user confirmation; a native question and answer are
    still required.
 4. If the user named an application, match it only against the MCP response.
    Ask on multiple matches and stop if no match exists.
-5. Optionally call `applications_get_application` for the selected ID when
-   details are needed.
+5. Treat the selected application's MCP `type` as authoritative for whether
+   tests target WEB or API. Never ask the user to decide WEB versus API.
+6. If `type` is absent from the list response, call
+   `applications_get_application` for the selected ID. Stop if that response
+   still does not contain a supported `WEB` or `API` type.
 
 Never use `voidr_workspace_inspect`, Explorer folders, Git remotes,
 `package.json`, or `project.json` to populate the application question. Do not
 offer a generic “application or flow” choice based on workspace directories.
 Never ask the user to provide an `applicationId` manually.
 
-Keep the selected `applicationId` authoritative for all Test Plan calls.
+Keep the selected `applicationId` and `type` authoritative for all Test Plan
+and implementation steps.
 
 ## 4. Select the Voidr platform environment through MCP
 
@@ -128,7 +134,8 @@ For a new Test Plan, use this mandatory sequence:
    Use a free-text `ask_user` field. Offer selectable features only when their
    names came from the Voidr MCP response or the user; never invent options from
    the application name or a repository. End the response and wait.
-2. Ask whether the feature is WEB or API using selectable options.
+2. Carry the selected application's MCP `type` into the Test Plan. Do not ask
+   the user whether the feature is WEB or API.
 3. Ask:
 
    > Para o smoke local, deseja usar a URL do ambiente Voidr selecionado ou

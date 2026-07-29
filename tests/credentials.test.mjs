@@ -6,7 +6,8 @@ import { join } from 'node:path'
 import {
   authStatus,
   basicAuthorizationHeader,
-  selectOrganization
+  selectOrganization,
+  validatedAuthStatus
 } from '../scripts/lib/credentials.mjs'
 
 test('reuses the framework Service Account store without exposing secrets', () => {
@@ -122,3 +123,95 @@ test('reports a missing write scope without guessing', () => {
     else process.env.VOIDR_SERVICE_ACCOUNTS_PATH = previous
   }
 })
+
+test('live status reports a deleted or revoked local account as rejected', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'voidr-auth-rejected-'))
+  const storePath = join(dir, 'service-accounts.json')
+  const secret = 'synthetic-rejected-secret'
+  writeFileSync(
+    storePath,
+    JSON.stringify({
+      activeOrgId: 'org-rejected',
+      accounts: {
+        'org-rejected': {
+          clientId: 'sa_rejected',
+          clientSecret: secret,
+          scopes: ['read', 'write']
+        }
+      }
+    })
+  )
+  const previous = process.env.VOIDR_SERVICE_ACCOUNTS_PATH
+  process.env.VOIDR_SERVICE_ACCOUNTS_PATH = storePath
+  try {
+    const status = await validatedAuthStatus({
+      fetchImpl: async (_url, options) => {
+        assert.equal(options.body.includes(secret), true)
+        return new Response(null, { status: 401 })
+      }
+    })
+    assert.equal(status.authenticated, false)
+    assert.equal(status.canRead, false)
+    assert.equal(status.canWrite, false)
+    assert.equal(status.localCredentialPresent, true)
+    assert.equal(status.validationStatus, 'rejected')
+    assert.equal(JSON.stringify(status).includes(secret), false)
+  } finally {
+    if (previous === undefined) delete process.env.VOIDR_SERVICE_ACCOUNTS_PATH
+    else process.env.VOIDR_SERVICE_ACCOUNTS_PATH = previous
+  }
+})
+
+test('live status trusts scopes from the validated token', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'voidr-auth-live-scope-'))
+  const storePath = join(dir, 'service-accounts.json')
+  writeFileSync(
+    storePath,
+    JSON.stringify({
+      activeOrgId: 'org-live',
+      accounts: {
+        'org-live': {
+          clientId: 'sa_live',
+          clientSecret: 'synthetic-live-secret',
+          scopes: ['read', 'write']
+        }
+      }
+    })
+  )
+  const previous = process.env.VOIDR_SERVICE_ACCOUNTS_PATH
+  process.env.VOIDR_SERVICE_ACCOUNTS_PATH = storePath
+  try {
+    const status = await validatedAuthStatus({
+      fetchImpl: async () =>
+        new Response(
+          JSON.stringify({
+            access_token: jwt({
+              organizationId: 'org-live',
+              scopes: ['read']
+            })
+          }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' }
+          }
+        )
+    })
+    assert.equal(status.validationStatus, 'valid')
+    assert.equal(status.authenticated, true)
+    assert.equal(status.canWrite, false)
+    assert.deepEqual(status.scopes, ['read'])
+  } finally {
+    if (previous === undefined) delete process.env.VOIDR_SERVICE_ACCOUNTS_PATH
+    else process.env.VOIDR_SERVICE_ACCOUNTS_PATH = previous
+  }
+})
+
+function jwt(payload) {
+  return [
+    Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString(
+      'base64url'
+    ),
+    Buffer.from(JSON.stringify(payload)).toString('base64url'),
+    'synthetic-signature'
+  ].join('.')
+}

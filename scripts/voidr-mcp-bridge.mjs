@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 
 import { createInterface } from 'node:readline'
-import { authStatus, selectOrganization } from './lib/credentials.mjs'
+import {
+  authStatus,
+  selectOrganization,
+  validatedAuthStatus
+} from './lib/credentials.mjs'
 import { canonicalToolName, isWriteTool, loadPolicy } from './lib/policy.mjs'
 import { RemoteMcpClient } from './lib/remote-mcp.mjs'
 import { bootstrapTestRepository } from './lib/bootstrap.mjs'
@@ -10,10 +14,7 @@ import {
   validateRepositorySelection
 } from './lib/workspace.mjs'
 import { deployMergedPullRequest } from './lib/release-deploy.mjs'
-import {
-  importServiceAccount,
-  prepareServiceAccountImport
-} from './lib/service-account-import.mjs'
+import { connectWithBrowser } from './lib/browser-auth.mjs'
 
 const policy = loadPolicy()
 const safeRemote = new Set(policy.safeRemoteTools)
@@ -25,7 +26,7 @@ const localTools = [
   {
     name: 'voidr_auth_status',
     description:
-      'Inspect local Voidr Service Account availability, organization, and scopes without exposing credentials.',
+      'Validate the selected local Voidr Service Account against the platform and report organization and scopes without exposing credentials.',
     inputSchema: { type: 'object', properties: {} }
   },
   {
@@ -41,15 +42,9 @@ const localTools = [
     }
   },
   {
-    name: 'voidr_auth_prepare_service_account',
+    name: 'voidr_auth_login',
     description:
-      'Create and open a protected local JSON for the user to fill with a Voidr Client ID and Client Secret. Never returns credential values.',
-    inputSchema: { type: 'object', properties: {} }
-  },
-  {
-    name: 'voidr_auth_import_service_account',
-    description:
-      'Validate and import the protected local Service Account JSON without exposing credentials to the model.',
+      'Open the official Voidr browser login, let the user choose an organization, then create, validate, and store a dedicated Copilot Service Account without exposing credentials.',
     inputSchema: { type: 'object', properties: {} }
   },
   {
@@ -160,7 +155,7 @@ async function dispatch(method, params) {
         capabilities: { tools: { listChanged: false } },
         serverInfo: {
           name: 'voidr-safe-bridge',
-          version: '0.1.0'
+          version: '0.2.0'
         }
       }
     case 'ping':
@@ -215,7 +210,7 @@ async function callTool(params) {
 async function callLocal(name, args) {
   switch (name) {
     case 'voidr_auth_status':
-      return textResult(authStatus())
+      return textResult(await validatedAuthStatus())
     case 'voidr_auth_select_organization': {
       const selected = selectOrganization(String(args.organizationId || ''))
       remote.reset()
@@ -226,10 +221,8 @@ async function callLocal(name, args) {
         scopes: selected.account?.scopes || []
       })
     }
-    case 'voidr_auth_prepare_service_account':
-      return textResult(await prepareServiceAccountImport())
-    case 'voidr_auth_import_service_account': {
-      const imported = await importServiceAccount()
+    case 'voidr_auth_login': {
+      const imported = await connectWithBrowser()
       remote.reset()
       return textResult(imported)
     }

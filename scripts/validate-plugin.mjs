@@ -166,22 +166,22 @@ assert(
   'Connect skill must ask which locally available Service Account to use.'
 )
 assert(
-  /If no local Service Account exists, call[\s\S]*?`voidr_auth_prepare_service_account` immediately/i.test(
+  /If `authenticated` is false,[\s\S]*?call `voidr_auth_login`/i.test(
     connectSkill
   ),
-  'Connect skill must prepare the protected credential JSON when none is local.'
+  'Connect skill must start the official browser login when authentication is unavailable.'
 )
 assert(
-  /When the user replies that the file is ready, call[\s\S]*?`voidr_auth_import_service_account`/i.test(
+  /browser flow handles user login and explicit organization selection/i.test(
     connectSkill
   ),
-  'Connect skill must import the protected credential JSON after confirmation.'
+  'Connect skill must delegate organization selection to the browser flow.'
 )
 assert(
-  /Never inspect the JSON with file,[\s\S]*?shell,[\s\S]*?editor,[\s\S]*?workspace tools/i.test(
+  /Never ask the user to create or edit a credential JSON/i.test(
     connectSkill
   ),
-  'Connect skill must keep credential JSON contents hidden from the model.'
+  'Connect skill must prohibit the legacy credential JSON flow.'
 )
 
 const allRepositoryText = findFiles(root)

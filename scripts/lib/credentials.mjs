@@ -169,6 +169,102 @@ export function authStatus() {
   }
 }
 
+export async function validatedAuthStatus({
+  fetchImpl = globalThis.fetch,
+  tokenUrl =
+    process.env.VOIDR_TOKEN_URL ||
+    'https://api.voidr.co/v1/service-accounts/token'
+} = {}) {
+  const local = authStatus()
+  if (!local.authenticated) {
+    return {
+      ...local,
+      validationStatus: 'not-configured',
+      localCredentialPresent: false
+    }
+  }
+
+  const resolved = resolveCredential()
+  let response
+  try {
+    response = await fetchImpl(tokenUrl, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        grantType: 'client_credentials',
+        clientId: resolved.account.clientId,
+        clientSecret: resolved.account.clientSecret
+      })
+    })
+  } catch {
+    throw new Error(
+      'Could not validate the local Voidr Service Account because the token endpoint is unavailable.'
+    )
+  }
+
+  if (response.status === 401 || response.status === 403) {
+    return {
+      ...local,
+      authenticated: false,
+      canRead: false,
+      canWrite: false,
+      validationStatus: 'rejected',
+      localCredentialPresent: true
+    }
+  }
+  if (!response.ok) {
+    throw new Error(
+      `Could not validate the local Voidr Service Account (HTTP ${response.status}).`
+    )
+  }
+
+  let token
+  try {
+    token = await response.json()
+  } catch {
+    throw new Error(
+      'Voidr returned an invalid response while validating the local Service Account.'
+    )
+  }
+  if (!token?.access_token) {
+    throw new Error(
+      'Voidr returned no access token while validating the local Service Account.'
+    )
+  }
+
+  const claims = decodeJwtPayload(token.access_token)
+  const tokenOrganizationId = String(claims.organizationId || '')
+  if (
+    local.organizationId &&
+    tokenOrganizationId &&
+    tokenOrganizationId !== String(local.organizationId)
+  ) {
+    return {
+      ...local,
+      authenticated: false,
+      canRead: false,
+      canWrite: false,
+      validationStatus: 'organization-mismatch',
+      localCredentialPresent: true
+    }
+  }
+
+  const scopes = normalizeScopes(claims.scopes)
+  return {
+    ...local,
+    scopes,
+    authenticated: true,
+    canRead: true,
+    canWrite: scopes.includes('write'),
+    scopeStatus: scopes.length ? 'known' : 'legacy-read-only',
+    validationStatus: 'valid',
+    localCredentialPresent: true
+  }
+}
+
 export function basicAuthorizationHeader() {
   const resolved = resolveCredential()
   const { clientId, clientSecret } = resolved.account || {}
@@ -198,4 +294,20 @@ function maskClientId(clientId) {
   const value = String(clientId)
   if (value.length <= 8) return `${value.slice(0, 2)}…`
   return `${value.slice(0, 6)}…${value.slice(-4)}`
+}
+
+function decodeJwtPayload(token) {
+  const parts = String(token).split('.')
+  if (parts.length !== 3) {
+    throw new Error(
+      'Voidr returned a malformed token while validating the local Service Account.'
+    )
+  }
+  try {
+    return JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'))
+  } catch {
+    throw new Error(
+      'Voidr returned an invalid token while validating the local Service Account.'
+    )
+  }
 }

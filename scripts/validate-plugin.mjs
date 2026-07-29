@@ -231,6 +231,24 @@ assert(
   'Entry skill must block Test Plan writes until feature-scoped draft approval.'
 )
 assert(
+  /explicitly names a product repository and asks to analyze[\s\S]*?authorization for immediate\s+read-only\s+inspection[\s\S]*?Do not ask permission again/i.test(
+    entrySkill
+  ) &&
+    /Ask only for material business decisions[\s\S]*?code cannot\s+establish/i.test(
+      entrySkill
+    ),
+  'Entry skill must analyze an explicitly authorized product repository before asking only unresolved business questions.'
+)
+assert(
+  /Present this question[\s\S]*?immediately after the feature answer[\s\S]*?do not ask whether the user wants to[\s\S]*?see the options/i.test(
+    entrySkill
+  ) &&
+    /Do not ask whether to present the next[\s\S]*?questions or whether the user wants to answer now/i.test(
+      entrySkill
+    ),
+  'Entry skill must not insert meta-confirmations before smoke or context questions.'
+)
+assert(
   /explicitly load[\s\S]*?`\/voidr-implement-tests` skill/i.test(entrySkill),
   'Entry skill must explicitly load the implementation skill before code work.'
 )

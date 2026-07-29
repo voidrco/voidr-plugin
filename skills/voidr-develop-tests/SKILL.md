@@ -154,13 +154,25 @@ For a new Test Plan, use this mandatory sequence:
    - `Usar localhost`
 
    If localhost is selected, ask for the exact local URL including port. Do not
-   guess it. Keep this URL only as `localSmokeBaseUrl`.
-4. Collect critical scenarios, expected behavior, out-of-scope behavior, and
-   test data or preconditions.
-5. Present a complete Test Plan draft containing at least one case with
+   guess it. Keep this URL only as `localSmokeBaseUrl`. Present this question
+   immediately after the feature answer; do not ask whether the user wants to
+   see the options.
+4. If the user explicitly names a product repository and asks to analyze or use
+   it as context, treat that message as authorization for immediate read-only
+   inspection. Do not ask permission again. Inspect only the selected feature's
+   routes, UI or API handlers, validation, domain errors, fixtures, existing
+   tests, and environment-variable names. Derive candidate critical scenarios,
+   observable expected behavior, and technical preconditions with file
+   evidence. Never request secret values.
+5. Ask only for material business decisions that the selected code cannot
+   establish. If no product repository was explicitly identified, collect the
+   missing scenarios, expected behavior, out-of-scope behavior, and test data
+   or preconditions in one group. Do not ask whether to present the next
+   questions or whether the user wants to answer now.
+6. Present a complete Test Plan draft containing at least one case with
    Arrange/Act/Assert.
-6. Ask the user to approve or revise that exact draft. End the response.
-7. Only after explicit approval may the agent call
+7. Ask the user to approve or revise that exact draft. End the response.
+8. Only after explicit approval may the agent call
    `test_plans_create_test_plan` and `test_plans_populate_test_plan`.
 
 Do not infer a feature from the application name, product repository, route,
@@ -205,8 +217,10 @@ Product repositories remain read-only. Never write to a repository merely
 because it contains product code or a `project.json`.
 
 After selecting the test repository, ask separately whether the user wants to
-attach zero, one, or multiple product repositories as read-only context. Do not
-change the selected application when product repositories are added.
+attach zero, one, or multiple product repositories as read-only context only
+when none was already explicitly identified during planning. Do not ask again
+for a repository already authorized and analyzed. Do not change the selected
+application when product repositories are added.
 
 ## 7. Continue through the gates
 

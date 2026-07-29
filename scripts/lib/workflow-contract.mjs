@@ -38,6 +38,9 @@ export function createWorkflow() {
       feature: null,
       localSmokeMode: null,
       localSmokeBaseUrl: null,
+      contextSource: null,
+      productRepositories: [],
+      contextEvidence: [],
       criticalScenarios: [],
       expectedBehavior: null,
       outOfScope: null,
@@ -183,9 +186,14 @@ export function transition(workflow, event) {
     case 'NEW_PLAN_CONTEXT_COLLECTED':
       requireState(next, States.LOCAL_SMOKE_TARGET_SELECTED)
       requireNewPlanContext(event)
+      next.context.contextSource = event.source || 'user'
+      next.context.productRepositories = [...(event.productRepositories || [])]
+      next.context.contextEvidence = [...(event.evidence || [])]
       next.context.criticalScenarios = [...event.criticalScenarios]
       next.context.expectedBehavior = event.expectedBehavior
-      next.context.outOfScope = event.outOfScope
+      next.context.outOfScope =
+        event.outOfScope ||
+        'Não determinado pela codebase; validar como premissa no draft.'
       next.context.preconditions = [...event.preconditions]
       next.state = States.PLAN_CONTEXT_COLLECTED
       next.prompt =
@@ -387,15 +395,22 @@ function requireMergedPullRequest(event) {
 }
 
 function requireNewPlanContext(event) {
+  const source = event.source || 'user'
   if (
+    !['user', 'codebase'].includes(source) ||
     !Array.isArray(event.criticalScenarios) ||
     event.criticalScenarios.length === 0 ||
     !String(event.expectedBehavior || '').trim() ||
-    !String(event.outOfScope || '').trim() ||
-    !Array.isArray(event.preconditions)
+    !Array.isArray(event.preconditions) ||
+    (source === 'user' && !String(event.outOfScope || '').trim()) ||
+    (source === 'codebase' &&
+      (!Array.isArray(event.productRepositories) ||
+        event.productRepositories.length === 0 ||
+        !Array.isArray(event.evidence) ||
+        event.evidence.length === 0))
   ) {
     throw new Error(
-      'New Test Plan context requires target, environment, scenarios, expected behavior, out-of-scope, and preconditions.'
+      'New Test Plan context requires scenarios, expected behavior, preconditions, and either user scope or codebase repository evidence.'
     )
   }
 }

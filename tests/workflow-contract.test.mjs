@@ -191,6 +191,45 @@ test('platform environment and localhost smoke remain separate confirmed targets
   assert.equal(workflow.context.localSmokeBaseUrl, 'http://localhost:5173')
 })
 
+test('explicit product repository analysis can supply evidence-backed plan context', () => {
+  let workflow = createWorkflow()
+  workflow = transition(workflow, {
+    type: 'PLAN_MODE_CHOSEN',
+    mode: 'new'
+  })
+  workflow = selectApplicationFromMcp(workflow)
+  workflow = transition(workflow, {
+    type: 'FEATURE_SELECTED',
+    feature: 'Login'
+  })
+  workflow = transition(workflow, {
+    type: 'LOCAL_SMOKE_TARGET_SELECTED',
+    mode: 'platform'
+  })
+  workflow = transition(workflow, {
+    type: 'NEW_PLAN_CONTEXT_COLLECTED',
+    source: 'codebase',
+    productRepositories: ['/workspace/demo-consulta-pj'],
+    evidence: [
+      'src/routes/login.ts validates credentials and redirects authenticated users'
+    ],
+    criticalScenarios: ['valid credentials', 'invalid credentials'],
+    expectedBehavior:
+      'Valid credentials create a session; invalid credentials show an error.',
+    preconditions: ['Synthetic credentials are supplied through environment variables']
+  })
+
+  assert.equal(workflow.state, States.PLAN_CONTEXT_COLLECTED)
+  assert.equal(workflow.context.contextSource, 'codebase')
+  assert.deepEqual(workflow.context.productRepositories, [
+    '/workspace/demo-consulta-pj'
+  ])
+  assert.equal(workflow.context.contextEvidence.length, 1)
+  assert.match(workflow.context.outOfScope, /não determinado pela codebase/i)
+  assert.match(workflow.prompt, /draft do Test Plan/i)
+  assert.deepEqual(workflow.actions, [])
+})
+
 test('project.json mismatch cannot silently change the selected plan', () => {
   let workflow = existingPlanThroughRepositorySelection()
   workflow = transition(workflow, {

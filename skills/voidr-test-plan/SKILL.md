@@ -108,18 +108,46 @@ After the feature is confirmed:
 3. If localhost is chosen, ask for the exact URL and port. Store it as
    `localSmokeBaseUrl`, never as the platform environment.
 
+Ask this choice immediately. Do not first ask whether the user wants to see the
+options.
+
 ### Gate 3: test context
 
-After the feature is confirmed, ask only the missing questions, preferably in
-one small group:
+After the feature and local smoke target are confirmed, proceed directly to
+context collection. Do not ask whether to present the options, whether to
+analyze, or whether the user wants to answer now.
+
+If the user explicitly names a product repository and asks to analyze it or use
+it as context, that message is sufficient authorization for read-only
+inspection. An `@repository` mention with an instruction such as “analise”,
+“use como contexto”, or “desenvolva o plano com esse código” qualifies. Do not
+ask for a second `Sim` or `Não`.
+
+Inspect the named repository immediately and focus on the user-selected
+feature:
+
+1. Locate relevant routes, screens or endpoints, handlers, validations, domain
+   rules, errors, fixtures, existing tests, and configuration.
+2. Derive candidate critical scenarios and observable expected behavior.
+3. Derive technical preconditions and environment-variable names, but never
+   read or request secret values.
+4. Cite files or symbols as evidence and label every conclusion as
+   `code-derived` or `user-confirmed`.
+5. Treat business priority, intended policy, and explicit exclusions as
+   unknown when the code cannot establish them. Put those unknowns in the
+   draft as assumptions or open questions instead of blocking analysis.
+
+The codebase may provide scenarios and behavior, but it must never select a
+different feature or application than the user confirmed.
+
+Ask the user only for missing information that materially changes the proposed
+Test Plan and cannot be inferred safely. If no product repository was
+identified, ask the missing context questions in one group:
 
 1. Which scenarios inside the selected feature are critical?
 2. What is the expected behavior or acceptance criterion?
 3. Which behavior is explicitly out of scope?
 4. What data, accounts, or preconditions are available?
-
-Use product repositories only as read-only supporting context and only after
-the user identifies them.
 
 ### Gate 4: visible draft and approval
 

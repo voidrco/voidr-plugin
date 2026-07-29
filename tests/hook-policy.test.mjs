@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -29,6 +29,30 @@ test('falls through for a safe Voidr read tool', () => {
     toolArgs: { testPlanId: '0123456789abcdef01234567' }
   })
   assert.deepEqual(output, {})
+})
+
+test('plugin hook resolves its script when VS Code omits PLUGIN_ROOT', () => {
+  const hooks = JSON.parse(readFileSync(join(root, 'hooks.json'), 'utf8'))
+  const command = hooks.hooks.preToolUse[0].bash
+  const result = spawnSync('/bin/bash', ['-lc', command], {
+    input: JSON.stringify({
+      hook_event_name: 'PreToolUse',
+      session_id: 'vscode-hook',
+      cwd: process.cwd(),
+      tool_name: 'mcp_voidr-agent_jobs_trigger_hive_automation',
+      tool_input: '{}'
+    }),
+    encoding: 'utf8',
+    env: {
+      HOME: process.env.HOME,
+      PATH: process.env.PATH,
+      VOIDR_PLUGIN_ROOT: root
+    }
+  })
+  assert.equal(result.status, 0, result.stderr)
+  const output = JSON.parse(result.stdout)
+  assert.equal(output.permissionDecision, 'deny')
+  assert.match(output.permissionDecisionReason, /Hive process/i)
 })
 
 for (const forbidden of [

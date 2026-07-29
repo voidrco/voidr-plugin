@@ -14,6 +14,8 @@ Never call a tool that starts a Hive process.
    It validates the selected local account against Voidr, so
    `validationStatus: rejected` means the local credential was revoked or
    deleted on the platform.
+   If this status call fails, never invent an organization ID and never call
+   `voidr_auth_select_organization`; call `voidr_auth_login` directly.
 2. Treat `serviceAccounts` as the complete list available on this machine,
    never as a platform listing.
 3. If `serviceAccountSelectionRequired` is true, follow the selection section
@@ -35,6 +37,8 @@ Never call a tool that starts a Hive process.
   organization name/ID, masked Client ID, and scopes. End the response.
 - After the user chooses, call `voidr_auth_select_organization` with that
   entry's organization ID, then call `voidr_auth_status` again.
+- Never pass `default`, a workspace name, or any value that was not returned
+  in `serviceAccounts` as `organizationId`.
 - If exactly one local Service Account exists, use it without asking.
 - If the selected account has `canWrite: true`, report that no connection is
   required.

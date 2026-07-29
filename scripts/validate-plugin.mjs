@@ -183,6 +183,15 @@ assert(
   ),
   'Connect skill must prohibit the legacy credential JSON flow.'
 )
+assert(
+  /If this status call fails,[\s\S]*?call `voidr_auth_login` directly/i.test(
+    connectSkill
+  ) &&
+    /Never pass `default`[\s\S]*?not returned[\s\S]*?`serviceAccounts`/i.test(
+      connectSkill
+    ),
+  'Connect skill must not invent an organization when status fails.'
+)
 
 const allRepositoryText = findFiles(root)
   .filter(path => !path.includes(`${join(root, 'tests')}/`))

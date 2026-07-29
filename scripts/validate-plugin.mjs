@@ -82,6 +82,16 @@ assert(
   ),
   'The Hive guard must run on preToolUse.'
 )
+const guardScript = readFileSync(
+  join(root, 'scripts/guard-hive-tools.mjs'),
+  'utf8'
+)
+assert(
+  /enforcePlanModeGate/.test(guardScript) &&
+    /enforceTestPlanWriteApproval/.test(guardScript) &&
+    /Aprovo este Test Plan/.test(guardScript),
+  'The runtime hook must enforce plan-mode and explicit Test Plan approval gates.'
+)
 const promptHooks = hooks.hooks?.userPromptTransformed
 assert(
   Array.isArray(promptHooks) &&
@@ -229,6 +239,12 @@ assert(
     entrySkill
   ),
   'Entry skill must block Test Plan writes until feature-scoped draft approval.'
+)
+assert(
+  /exact approval[\s\S]*?Aprovar este Test Plan[\s\S]*?generic `Sim` is not[\s\S]*?new user message/i.test(
+    entrySkill
+  ),
+  'Entry skill must require the exact post-draft approval message.'
 )
 assert(
   /explicitly names a product repository and asks to analyze[\s\S]*?authorization for immediate\s+read-only\s+inspection[\s\S]*?Do not ask permission again/i.test(

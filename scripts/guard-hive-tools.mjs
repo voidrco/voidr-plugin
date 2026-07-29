@@ -2,16 +2,15 @@
 
 import {
   existsSync,
-  mkdirSync,
-  readFileSync,
   realpathSync,
-  statSync,
-  writeFileSync
+  statSync
 } from 'node:fs'
-import { createHash } from 'node:crypto'
-import { tmpdir } from 'node:os'
 import { basename, dirname, relative, resolve, sep } from 'node:path'
 import { canonicalToolName, loadPolicy } from './lib/policy.mjs'
+import {
+  readSessionState,
+  updateSessionState
+} from './lib/session-state.mjs'
 
 const input = await readStdin()
 let payload
@@ -24,9 +23,12 @@ try {
 const policy = loadPolicy()
 const rawToolName = String(payload.toolName || payload.tool_name || '')
 const toolName = canonicalToolName(rawToolName)
-const toolArgs = payload.toolArgs ?? payload.tool_input ?? {}
+const toolArgs = normalizeToolArgs(payload.toolArgs ?? payload.tool_input ?? {})
 const serializedArgs = safelyStringify(toolArgs)
 const searchable = `${rawToolName}\n${toolName}\n${serializedArgs}`.toLowerCase()
+
+enforcePlanModeGate(payload, rawToolName, toolName)
+enforceTestPlanWriteApproval(payload, toolName)
 
 const protectedCredential = (policy.protectedCredentialFragments || []).find(
   fragment => searchable.includes(fragment.toLowerCase())
@@ -108,28 +110,18 @@ function recordSelection(hookPayload, args) {
     deny('The test repository must be inside the current Copilot workspace.')
   }
 
-  const statePath = sessionStatePath(hookPayload)
-  mkdirSync(dirname(statePath), { recursive: true })
-  writeFileSync(
-    statePath,
-    JSON.stringify({ selectedRepository: selected, workspaceRoot: cwd }, null, 2),
-    'utf8'
-  )
+  updateSessionState(hookPayload, {
+    selectedRepository: selected,
+    workspaceRoot: cwd
+  })
 }
 
 function enforceSelectedRepositoryBoundary(hookPayload, name, args) {
   if (!/(^|[-_/])(create|edit|write|apply_patch|str_replace_editor)$/i.test(name)) {
     return
   }
-  const statePath = sessionStatePath(hookPayload)
-  if (!existsSync(statePath)) return
-
-  let state
-  try {
-    state = JSON.parse(readFileSync(statePath, 'utf8'))
-  } catch {
-    deny('Voidr repository boundary state is invalid.')
-  }
+  const state = readSessionState(hookPayload)
+  if (!state.selectedRepository) return
 
   const paths = [
     ...collectPathArguments(args),
@@ -145,18 +137,6 @@ function enforceSelectedRepositoryBoundary(hookPayload, name, args) {
       )
     }
   }
-}
-
-function sessionStatePath(hookPayload) {
-  const dataRoot =
-    process.env.COPILOT_PLUGIN_DATA ||
-    process.env.VOIDR_PLUGIN_DATA ||
-    resolve(tmpdir(), 'voidr-copilot-plugin-data')
-  const sessionId = String(
-    hookPayload.sessionId || hookPayload.session_id || 'unknown-session'
-  )
-  const safeId = createHash('sha256').update(sessionId).digest('hex')
-  return resolve(dataRoot, 'sessions', `${safeId}.json`)
 }
 
 function collectPathArguments(value, key = '') {
@@ -229,6 +209,49 @@ function safelyStringify(value) {
     return JSON.stringify(value)
   } catch {
     return String(value)
+  }
+}
+
+function enforcePlanModeGate(hookPayload, rawName, canonicalName) {
+  const state = readSessionState(hookPayload)
+  if (state.workflowActive !== true || state.planMode) return
+  if (/(?:ask_user|askuserquestion|skill|todo)/i.test(rawName)) {
+    return
+  }
+  deny(
+    'Blocked by Voidr workflow: ask the user to choose “Criar novo Test Plan” or “Usar Test Plan existente” before reading the platform or codebase.'
+  )
+}
+
+function enforceTestPlanWriteApproval(hookPayload, canonicalName) {
+  if (
+    !canonicalName.startsWith('test_plans_') ||
+    !policy.writeRemoteTools.includes(canonicalName)
+  ) {
+    return
+  }
+  const state = readSessionState(hookPayload)
+  const approvalFresh =
+    state.planWriteApproved === true &&
+    Number.isFinite(state.planWriteApprovedAt) &&
+    Date.now() - state.planWriteApprovedAt <= 30 * 60 * 1000
+  if (
+    state.workflowActive !== true ||
+    !state.planMode ||
+    !approvalFresh
+  ) {
+    deny(
+      'Blocked by Voidr workflow: Test Plan writes require a visible draft followed by a new user message explicitly saying “Aprovo este Test Plan”. A generic “sim” is not approval.'
+    )
+  }
+}
+
+function normalizeToolArgs(value) {
+  if (typeof value !== 'string') return value || {}
+  try {
+    return JSON.parse(value)
+  } catch {
+    return value
   }
 }
 

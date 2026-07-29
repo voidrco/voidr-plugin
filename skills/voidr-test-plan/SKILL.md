@@ -166,11 +166,17 @@ Create a visible draft with:
 - source or evidence for each case;
 - total case count.
 
-Ask the user to approve or revise the draft. Do not persist a partial or
-unapproved plan. Do not call `test_plans_create_test_plan`,
+Ask the user to approve or revise the draft using the exact approval option
+`Aprovar este Test Plan`. A generic `Sim` is not approval. End the response and
+wait for that new user message. Do not persist a partial or unapproved plan. Do
+not call `test_plans_create_test_plan`,
 `test_plans_create_module`, `test_plans_create_suite`,
 `test_plans_create_case`, or `test_plans_populate_test_plan` before this
 approval.
+
+The runtime hook blocks all Test Plan mutations without this approval. If a
+mutation is denied, do not retry with another create or update tool; present
+the complete draft and approval option.
 
 After approval:
 

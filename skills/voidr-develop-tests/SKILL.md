@@ -171,9 +171,16 @@ For a new Test Plan, use this mandatory sequence:
    questions or whether the user wants to answer now.
 6. Present a complete Test Plan draft containing at least one case with
    Arrange/Act/Assert.
-7. Ask the user to approve or revise that exact draft. End the response.
+7. Ask the user to approve or revise that exact draft. Offer the exact approval
+   option `Aprovar este Test Plan` and end the response. A generic `Sim` is not
+   approval. The approval must arrive in a new user message after the complete
+   draft is visible.
 8. Only after explicit approval may the agent call
    `test_plans_create_test_plan` and `test_plans_populate_test_plan`.
+
+The runtime hook blocks every `test_plans_*` mutation before this explicit
+approval. If blocked, do not retry or switch to lower-level create/update
+tools. Return to the visible draft and approval gate.
 
 Do not infer a feature from the application name, product repository, route,
 README, or existing source code. Do not create an empty DRAFT and fill it later.

@@ -7,9 +7,23 @@ import { spawnSync } from 'node:child_process'
 
 const root = resolve(import.meta.dirname, '..')
 const guard = join(root, 'scripts/guard-hive-tools.mjs')
+const promptHook = join(root, 'scripts/route-voidr-prompt.mjs')
 
 function runHook(payload, dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-'))) {
   const result = spawnSync(process.execPath, [guard], {
+    input: JSON.stringify(payload),
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      COPILOT_PLUGIN_DATA: dataRoot
+    }
+  })
+  assert.equal(result.status, 0, result.stderr)
+  return JSON.parse(result.stdout || '{}')
+}
+
+function submitPrompt(payload, dataRoot) {
+  const result = spawnSync(process.execPath, [promptHook], {
     input: JSON.stringify(payload),
     encoding: 'utf8',
     env: {
@@ -29,6 +43,140 @@ test('falls through for a safe Voidr read tool', () => {
     toolArgs: { testPlanId: '0123456789abcdef01234567' }
   })
   assert.deepEqual(output, {})
+})
+
+test('blocks platform and codebase tools until plan mode is selected', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
+  const now = Date.now()
+  submitPrompt(
+    {
+      sessionId: 'plan-mode-gate',
+      timestamp: now,
+      prompt:
+        'Quero desenvolver testes na Voidr usando o repositório do produto.',
+      transformedPrompt:
+        'Quero desenvolver testes na Voidr usando o repositório do produto.'
+    },
+    dataRoot
+  )
+
+  for (const toolName of ['voidr-voidr_auth_status', 'view']) {
+    const output = runHook(
+      {
+        sessionId: 'plan-mode-gate',
+        cwd: process.cwd(),
+        toolName,
+        toolArgs: {}
+      },
+      dataRoot
+    )
+    assert.equal(output.permissionDecision, 'deny')
+    assert.match(output.permissionDecisionReason, /Criar novo Test Plan/i)
+  }
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId: 'plan-mode-gate',
+        cwd: process.cwd(),
+        toolName: 'ask_user',
+        toolArgs: {}
+      },
+      dataRoot
+    ),
+    {}
+  )
+
+  submitPrompt(
+    {
+      sessionId: 'plan-mode-gate',
+      timestamp: now + 1,
+      prompt: 'Criar novo Test Plan',
+      transformedPrompt: 'Criar novo Test Plan'
+    },
+    dataRoot
+  )
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId: 'plan-mode-gate',
+        cwd: process.cwd(),
+        toolName: 'voidr-voidr_auth_status',
+        toolArgs: {}
+      },
+      dataRoot
+    ),
+    {}
+  )
+})
+
+test('blocks Test Plan writes until the user explicitly approves the draft', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
+  const sessionId = 'test-plan-approval-gate'
+  const now = Date.now()
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now,
+      prompt: '/copilot voidr-develop-tests',
+      transformedPrompt: '/copilot voidr-develop-tests'
+    },
+    dataRoot
+  )
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 1,
+      prompt: 'Criar novo Test Plan',
+      transformedPrompt: 'Criar novo Test Plan'
+    },
+    dataRoot
+  )
+
+  const mutation = {
+    sessionId,
+    cwd: process.cwd(),
+    toolName: 'voidr-test_plans_update_case',
+    toolArgs: JSON.stringify({ caseId: 'case-1', title: 'Login válido' })
+  }
+  let output = runHook(mutation, dataRoot)
+  assert.equal(output.permissionDecision, 'deny')
+  assert.match(output.permissionDecisionReason, /Aprovo este Test Plan/i)
+
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 2,
+      prompt: 'Sim',
+      transformedPrompt: 'Sim'
+    },
+    dataRoot
+  )
+  output = runHook(mutation, dataRoot)
+  assert.equal(output.permissionDecision, 'deny')
+
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 3,
+      prompt: 'Aprovo este Test Plan',
+      transformedPrompt: 'Aprovo este Test Plan'
+    },
+    dataRoot
+  )
+  assert.deepEqual(runHook(mutation, dataRoot), {})
+
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 4,
+      prompt: 'Faça mais uma alteração',
+      transformedPrompt: 'Faça mais uma alteração'
+    },
+    dataRoot
+  )
+  output = runHook(mutation, dataRoot)
+  assert.equal(output.permissionDecision, 'deny')
 })
 
 test('plugin hook resolves its script when VS Code omits PLUGIN_ROOT', () => {

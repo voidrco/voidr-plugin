@@ -1,7 +1,6 @@
 ---
 name: voidr-implement-tests
 description: Implements an explicitly selected set of Voidr Test Plan cases in one explicitly selected Playwright test repository. Use after a Test Plan and writable repository have been confirmed.
-argument-hint: "[case-slugs]"
 ---
 
 # Implement Voidr Playwright tests
@@ -57,11 +56,12 @@ Do not use `project.json` to change the selected plan.
 Read the selected cases with `test_plans_get_test_plan`. Preserve their
 module, suite, slug, and Arrange/Act/Assert content literally.
 
-If a selected spec does not exist, run from the selected test repository:
-
-```sh
-npm run voidr:scaffold -- --split-per-case --cases <comma-separated-slugs>
-```
+If a selected spec does not exist, call
+`voidr_workspace_scaffold_test_cases` with the selected repository path, Test
+Plan ID, and exact case slugs. This local bridge tool injects the selected
+Service Account and the plugin's production endpoints into the Voidr CLI process
+without exposing credentials to the model or writing them into the repository.
+Never run `npm run voidr:scaffold` directly from the agent shell.
 
 Do not use `--force` unless the user explicitly asks to replace an existing
 spec after seeing the affected paths.
@@ -87,8 +87,13 @@ Run targeted checks first:
 ```sh
 npx playwright test <selected-specs> --list
 npx playwright test <selected-specs>
-npm run voidr:build
 ```
+
+After the Playwright checks, call
+`voidr_workspace_build_test_repository` with the selected repository path and
+Test Plan ID. Never run `npm run voidr:build` directly from the agent shell;
+the bridge tool keeps the Service Account secret model-invisible and binds the
+build to the plugin's configured Voidr environment.
 
 Classify failures as test logic, product behavior, test data, authentication,
 or infrastructure. Fix only failures in the selected scope. Do not dispatch

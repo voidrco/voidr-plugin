@@ -5,40 +5,34 @@ import { upsertOrganizationAccount } from './credentials.mjs'
 
 const DEFAULT_PLATFORM_URL = 'https://platform.voidr.co'
 const DEFAULT_API_URL = 'https://api.voidr.co/v1'
-const DEFAULT_AUTH_URL = 'https://bounties4.us.auth0.com/authorize'
-const DEFAULT_CLIENT_ID = 'c4eLr6uaq98KB2dCKNkmP9bz6sS3gJfS'
-const DEFAULT_AUDIENCE = 'https://service.bounties4.com/'
+const DEFAULT_AUTH_CALLBACK_URL =
+  `${DEFAULT_PLATFORM_URL}/auth/cli-connect`
 
-export function buildBrowserAuthorizationUrl({
+export function buildBrowserConnectUrl({
   port,
   nonce,
   platformUrl = process.env.VOIDR_PLATFORM_URL || DEFAULT_PLATFORM_URL,
-  authUrl = process.env.VOIDR_AUTH0_AUTHORIZE_URL || DEFAULT_AUTH_URL,
-  clientId = process.env.VOIDR_AUTH0_CLIENT_ID || DEFAULT_CLIENT_ID,
-  audience = process.env.VOIDR_AUTH0_AUDIENCE || DEFAULT_AUDIENCE
+  callbackUrl = process.env.VOIDR_AUTH_CALLBACK_URL
 }) {
   const normalizedPlatform = String(platformUrl).replace(/\/+$/, '')
-  const url = new URL(authUrl)
+  const resolvedCallbackUrl = String(
+    callbackUrl || `${normalizedPlatform}/auth/cli-connect`
+  )
+  const url = new URL(resolvedCallbackUrl)
   const state = Buffer.from(
     JSON.stringify({ port, nonce, cliLogin: true })
   ).toString('base64url')
 
-  url.searchParams.set('response_type', 'code')
-  url.searchParams.set('client_id', clientId)
-  url.searchParams.set(
-    'redirect_uri',
-    `${normalizedPlatform}/auth/cli-connect`
-  )
-  url.searchParams.set('scope', 'openid profile email')
   url.searchParams.set('state', state)
-  url.searchParams.set('audience', audience)
   return url.toString()
 }
 
 export async function startLocalBrowserAuthServer({
   expectedNonce,
   timeoutMs = 300000,
-  allowedOrigins
+  allowedOrigins,
+  callbackUrl = process.env.VOIDR_AUTH_CALLBACK_URL ||
+    DEFAULT_AUTH_CALLBACK_URL
 } = {}) {
   if (!expectedNonce) {
     throw new Error('A browser authentication nonce is required.')
@@ -47,8 +41,10 @@ export async function startLocalBrowserAuthServer({
   const configuredPlatform = String(
     process.env.VOIDR_PLATFORM_URL || DEFAULT_PLATFORM_URL
   ).replace(/\/+$/, '')
+  const callbackOrigin = new URL(callbackUrl).origin
   const origins = new Set(
     allowedOrigins || [
+      callbackOrigin,
       configuredPlatform,
       DEFAULT_PLATFORM_URL,
       'https://canary.voidr.co'
@@ -192,18 +188,24 @@ export async function connectWithBrowser({
   timeoutMs = Number(process.env.VOIDR_BROWSER_AUTH_TIMEOUT_MS) || 300000,
   apiUrl = process.env.VOIDR_API_URL || DEFAULT_API_URL,
   platformUrl = process.env.VOIDR_PLATFORM_URL || DEFAULT_PLATFORM_URL,
+  callbackUrl = process.env.VOIDR_AUTH_CALLBACK_URL,
   allowedOrigins
 } = {}) {
+  const normalizedPlatform = String(platformUrl).replace(/\/+$/, '')
+  const resolvedCallbackUrl =
+    callbackUrl || `${normalizedPlatform}/auth/cli-connect`
   const nonce = randomBytes(32).toString('hex')
   const local = await startLocalBrowserAuthServer({
     expectedNonce: nonce,
     timeoutMs,
-    allowedOrigins
+    allowedOrigins,
+    callbackUrl: resolvedCallbackUrl
   })
-  const authorizationUrl = buildBrowserAuthorizationUrl({
+  const authorizationUrl = buildBrowserConnectUrl({
     port: local.port,
     nonce,
-    platformUrl
+    platformUrl,
+    callbackUrl: resolvedCallbackUrl
   })
 
   const opened = await openBrowserImpl(authorizationUrl)

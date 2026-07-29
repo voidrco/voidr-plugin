@@ -1,7 +1,6 @@
 ---
 name: voidr-test-plan
-description: Creates or selects a Voidr Test Plan with mandatory user-selected feature, scope collection, visible draft, and explicit human approval gates. Use after the user has said whether the plan is new or existing.
-argument-hint: "[novo|existente] [objetivo]"
+description: Creates or selects a Voidr Test Plan with mandatory user-selected feature, scope collection, visible draft, explicit human approval gates, and the linked repository URL as a required creation output. Use after the user has said whether the plan is new or existing.
 ---
 
 # Voidr Test Plan
@@ -181,12 +180,39 @@ the complete draft and approval option.
 After approval:
 
 1. Call `test_plans_create_test_plan`.
-2. Use the returned ID, never a guessed or sentinel ID.
+2. Use the returned ID, never a guessed or sentinel ID. Capture the returned
+   `repository` object. On the configured production backend, creation is successful only
+   when the server also provisions or reuses and links a private GitHub
+   repository. If `repository` is absent, stop and report the incomplete
+   server response; never compensate by inventing a repository URL.
 3. Call `test_plans_populate_test_plan` with the approved structure.
 4. Read it back with `test_plans_get_test_plan`.
 5. Compare the persisted modules, suites, and case slugs to the approved
-   draft.
-6. Stop on any mismatch and report it. Do not silently add missing cases.
+   draft. Also verify that the persisted
+   `gitProviderConfig.repositoryUrl` equals the `repository.url` returned by
+   `test_plans_create_test_plan`.
+6. Stop on any content or repository-link mismatch and report it. Do not
+   silently add missing cases and do not continue to local repository setup.
+7. Return the creation result using this mandatory Markdown shape:
+
+   ```md
+   Test Plan criado e verificado.
+
+   - Test Plan: <plan-name> (`<test-plan-id>`)
+   - Repositório vinculado: [<owner>/<repository-name>](<repository.url>)
+   - Branch padrão: `<defaultBranch>`
+   - Destino: `<destination>`
+   - Provisionamento: `<criado|reutilizado>`
+   ```
+
+   Use the exact server-returned `repository.url` as the link target. Never
+   print only a repository name or plain URL. Never invent, reconstruct, or
+   substitute a GitHub link.
+
+The skill has not completed successfully until this clickable repository link
+is visible to the user. If `repository.url`, owner, name, or default branch is
+missing, stop and report an incomplete MCP response instead of claiming the
+Test Plan was created successfully.
 
 Never create an empty DRAFT to complete later. The approved draft must contain
 at least one case before the first mutation.

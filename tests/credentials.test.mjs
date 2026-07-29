@@ -1,14 +1,43 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   authStatus,
   basicAuthorizationHeader,
+  credentialsPath,
   selectOrganization,
   validatedAuthStatus
 } from '../scripts/lib/credentials.mjs'
+
+test('isolates non-production credentials by profile', () => {
+  const previousPath = process.env.VOIDR_SERVICE_ACCOUNTS_PATH
+  const previousProfile = process.env.VOIDR_CREDENTIAL_PROFILE
+  delete process.env.VOIDR_SERVICE_ACCOUNTS_PATH
+  process.env.VOIDR_CREDENTIAL_PROFILE = 'Release Outside Repo Creation'
+  try {
+    assert.equal(
+      credentialsPath(),
+      join(
+        homedir(),
+        '.voidr',
+        'service-accounts.release-outside-repo-creation.json'
+      )
+    )
+  } finally {
+    if (previousPath === undefined) {
+      delete process.env.VOIDR_SERVICE_ACCOUNTS_PATH
+    } else {
+      process.env.VOIDR_SERVICE_ACCOUNTS_PATH = previousPath
+    }
+    if (previousProfile === undefined) {
+      delete process.env.VOIDR_CREDENTIAL_PROFILE
+    } else {
+      process.env.VOIDR_CREDENTIAL_PROFILE = previousProfile
+    }
+  }
+})
 
 test('reuses the framework Service Account store without exposing secrets', () => {
   const dir = mkdtempSync(join(tmpdir(), 'voidr-auth-'))

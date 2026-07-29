@@ -27,6 +27,7 @@ const toolArgs = normalizeToolArgs(payload.toolArgs ?? payload.tool_input ?? {})
 const serializedArgs = safelyStringify(toolArgs)
 const searchable = `${rawToolName}\n${toolName}\n${serializedArgs}`.toLowerCase()
 
+enforceConnectFirstTool(payload, rawToolName, toolName, serializedArgs)
 enforcePlanModeGate(payload, rawToolName, toolName)
 enforceTestPlanWriteApproval(payload, toolName)
 
@@ -61,6 +62,11 @@ const isShell = /(^|[-_/])(bash|shell|powershell)$/i.test(rawToolName)
 if (isShell) {
   const shellText = collectStringValues(toolArgs).join('\n').toLowerCase()
   const normalizedShell = shellText.replace(/\s+/g, ' ')
+  if (normalizedShell.includes('voidr-mcp-bridge.mjs')) {
+    deny(
+      'Blocked by Voidr policy: do not invoke the MCP bridge through the terminal. Call the official Voidr MCP authentication tools directly.'
+    )
+  }
   const forbiddenDeploy = (policy.forbiddenDeployShellFragments || []).find(value =>
     normalizedShell.includes(value.toLowerCase())
   )
@@ -214,13 +220,39 @@ function safelyStringify(value) {
 
 function enforcePlanModeGate(hookPayload, rawName, canonicalName) {
   const state = readSessionState(hookPayload)
-  if (state.workflowActive !== true || state.planMode) return
+  if (
+    state.connectWorkflowActive === true ||
+    state.workflowActive !== true ||
+    state.planMode
+  ) {
+    return
+  }
   if (/(?:ask_user|askuserquestion|skill|todo)/i.test(rawName)) {
     return
   }
   deny(
     'Blocked by Voidr workflow: ask the user to choose “Criar novo Test Plan” or “Usar Test Plan existente” before reading the platform or codebase.'
   )
+}
+
+function enforceConnectFirstTool(hookPayload, rawName, canonicalName, args) {
+  const state = readSessionState(hookPayload)
+  if (state.connectFirstToolRequired !== true) return
+
+  const loadingConnectSkill =
+    /skill/i.test(rawName) &&
+    /voidr-connect/i.test(`${rawName}\n${args}`)
+  if (loadingConnectSkill) return
+
+  if (canonicalName !== 'voidr_auth_status') {
+    deny(
+      'Blocked by Voidr connect workflow: the first operational action must be the MCP tool voidr_auth_status. Do not inspect files, search for tools, or use the terminal.'
+    )
+  }
+
+  updateSessionState(hookPayload, {
+    connectFirstToolRequired: false
+  })
 }
 
 function enforceTestPlanWriteApproval(hookPayload, canonicalName) {

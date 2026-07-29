@@ -50,6 +50,27 @@ assert(
   server?.args?.[0] === '${PLUGIN_ROOT}/scripts/voidr-mcp-bridge.mjs',
   'Voidr MCP bridge path must be plugin-relative.'
 )
+assert(
+  !server?.env?.VOIDR_CREDENTIAL_PROFILE,
+  'Production must reuse the default Voidr Service Account store.'
+)
+assert(
+  server?.env?.VOIDR_PLATFORM_URL === 'https://platform.voidr.co',
+  'Voidr platform links must use production.'
+)
+assert(
+  server?.env?.VOIDR_AUTH_CALLBACK_URL ===
+    'https://platform.voidr.co/auth/cli-connect',
+  'Browser authentication must use the Auth0-allowlisted production callback.'
+)
+assert(
+  server?.env?.VOIDR_API_URL === 'https://api.voidr.co/v1' &&
+    server?.env?.VOIDR_MCP_URL === 'https://api.voidr.co/v1/mcp' &&
+    server?.env?.VOIDR_MCP_ORIGIN === 'https://platform.voidr.co' &&
+    server?.env?.VOIDR_TOKEN_URL ===
+      'https://api.voidr.co/v1/service-accounts/token',
+  'Voidr API, MCP, origin, and token endpoints must use production.'
+)
 
 const configuredTools = new Set(server?.tools || [])
 const policyTools = new Set([...policy.localTools, ...policy.safeRemoteTools])
@@ -136,6 +157,10 @@ const entrySkill = readFileSync(
 const entryFrontmatter = parseFrontmatter(entrySkill)
 const connectSkill = readFileSync(
   join(root, 'skills/voidr-connect/SKILL.md'),
+  'utf8'
+)
+const testPlanSkill = readFileSync(
+  join(root, 'skills/voidr-test-plan/SKILL.md'),
   'utf8'
 )
 const questionIndex = entrySkill.indexOf(
@@ -241,6 +266,27 @@ assert(
   'Entry skill must block Test Plan writes until feature-scoped draft approval.'
 )
 assert(
+  /repository returned by[\s\S]*?test_plans_create_test_plan[\s\S]*?authoritative/i.test(
+    entrySkill
+  ) &&
+    /allowExistingGitRepository: true[\s\S]*?server-returned[\s\S]*?repositoryUrl/i.test(
+      entrySkill
+    ),
+  'Entry skill must consume the repository provisioned by the Voidr MCP.'
+)
+assert(
+  /gitProviderConfig\.repositoryUrl[\s\S]*?equals[\s\S]*?repository\.url/i.test(
+    testPlanSkill
+  ) &&
+    /Repositório vinculado:\s*\[<owner>\/<repository-name>\]\(<repository\.url>\)/i.test(
+      testPlanSkill
+    ) &&
+    /has not completed successfully until this clickable repository link/i.test(
+      testPlanSkill
+    ),
+  'Test Plan skill must verify and return the linked repository as a clickable URL.'
+)
+assert(
   /exact approval[\s\S]*?Aprovar este Test Plan[\s\S]*?generic `Sim` is not[\s\S]*?new user message/i.test(
     entrySkill
   ),
@@ -306,6 +352,24 @@ assert(
       connectSkill
     ),
   'Connect skill must not invent an organization when status fails.'
+)
+assert(
+  /first operational action must be a direct MCP call to[\s\S]*?`voidr_auth_status` with `\{\}`/i.test(
+    connectSkill
+  ) &&
+    /Do not search, read, or inspect workspace files[\s\S]*?MCP bridge implementation/i.test(
+      connectSkill
+    ) &&
+    /Never use a shell, terminal, `node`, `npx`, `curl`[\s\S]*?`voidr-mcp-bridge\.mjs`/i.test(
+      connectSkill
+    ),
+  'Connect skill must force MCP-first authentication without filesystem or shell fallbacks.'
+)
+assert(
+  /voidr_auth_status` is not available as an MCP tool[\s\S]*?reload the plugin and start a new chat[\s\S]*?Do not investigate through\s+files or the terminal/i.test(
+    connectSkill
+  ),
+  'Connect skill must stop cleanly when its MCP tools are unavailable.'
 )
 
 const allRepositoryText = findFiles(root)

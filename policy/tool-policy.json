@@ -34,6 +34,8 @@
     "executions_create_execution"
   ],
   "writeLocalTools": [
+    "voidr_workspace_scaffold_test_cases",
+    "voidr_workspace_build_test_repository",
     "voidr_release_deploy_merged_pr"
   ],
   "localTools": [
@@ -43,6 +45,8 @@
     "voidr_workspace_inspect",
     "voidr_workspace_bootstrap_test_repository",
     "voidr_workspace_select_test_repository",
+    "voidr_workspace_scaffold_test_cases",
+    "voidr_workspace_build_test_repository",
     "voidr_release_deploy_merged_pr"
   ],
   "forbiddenTools": [
@@ -79,6 +83,7 @@
   ],
   "protectedCredentialFragments": [
     ".voidr/service-accounts.json",
+    ".voidr/service-accounts.",
     ".voidr/copilot-service-account.json",
     "copilot-service-account.json"
   ]

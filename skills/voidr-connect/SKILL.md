@@ -1,12 +1,31 @@
 ---
 name: voidr-connect
 description: Checks or securely connects Voidr through the official browser login, then creates a dedicated role-scoped Copilot Service Account without exposing credentials. Use when Voidr authentication is missing, revoked, read-only, or needs another organization.
-argument-hint: "[organization]"
 ---
 
 # Connect a Voidr Service Account
 
 Never call a tool that starts a Hive process.
+
+## Mandatory execution contract
+
+When this skill is invoked explicitly, follow this contract literally:
+
+1. Do not create a plan or todo list. Do not ask a setup question.
+2. Do not search, read, or inspect workspace files, installed-plugin files,
+   scripts, manifests, tool definitions, or the MCP bridge implementation.
+3. The first operational action must be a direct MCP call to
+   `voidr_auth_status` with `{}`.
+4. Use only `voidr_auth_status`, `voidr_auth_select_organization`, and
+   `voidr_auth_login` during this connection workflow.
+5. Never use a shell, terminal, `node`, `npx`, `curl`, or a manually invoked
+   `voidr-mcp-bridge.mjs` as an authentication fallback.
+6. Do not ask whether the user prefers a status check or browser login. The
+   status result determines the next action automatically.
+7. If `voidr_auth_status` is not available as an MCP tool in the current
+   session, stop and say that the Voidr MCP tools are unavailable and that the
+   user must reload the plugin and start a new chat. Do not investigate through
+   files or the terminal.
 
 ## Connect
 

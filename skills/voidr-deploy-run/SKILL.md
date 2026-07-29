@@ -17,7 +17,7 @@ Require:
 - a matching `project.json`;
 - no unimplemented selected cases;
 - passing targeted local validation;
-- a successful `npm run voidr:build`;
+- a successful `voidr_workspace_build_test_repository` result;
 - a GitHub repository with a pull request for the selected test changes;
 - Service Account scope `write`.
 

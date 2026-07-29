@@ -1,7 +1,6 @@
 ---
 name: voidr-develop-tests
 description: Inicia e orquestra o desenvolvimento de testes na Voidr. Use SEMPRE quando o usuário disser "quero desenvolver testes na Voidr", "quero criar testes na Voidr", "automatizar testes na Voidr", "criar um Test Plan", "usar um Test Plan existente" ou pedir para implementar, publicar ou executar testes Playwright pela Voidr. Antes de qualquer tool, pergunta se o Test Plan é novo ou existente; depois exige seleção humana de aplicação e ambiente via MCP, usa o tipo WEB/API do produto, coleta feature e smoke local, apresenta draft e exige aprovação.
-argument-hint: "[objetivo de teste]"
 ---
 
 # Develop tests in Voidr
@@ -177,6 +176,11 @@ For a new Test Plan, use this mandatory sequence:
    draft is visible.
 8. Only after explicit approval may the agent call
    `test_plans_create_test_plan` and `test_plans_populate_test_plan`.
+   The Voidr MCP provisions and links a private GitHub repository as part of
+   `test_plans_create_test_plan`. Capture the returned `repository` object,
+   including `url`, `cloneUrl`, `defaultBranch`, `destination`, and `created`.
+   Treat a missing repository as a failed creation flow and stop; do not create
+   a second unrelated repository locally.
 
 The runtime hook blocks every `test_plans_*` mutation before this explicit
 approval. If blocked, do not retry or switch to lower-level create/update
@@ -195,20 +199,48 @@ the selected ID internally and never ask the user to type a `testPlanId`.
 Do not proceed until the plan ID, application ID, organization ID, and exact
 case scope are visible to the user.
 
-## 6. Choose repositories only after the plan
+## 6. Materialize the selected Test Plan repository locally
 
-Ask:
+For a newly created Test Plan, the repository returned by
+`test_plans_create_test_plan` is authoritative. Do not ask whether to use an
+existing repository or create a new one, because the platform has already
+created or reused and linked the correct repository.
+
+1. Show the returned repository owner/name, URL, default branch, destination,
+   and whether it was created or reused. Render the repository as a clickable
+   Markdown link using the exact server-returned URL:
+   `[<owner>/<repository-name>](<repository.url>)`. This output is mandatory
+   before asking where to clone it.
+2. Call `voidr_workspace_inspect` and look only for a checkout whose Git
+   `origin` matches the returned repository URL. A matching checkout may be
+   offered for confirmation; a folder with a similar name is not a match.
+3. If no matching checkout exists, ask for the exact local destination inside
+   the workspace. Show the exact `git clone` source and destination and obtain
+   confirmation before cloning.
+4. Clone only the server-returned `cloneUrl` or `url`. Do not construct or
+   guess a GitHub URL.
+5. Call `voidr_workspace_bootstrap_test_repository` with
+   `allowExistingGitRepository: true` and the exact server-returned
+   `repositoryUrl`. This tool verifies the local `origin` and refuses to
+   overwrite existing test-project files.
+6. Run `npm install` inside that checkout, then call
+   `voidr_workspace_select_test_repository`.
+
+For an existing Test Plan that already returns a linked Git repository, follow
+the same origin-matching and local materialization sequence.
+
+Only when an existing Test Plan has no linked repository, ask:
 
 > Para implementar os testes, você quer usar um repositório de testes
 > existente ou criar um novo?
 
-For an existing repository:
+For a user-selected existing repository:
 
 1. Call `voidr_workspace_inspect` to list candidates.
 2. Ask the user to select one candidate or provide an explicit path.
 3. Call `voidr_workspace_select_test_repository` only after selection.
 
-For a new repository:
+For a locally bootstrapped repository when the existing plan has no link:
 
 1. Ask for the parent directory and repository name.
 2. Show the exact destination and files to be created.

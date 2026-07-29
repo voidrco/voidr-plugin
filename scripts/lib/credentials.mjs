@@ -9,10 +9,26 @@ import { homedir } from 'node:os'
 import { dirname, resolve } from 'node:path'
 
 export function credentialsPath() {
+  const profile = sanitizeCredentialProfile(
+    process.env.VOIDR_CREDENTIAL_PROFILE
+  )
+  const fileName = profile
+    ? `service-accounts.${profile}.json`
+    : 'service-accounts.json'
   return resolve(
     process.env.VOIDR_SERVICE_ACCOUNTS_PATH ||
-      `${homedir()}/.voidr/service-accounts.json`
+      `${homedir()}/.voidr/${fileName}`
   )
+}
+
+function sanitizeCredentialProfile(value) {
+  if (!value) return ''
+  return String(value)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80)
 }
 
 function emptyStore() {
@@ -77,6 +93,27 @@ export function resolveCredential() {
       selected: id === orgId,
       canWrite: normalizeScopes(store.accounts[id]?.scopes).includes('write')
     }))
+  }
+}
+
+export function voidrCliEnvironment(baseEnvironment = process.env) {
+  const resolved = resolveCredential()
+  if (!resolved.account?.clientId || !resolved.account?.clientSecret) {
+    throw new Error(
+      'No selected Voidr Service Account is available for the CLI operation.'
+    )
+  }
+  return {
+    ...baseEnvironment,
+    VOIDR_CLIENT_ID: resolved.account.clientId,
+    VOIDR_CLIENT_SECRET: resolved.account.clientSecret,
+    ...(resolved.orgId ? { VOIDR_ORG_ID: resolved.orgId } : {}),
+    ...(baseEnvironment.VOIDR_PLATFORM_URL
+      ? { VOIDR_WEB_URL: baseEnvironment.VOIDR_PLATFORM_URL }
+      : {}),
+    ...(baseEnvironment.VOIDR_MCP_URL
+      ? { VOIDR_MCP_BASE_URL: baseEnvironment.VOIDR_MCP_URL }
+      : {})
   }
 }
 

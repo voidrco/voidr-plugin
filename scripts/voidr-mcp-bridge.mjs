@@ -15,6 +15,10 @@ import {
 } from './lib/workspace.mjs'
 import { deployMergedPullRequest } from './lib/release-deploy.mjs'
 import { connectWithBrowser } from './lib/browser-auth.mjs'
+import {
+  buildTestRepository,
+  scaffoldTestCases
+} from './lib/scaffold.mjs'
 
 const policy = loadPolicy()
 const safeRemote = new Set(policy.safeRemoteTools)
@@ -66,7 +70,7 @@ const localTools = [
   {
     name: 'voidr_workspace_bootstrap_test_repository',
     description:
-      'Create a minimal Voidr Playwright test repository at an explicitly confirmed empty destination inside the current workspace.',
+      'Create a minimal Voidr Playwright test repository at an explicitly confirmed empty destination, or initialize an explicitly confirmed Git checkout whose origin matches the repository provisioned by Voidr.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -74,7 +78,14 @@ const localTools = [
         name: { type: 'string' },
         organizationId: { type: 'string' },
         applicationId: { type: 'string' },
-        testPlanId: { type: 'string' }
+        testPlanId: { type: 'string' },
+        allowExistingGitRepository: {
+          type: 'boolean',
+          default: false
+        },
+        repositoryUrl: {
+          type: 'string'
+        }
       },
       required: [
         'path',
@@ -94,6 +105,43 @@ const localTools = [
         path: { type: 'string' }
       },
       required: ['path']
+    }
+  },
+  {
+    name: 'voidr_workspace_scaffold_test_cases',
+    description:
+      'Run the Voidr CLI scaffold for explicitly selected Test Plan case slugs inside the selected repository while injecting the selected Service Account and the plugin environment without exposing credentials.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        repositoryPath: { type: 'string' },
+        testPlanId: {
+          type: 'string',
+          pattern: '^[a-fA-F0-9]{24}$'
+        },
+        cases: {
+          type: 'array',
+          minItems: 1,
+          items: { type: 'string' }
+        }
+      },
+      required: ['repositoryPath', 'testPlanId', 'cases']
+    }
+  },
+  {
+    name: 'voidr_workspace_build_test_repository',
+    description:
+      'Build the explicitly selected Voidr test repository while injecting the selected Service Account and the plugin environment without exposing credentials.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        repositoryPath: { type: 'string' },
+        testPlanId: {
+          type: 'string',
+          pattern: '^[a-fA-F0-9]{24}$'
+        }
+      },
+      required: ['repositoryPath', 'testPlanId']
     }
   },
   {
@@ -155,7 +203,7 @@ async function dispatch(method, params) {
         capabilities: { tools: { listChanged: true } },
         serverInfo: {
           name: 'voidr-safe-bridge',
-          version: '0.2.8'
+          version: '0.2.16'
         }
       }
     case 'ping':
@@ -243,6 +291,11 @@ async function callLocal(name, args) {
           organizationId: String(args.organizationId || ''),
           applicationId: String(args.applicationId || ''),
           testPlanId: String(args.testPlanId || ''),
+          allowExistingGitRepository:
+            args.allowExistingGitRepository === true,
+          repositoryUrl: args.repositoryUrl
+            ? String(args.repositoryUrl)
+            : undefined,
           workspaceRoot: process.env.VOIDR_WORKSPACE_ROOT || process.cwd()
         })
       )
@@ -252,6 +305,23 @@ async function callLocal(name, args) {
           String(args.path || ''),
           process.env.VOIDR_WORKSPACE_ROOT || process.cwd()
         )
+      )
+    case 'voidr_workspace_scaffold_test_cases':
+      return textResult(
+        await scaffoldTestCases({
+          repositoryPath: String(args.repositoryPath || ''),
+          testPlanId: String(args.testPlanId || ''),
+          cases: Array.isArray(args.cases) ? args.cases : [],
+          workspaceRoot: process.env.VOIDR_WORKSPACE_ROOT || process.cwd()
+        })
+      )
+    case 'voidr_workspace_build_test_repository':
+      return textResult(
+        await buildTestRepository({
+          repositoryPath: String(args.repositoryPath || ''),
+          testPlanId: String(args.testPlanId || ''),
+          workspaceRoot: process.env.VOIDR_WORKSPACE_ROOT || process.cwd()
+        })
       )
     case 'voidr_release_deploy_merged_pr':
       return textResult(

@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
-  buildBrowserAuthorizationUrl,
+  buildBrowserConnectUrl,
   connectWithBrowser,
   startLocalBrowserAuthServer
 } from '../scripts/lib/browser-auth.mjs'
@@ -25,26 +25,27 @@ test('browser login creates, validates, and stores a role-scoped Copilot account
   t.after(restore)
 
   const result = await connectWithBrowser({
-    platformUrl: 'https://platform.test',
-    allowedOrigins: ['https://platform.test'],
-    apiUrl: 'https://api.test/v1',
-    openBrowserImpl: async authorizationUrl => {
-      const url = new URL(authorizationUrl)
+    platformUrl:
+      'https://release-outside-repo-crea.app-preview.voidr.co',
+    callbackUrl: 'https://platform.voidr.co/auth/cli-connect',
+    allowedOrigins: ['https://platform.voidr.co'],
+    apiUrl:
+      'https://release-outside-repo-crea.api-preview.voidr.co/v1',
+    openBrowserImpl: async connectUrl => {
+      const url = new URL(connectUrl)
       const state = JSON.parse(
         Buffer.from(url.searchParams.get('state'), 'base64url').toString(
           'utf8'
         )
       )
-      assert.equal(
-        url.searchParams.get('redirect_uri'),
-        'https://platform.test/auth/cli-connect'
-      )
+      assert.equal(url.origin, 'https://platform.voidr.co')
+      assert.equal(url.pathname, '/auth/cli-connect')
       setImmediate(async () => {
         await fetch(`http://127.0.0.1:${state.port}/cli-callback`, {
           method: 'POST',
           headers: {
             'content-type': 'application/json',
-            origin: 'https://platform.test'
+            origin: 'https://platform.voidr.co'
           },
           body: JSON.stringify({
             nonce: state.nonce,
@@ -119,6 +120,15 @@ test('browser login creates, validates, and stores a role-scoped Copilot account
       request => request.authorization === `Bearer ${temporaryUserToken}`
     ).length,
     2
+  )
+  assert.equal(
+    requests.every(request =>
+      request.url.startsWith(
+        'https://release-outside-repo-crea.api-preview.voidr.co/v1/'
+      )
+    ),
+    true,
+    'the production callback must not move API operations away from preview'
   )
   assert.equal(
     requests.at(-1).body.includes(clientSecret),
@@ -208,9 +218,9 @@ test('loopback callback rejects invalid origin and nonce before accepting one re
   })
 })
 
-test('authorization URL binds the browser to an ephemeral port and nonce', () => {
+test('platform connect URL binds the browser to an ephemeral port and nonce', () => {
   const built = new URL(
-    buildBrowserAuthorizationUrl({
+    buildBrowserConnectUrl({
       port: 43123,
       nonce: 'synthetic-nonce',
       platformUrl: 'https://platform.test'
@@ -225,16 +235,31 @@ test('authorization URL binds the browser to an ephemeral port and nonce', () =>
     cliLogin: true
   })
   assert.equal(
-    built.searchParams.get('redirect_uri'),
+    `${built.origin}${built.pathname}`,
     'https://platform.test/auth/cli-connect'
   )
 })
 
+test('authorization callback can be separated from the target platform', () => {
+  const built = new URL(
+    buildBrowserConnectUrl({
+      port: 43123,
+      nonce: 'synthetic-nonce',
+      platformUrl: 'https://preview.platform.test',
+      callbackUrl: 'https://staging.platform.test/auth/cli-connect'
+    })
+  )
+  assert.equal(
+    `${built.origin}${built.pathname}`,
+    'https://staging.platform.test/auth/cli-connect'
+  )
+})
+
 function browserCallback(origin, accessToken) {
-  return async authorizationUrl => {
+  return async connectUrl => {
     const state = JSON.parse(
       Buffer.from(
-        new URL(authorizationUrl).searchParams.get('state'),
+        new URL(connectUrl).searchParams.get('state'),
         'base64url'
       ).toString('utf8')
     )

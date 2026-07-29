@@ -11,7 +11,8 @@ For a new or read-only developer, `/voidr-connect` reuses the browser callback
 already used by the Voidr CLI:
 
 1. the plugin starts a one-shot callback on a random `127.0.0.1` port;
-2. it opens the official Voidr login with a random nonce;
+2. it opens `/auth/cli-connect` with a random nonce, allowing the platform to
+   persist the CLI handshake before starting Auth0;
 3. the user logs in and explicitly chooses an organization when necessary;
 4. the platform sends a temporary user token directly to the loopback callback;
 5. the plugin creates a dedicated Copilot Service Account with no requested
@@ -23,6 +24,11 @@ already used by the Voidr CLI:
 The model never receives the Service Account secret or temporary access token.
 The callback accepts only the configured Voidr origins, validates the loopback
 host and nonce, limits request size, and handles only one successful request.
+
+The production build uses the Auth0-allowlisted production page as the browser
+callback and targets the production API. `/auth/me`, Service Account creation
+and validation, MCP calls, Test Plans, deploys, and executions use
+`https://api.voidr.co/v1` and `https://api.voidr.co/v1/mcp`.
 
 Admins and editors receive `read` + `write`. Viewers receive `read` and cannot
 escalate by changing a client request.

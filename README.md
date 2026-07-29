@@ -10,13 +10,15 @@ This plugin guides a developer from “I want to develop tests in Voidr” throu
 6. verifying `latest` and platform sync independently;
 7. creating an execution after a second confirmation.
 
-It reuses existing Voidr Service Accounts from
-`~/.voidr/service-accounts.json`. It does not call `npx voidr login` and never
-returns a client secret to Copilot. `/voidr-connect` opens the official Voidr
-login in the browser, asks the user to choose an organization when necessary,
-and creates a dedicated Copilot Service Account. The temporary user token is
-kept only in the local Node process and discarded after the account is created
-and validated.
+The current build uses Voidr production for browser authentication, application
+discovery, Test Plans, repository provisioning, deploy, and execution. Service
+Accounts use the standard production store at
+`~/.voidr/service-accounts.json`, shared with the Playwright framework. It does
+not call `npx voidr login` and never returns a client secret to Copilot.
+`/voidr-connect` opens the official Voidr connect page, which persists the local
+callback state before starting Auth0 and asks the user to choose an organization
+when necessary. The temporary user token is kept only in the local Node process
+and discarded after the account is created and validated.
 
 ## Local development
 
@@ -27,6 +29,17 @@ copilot plugin install copilot@voidrco
 copilot plugin list
 copilot mcp get voidr --json
 ```
+
+This build uses these production endpoints through the plugin MCP process:
+
+- platform:
+  `https://platform.voidr.co`;
+- browser authentication callback:
+  `https://platform.voidr.co/auth/cli-connect`;
+- API:
+  `https://api.voidr.co/v1`;
+- MCP:
+  `https://api.voidr.co/v1/mcp`.
 
 Start Copilot from the workspace containing the relevant product and test
 repositories, then say:

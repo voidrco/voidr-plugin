@@ -53,6 +53,7 @@ export function recordUserPromptState(payload) {
     }
 
     const workflowStarted = isVoidrTestingPrompt(prompt)
+    const connectStarted = isVoidrConnectPrompt(prompt)
     let planMode = workflowStarted ? null : current.planMode || null
     if (isNewPlanChoice(prompt)) planMode = 'new'
     if (isExistingPlanChoice(prompt)) planMode = 'existing'
@@ -60,6 +61,14 @@ export function recordUserPromptState(payload) {
     return {
       ...current,
       workflowActive: current.workflowActive === true || workflowStarted,
+      connectWorkflowActive: connectStarted
+        ? true
+        : workflowStarted
+          ? false
+          : current.connectWorkflowActive === true,
+      connectFirstToolRequired: connectStarted
+        ? true
+        : current.connectFirstToolRequired === true,
       planMode,
       planWriteApproved: isExplicitTestPlanApproval(prompt),
       planWriteApprovedAt: isExplicitTestPlanApproval(prompt)
@@ -92,6 +101,10 @@ function isVoidrTestingPrompt(prompt) {
       ) &&
       /\b(?:teste|testes|test plan|plano de testes)\b/.test(text))
   )
+}
+
+function isVoidrConnectPrompt(prompt) {
+  return /\/(?:copilot\s+)?voidr-connect\b/i.test(prompt)
 }
 
 function isNewPlanChoice(prompt) {

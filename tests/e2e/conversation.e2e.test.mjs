@@ -75,12 +75,25 @@ test('natural-language greenfield journey reaches deploy and execution through e
     workflow.context.localSmokeBaseUrl,
     'https://monitor.staging.example.test'
   )
+  assert.match(workflow.prompt, /Com base em quais insumos/i)
+  workflow = transition(workflow, {
+    type: 'PLAN_CONTEXT_SOURCE_SELECTED',
+    source: 'business'
+  })
   workflow = transition(workflow, {
     type: 'NEW_PLAN_CONTEXT_COLLECTED',
+    source: 'business',
+    evidence: [
+      'user-confirmed: endpoint availability and latency thresholds are critical'
+    ],
     criticalScenarios: ['endpoint indisponível', 'latência acima do limite'],
     expectedBehavior: 'A plataforma registra e alerta a indisponibilidade.',
     outOfScope: 'Falhas de infraestrutura da própria Voidr',
     preconditions: ['Endpoint sintético controlado']
+  })
+  assert.match(workflow.prompt, /Confirmar insumos do planejamento/i)
+  workflow = transition(workflow, {
+    type: 'PLAN_CONTEXT_CONFIRMED'
   })
   workflow = transition(workflow, {
     type: 'NEW_PLAN_DRAFTED',

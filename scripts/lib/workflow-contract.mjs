@@ -7,7 +7,9 @@ export const States = Object.freeze({
   ENVIRONMENT_SELECTED: 'ENVIRONMENT_SELECTED',
   FEATURE_SELECTED: 'FEATURE_SELECTED',
   LOCAL_SMOKE_TARGET_SELECTED: 'LOCAL_SMOKE_TARGET_SELECTED',
+  PLAN_CONTEXT_SOURCE_SELECTED: 'PLAN_CONTEXT_SOURCE_SELECTED',
   PLAN_CONTEXT_COLLECTED: 'PLAN_CONTEXT_COLLECTED',
+  PLAN_CONTEXT_CONFIRMED: 'PLAN_CONTEXT_CONFIRMED',
   PLAN_DRAFTED: 'PLAN_DRAFTED',
   PLAN_LOADED: 'PLAN_LOADED',
   PLAN_APPROVED: 'PLAN_APPROVED',
@@ -180,13 +182,29 @@ export function transition(workflow, event) {
           : event.baseUrl
       next.state = States.LOCAL_SMOKE_TARGET_SELECTED
       next.prompt =
-        'Informe os cenários críticos, o comportamento esperado, o que fica fora do escopo e os dados ou pré-condições disponíveis.'
+        'Com base em quais insumos devo montar o Test Plan? Escolha: Analisar código-fonte do workspace; Usar documentação ou requisitos; Descrever regras e cenários no chat; ou Combinar código, documentação e contexto do negócio.'
+      return next
+
+    case 'PLAN_CONTEXT_SOURCE_SELECTED':
+      requireState(next, States.LOCAL_SMOKE_TARGET_SELECTED)
+      if (
+        !['codebase', 'documentation', 'business', 'combined'].includes(
+          event.source
+        )
+      ) {
+        throw new Error('A supported planning-input source is required.')
+      }
+      next.context.contextSource = event.source
+      next.state = States.PLAN_CONTEXT_SOURCE_SELECTED
+      next.prompt = planningInputPrompt(event.source)
       return next
 
     case 'NEW_PLAN_CONTEXT_COLLECTED':
-      requireState(next, States.LOCAL_SMOKE_TARGET_SELECTED)
+      requireState(next, States.PLAN_CONTEXT_SOURCE_SELECTED)
       requireNewPlanContext(event)
-      next.context.contextSource = event.source || 'user'
+      if (event.source !== next.context.contextSource) {
+        throw new Error('Collected context must match the selected source.')
+      }
       next.context.productRepositories = [...(event.productRepositories || [])]
       next.context.contextEvidence = [...(event.evidence || [])]
       next.context.criticalScenarios = [...event.criticalScenarios]
@@ -197,11 +215,18 @@ export function transition(workflow, event) {
       next.context.preconditions = [...event.preconditions]
       next.state = States.PLAN_CONTEXT_COLLECTED
       next.prompt =
+        'Mostre o Resumo dos insumos do planejamento e aguarde a opção exata “Confirmar insumos do planejamento”. Ainda não apresente o draft.'
+      return next
+
+    case 'PLAN_CONTEXT_CONFIRMED':
+      requireState(next, States.PLAN_CONTEXT_COLLECTED)
+      next.state = States.PLAN_CONTEXT_CONFIRMED
+      next.prompt =
         'Apresente um draft do Test Plan para a feature selecionada, incluindo módulos, suites, casos e Arrange/Act/Assert. Não persista nada antes da aprovação.'
       return next
 
     case 'NEW_PLAN_DRAFTED':
-      requireState(next, States.PLAN_CONTEXT_COLLECTED)
+      requireState(next, States.PLAN_CONTEXT_CONFIRMED)
       if (next.context.planMode !== 'new') throw new Error('Not in new-plan mode.')
       if (event.feature !== next.context.feature) {
         throw new Error('The draft must preserve the user-selected feature.')
@@ -395,23 +420,36 @@ function requireMergedPullRequest(event) {
 }
 
 function requireNewPlanContext(event) {
-  const source = event.source || 'user'
+  const source = event.source
   if (
-    !['user', 'codebase'].includes(source) ||
+    !['codebase', 'documentation', 'business', 'combined'].includes(source) ||
     !Array.isArray(event.criticalScenarios) ||
     event.criticalScenarios.length === 0 ||
     !String(event.expectedBehavior || '').trim() ||
     !Array.isArray(event.preconditions) ||
-    (source === 'user' && !String(event.outOfScope || '').trim()) ||
+    !Array.isArray(event.evidence) ||
+    event.evidence.length === 0 ||
+    (source === 'business' && !String(event.outOfScope || '').trim()) ||
     (source === 'codebase' &&
       (!Array.isArray(event.productRepositories) ||
-        event.productRepositories.length === 0 ||
-        !Array.isArray(event.evidence) ||
-        event.evidence.length === 0))
+        event.productRepositories.length === 0))
   ) {
     throw new Error(
-      'New Test Plan context requires scenarios, expected behavior, preconditions, and either user scope or codebase repository evidence.'
+      'New Test Plan context requires a selected source, concrete evidence, scenarios, expected behavior, preconditions, and source-specific scope.'
     )
+  }
+}
+
+function planningInputPrompt(source) {
+  switch (source) {
+    case 'codebase':
+      return 'Selecione o repositório ou os repositórios exatos do produto para análise somente leitura.'
+    case 'documentation':
+      return 'Anexe, cole ou informe o caminho ou URL exata da documentação ou dos requisitos.'
+    case 'business':
+      return 'Informe em um grupo os cenários críticos, critérios de aceite, itens fora do escopo e dados ou pré-condições.'
+    default:
+      return 'Informe quais repositórios, documentos e regras de negócio devem ser combinados como insumos.'
   }
 }
 

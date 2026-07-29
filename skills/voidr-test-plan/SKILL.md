@@ -112,9 +112,21 @@ options.
 
 ### Gate 3: test context
 
-After the feature and local smoke target are confirmed, proceed directly to
-context collection. Do not ask whether to present the options, whether to
-analyze, or whether the user wants to answer now.
+After the feature and local smoke target are confirmed, ask exactly:
+
+> Com base em quais insumos devo montar o Test Plan?
+
+Use `ask_user` with exactly these selectable options:
+
+- `Analisar código-fonte do workspace`
+- `Usar documentação ou requisitos`
+- `Descrever regras e cenários no chat`
+- `Combinar código, documentação e contexto do negócio`
+
+End the response and wait. The application name, WEB/API type, environment,
+feature name, and base URL are routing metadata. They are never sufficient
+evidence for test cases, expected results, business rules, priorities, or
+severity. Never draft a Test Plan from those values alone.
 
 If the user explicitly names a product repository and asks to analyze it or use
 it as context, that message is sufficient authorization for read-only
@@ -139,18 +151,42 @@ feature:
 The codebase may provide scenarios and behavior, but it must never select a
 different feature or application than the user confirmed.
 
-Ask the user only for missing information that materially changes the proposed
-Test Plan and cannot be inferred safely. If no product repository was
-identified, ask the missing context questions in one group:
+When the user selects code analysis without naming a repository, call
+`voidr_workspace_inspect`, present the returned workspace repositories, and ask
+which exact product repository or repositories to analyze. Do not select one
+from its name.
+
+When the user selects documentation, ask them to attach it, paste it, or provide
+an exact accessible path or URL. Read the actual content before deriving any
+scenario. Cite the document section, requirement, or source location used.
+
+When the user selects chat context, ask these questions in one group:
 
 1. Which scenarios inside the selected feature are critical?
 2. What is the expected behavior or acceptance criterion?
 3. Which behavior is explicitly out of scope?
 4. What data, accounts, or preconditions are available?
 
+For combined context, collect each chosen source and label every conclusion by
+source. Ask only for material business decisions that code or documentation
+cannot establish.
+
+After collecting the inputs, show a `Resumo dos insumos do planejamento` with:
+
+- selected source or sources;
+- concrete code or documentation evidence;
+- user-confirmed business rules;
+- candidate critical scenarios and expected behavior;
+- assumptions and open questions;
+- data and technical preconditions.
+
+Offer the exact option `Confirmar insumos do planejamento` and end the response.
+This confirmation must arrive in a new user message. Do not render a Test Plan
+draft before it.
+
 ### Gate 4: visible draft and approval
 
-Create a visible draft with:
+Only after `Confirmar insumos do planejamento`, create a visible draft with:
 
 - plan name and objective;
 - the exact user-selected feature or journey;
@@ -173,9 +209,9 @@ not call `test_plans_create_test_plan`,
 `test_plans_create_case`, or `test_plans_populate_test_plan` before this
 approval.
 
-The runtime hook blocks all Test Plan mutations without this approval. If a
-mutation is denied, do not retry with another create or update tool; present
-the complete draft and approval option.
+The runtime hook blocks all Test Plan mutations without both the planning-input
+confirmation and this draft approval. If a mutation is denied, do not retry
+with another create or update tool; return to the missing visible gate.
 
 After approval:
 

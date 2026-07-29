@@ -90,7 +90,7 @@ test('new plan requires approval before platform mutations', () => {
         feature: 'Login',
         caseSlugs: ['LOGIN-001']
       }),
-    /Expected PLAN_CONTEXT_COLLECTED/
+    /Expected PLAN_CONTEXT_CONFIRMED/
   )
   workflow = collectNewPlanScope(workflow, 'Login com MFA')
   workflow = transition(workflow, {
@@ -189,6 +189,7 @@ test('platform environment and localhost smoke remain separate confirmed targets
   assert.equal(workflow.context.platformEnvironmentUrl, 'https://prod.example.test')
   assert.equal(workflow.context.localSmokeMode, 'localhost')
   assert.equal(workflow.context.localSmokeBaseUrl, 'http://localhost:5173')
+  assert.match(workflow.prompt, /Com base em quais insumos/i)
 })
 
 test('explicit product repository analysis can supply evidence-backed plan context', () => {
@@ -205,6 +206,10 @@ test('explicit product repository analysis can supply evidence-backed plan conte
   workflow = transition(workflow, {
     type: 'LOCAL_SMOKE_TARGET_SELECTED',
     mode: 'platform'
+  })
+  workflow = transition(workflow, {
+    type: 'PLAN_CONTEXT_SOURCE_SELECTED',
+    source: 'codebase'
   })
   workflow = transition(workflow, {
     type: 'NEW_PLAN_CONTEXT_COLLECTED',
@@ -226,8 +231,54 @@ test('explicit product repository analysis can supply evidence-backed plan conte
   ])
   assert.equal(workflow.context.contextEvidence.length, 1)
   assert.match(workflow.context.outOfScope, /não determinado pela codebase/i)
-  assert.match(workflow.prompt, /draft do Test Plan/i)
+  assert.match(workflow.prompt, /Confirmar insumos do planejamento/i)
   assert.deepEqual(workflow.actions, [])
+})
+
+test('routing metadata cannot be used as Test Plan evidence', () => {
+  let workflow = createWorkflow()
+  workflow = transition(workflow, {
+    type: 'PLAN_MODE_CHOSEN',
+    mode: 'new'
+  })
+  workflow = selectApplicationFromMcp(workflow)
+  workflow = transition(workflow, {
+    type: 'FEATURE_SELECTED',
+    feature: 'Consulta de CNPJ'
+  })
+  workflow = transition(workflow, {
+    type: 'LOCAL_SMOKE_TARGET_SELECTED',
+    mode: 'platform'
+  })
+
+  assert.match(workflow.prompt, /Com base em quais insumos/i)
+  assert.throws(
+    () =>
+      transition(workflow, {
+        type: 'NEW_PLAN_DRAFTED',
+        feature: 'Consulta de CNPJ',
+        caseSlugs: ['CNPJ-001']
+      }),
+    /Expected PLAN_CONTEXT_CONFIRMED/
+  )
+
+  workflow = transition(workflow, {
+    type: 'PLAN_CONTEXT_SOURCE_SELECTED',
+    source: 'documentation'
+  })
+  assert.throws(
+    () =>
+      transition(workflow, {
+        type: 'NEW_PLAN_CONTEXT_COLLECTED',
+        source: 'documentation',
+        evidence: [],
+        criticalScenarios: ['consulta válida'],
+        expectedBehavior: 'Exibir o resultado',
+        outOfScope: 'Não informado',
+        preconditions: []
+      }),
+    /concrete evidence/i
+  )
 })
 
 test('project.json mismatch cannot silently change the selected plan', () => {
@@ -397,12 +448,25 @@ function collectNewPlanScope(workflow, feature) {
   })
   assert.equal(workflow.context.platformEnvironmentUrl, 'https://staging.example.test')
   assert.equal(workflow.context.localSmokeBaseUrl, 'http://localhost:3000')
-  return transition(workflow, {
+  assert.match(workflow.prompt, /Com base em quais insumos/i)
+  workflow = transition(workflow, {
+    type: 'PLAN_CONTEXT_SOURCE_SELECTED',
+    source: 'business'
+  })
+  workflow = transition(workflow, {
     type: 'NEW_PLAN_CONTEXT_COLLECTED',
+    source: 'business',
+    evidence: [
+      'user-confirmed: valid and invalid credential scenarios are critical'
+    ],
     criticalScenarios: ['happy path', 'invalid credentials'],
     expectedBehavior: 'The user reaches the authenticated home page.',
     outOfScope: 'Social login',
     preconditions: ['A writable synthetic test account exists']
+  })
+  assert.match(workflow.prompt, /Confirmar insumos do planejamento/i)
+  return transition(workflow, {
+    type: 'PLAN_CONTEXT_CONFIRMED'
   })
 }
 

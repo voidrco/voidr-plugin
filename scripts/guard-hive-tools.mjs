@@ -267,6 +267,16 @@ function enforceTestPlanWriteApproval(hookPayload, canonicalName) {
     state.planWriteApproved === true &&
     Number.isFinite(state.planWriteApprovedAt) &&
     Date.now() - state.planWriteApprovedAt <= 30 * 60 * 1000
+  const planningContextFresh =
+    state.planMode !== 'new' ||
+    (state.planContextConfirmed === true &&
+      Number.isFinite(state.planContextConfirmedAt) &&
+      Date.now() - state.planContextConfirmedAt <= 60 * 60 * 1000)
+  if (!planningContextFresh) {
+    deny(
+      'Blocked by Voidr workflow: a new Test Plan requires collected planning inputs and a new user message saying “Confirmar insumos do planejamento” before the draft can be persisted.'
+    )
+  }
   if (
     state.workflowActive !== true ||
     !state.planMode ||

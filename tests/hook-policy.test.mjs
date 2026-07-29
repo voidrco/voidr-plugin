@@ -198,7 +198,7 @@ test('forces voidr_auth_status as the first operational connect action', () => {
   )
 })
 
-test('blocks Test Plan writes until the user explicitly approves the draft', () => {
+test('blocks Test Plan writes until inputs and draft are explicitly approved', () => {
   const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
   const sessionId = 'test-plan-approval-gate'
   const now = Date.now()
@@ -229,12 +229,38 @@ test('blocks Test Plan writes until the user explicitly approves the draft', () 
   }
   let output = runHook(mutation, dataRoot)
   assert.equal(output.permissionDecision, 'deny')
-  assert.match(output.permissionDecisionReason, /Aprovo este Test Plan/i)
+  assert.match(output.permissionDecisionReason, /Confirmar insumos/i)
 
   submitPrompt(
     {
       sessionId,
       timestamp: now + 2,
+      prompt: 'Aprovo este Test Plan',
+      transformedPrompt: 'Aprovo este Test Plan'
+    },
+    dataRoot
+  )
+  output = runHook(mutation, dataRoot)
+  assert.equal(output.permissionDecision, 'deny')
+  assert.match(output.permissionDecisionReason, /Confirmar insumos/i)
+
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 3,
+      prompt: 'Confirmar insumos do planejamento',
+      transformedPrompt: 'Confirmar insumos do planejamento'
+    },
+    dataRoot
+  )
+  output = runHook(mutation, dataRoot)
+  assert.equal(output.permissionDecision, 'deny')
+  assert.match(output.permissionDecisionReason, /Aprovo este Test Plan/i)
+
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 4,
       prompt: 'Sim',
       transformedPrompt: 'Sim'
     },
@@ -242,11 +268,12 @@ test('blocks Test Plan writes until the user explicitly approves the draft', () 
   )
   output = runHook(mutation, dataRoot)
   assert.equal(output.permissionDecision, 'deny')
+  assert.match(output.permissionDecisionReason, /Aprovo este Test Plan/i)
 
   submitPrompt(
     {
       sessionId,
-      timestamp: now + 3,
+      timestamp: now + 5,
       prompt: 'Aprovo este Test Plan',
       transformedPrompt: 'Aprovo este Test Plan'
     },
@@ -257,7 +284,7 @@ test('blocks Test Plan writes until the user explicitly approves the draft', () 
   submitPrompt(
     {
       sessionId,
-      timestamp: now + 4,
+      timestamp: now + 6,
       prompt: 'Faça mais uma alteração',
       transformedPrompt: 'Faça mais uma alteração'
     },

@@ -3,12 +3,13 @@
 This plugin guides a developer from “I want to develop tests in Voidr” through:
 
 1. creating or selecting a Test Plan;
-2. selecting or bootstrapping one test repository;
-3. implementing and validating Playwright cases;
-4. requiring a PR already merged into the repository default branch;
-5. deploying that exact commit as an immutable release after confirmation;
-6. verifying `latest` and platform sync independently;
-7. creating an execution after a second confirmation.
+2. selecting and confirming the planning inputs before generating a draft;
+3. selecting or bootstrapping one test repository;
+4. implementing and validating Playwright cases;
+5. requiring a PR already merged into the repository default branch;
+6. deploying that exact commit as an immutable release after confirmation;
+7. verifying `latest` and platform sync independently;
+8. creating an execution after a second confirmation.
 
 The current build uses Voidr production for browser authentication, application
 discovery, Test Plans, repository provisioning, deploy, and execution. Service
@@ -48,6 +49,14 @@ repositories, then say:
 
 The first question must always be whether the Test Plan is new or existing.
 No `project.json` is used to infer that choice.
+
+For a new Test Plan, application, product type, environment, feature, and base
+URL are routing metadata—not sufficient test-design evidence. After collecting
+them, the plugin asks what inputs should support the plan: product code,
+documentation or requirements, business context supplied in chat, or a
+combination. It summarizes the evidence and requires the exact confirmation
+`Confirmar insumos do planejamento` before it may generate a draft. Persisting
+the draft still requires the separate approval `Aprovar Test Plan`.
 
 Before deploy, the selected test changes must be in a merged GitHub pull
 request. The plugin rebuilds from that exact merge commit, uploads a

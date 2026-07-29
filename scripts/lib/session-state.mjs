@@ -54,9 +54,12 @@ export function recordUserPromptState(payload) {
 
     const workflowStarted = isVoidrTestingPrompt(prompt)
     const connectStarted = isVoidrConnectPrompt(prompt)
+    const planningInputsConfirmed =
+      isPlanningInputsConfirmation(prompt)
     let planMode = workflowStarted ? null : current.planMode || null
     if (isNewPlanChoice(prompt)) planMode = 'new'
     if (isExistingPlanChoice(prompt)) planMode = 'existing'
+    const resetPlanningContext = workflowStarted || isNewPlanChoice(prompt)
 
     return {
       ...current,
@@ -70,6 +73,16 @@ export function recordUserPromptState(payload) {
         ? true
         : current.connectFirstToolRequired === true,
       planMode,
+      planContextConfirmed: resetPlanningContext
+        ? false
+        : planningInputsConfirmed
+          ? true
+          : current.planContextConfirmed === true,
+      planContextConfirmedAt: resetPlanningContext
+        ? null
+        : planningInputsConfirmed
+          ? timestamp || Date.now()
+          : current.planContextConfirmedAt || null,
       planWriteApproved: isExplicitTestPlanApproval(prompt),
       planWriteApprovedAt: isExplicitTestPlanApproval(prompt)
         ? timestamp || Date.now()
@@ -89,6 +102,10 @@ export function isExplicitTestPlanApproval(prompt) {
     plan.test(text) &&
     Math.abs(firstIndex(text, approval) - firstIndex(text, plan)) <= 120
   )
+}
+
+export function isPlanningInputsConfirmation(prompt) {
+  return /\bconfirmar\s+insumos\s+do\s+planejamento\b/i.test(prompt)
 }
 
 function isVoidrTestingPrompt(prompt) {

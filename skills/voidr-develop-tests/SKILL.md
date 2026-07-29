@@ -156,25 +156,49 @@ For a new Test Plan, use this mandatory sequence:
    guess it. Keep this URL only as `localSmokeBaseUrl`. Present this question
    immediately after the feature answer; do not ask whether the user wants to
    see the options.
-4. If the user explicitly names a product repository and asks to analyze or use
-   it as context, treat that message as authorization for immediate read-only
-   inspection. Do not ask permission again. Inspect only the selected feature's
-   routes, UI or API handlers, validation, domain errors, fixtures, existing
-   tests, and environment-variable names. Derive candidate critical scenarios,
-   observable expected behavior, and technical preconditions with file
-   evidence. Never request secret values.
-5. Ask only for material business decisions that the selected code cannot
-   establish. If no product repository was explicitly identified, collect the
-   missing scenarios, expected behavior, out-of-scope behavior, and test data
-   or preconditions in one group. Do not ask whether to present the next
-   questions or whether the user wants to answer now.
-6. Present a complete Test Plan draft containing at least one case with
+4. Immediately after the local smoke answer, ask exactly:
+
+   > Com base em quais insumos devo montar o Test Plan?
+
+   Use `ask_user` with these selectable options:
+
+   - `Analisar código-fonte do workspace`
+   - `Usar documentação ou requisitos`
+   - `Descrever regras e cenários no chat`
+   - `Combinar código, documentação e contexto do negócio`
+
+   End the response and wait. Application name, application type, environment,
+   feature name, and base URL are routing metadata, never sufficient test-design
+   evidence. Do not draft cases from those values.
+5. Collect the selected inputs:
+   - For code, call `voidr_workspace_inspect`, ask which exact product
+     repository or repositories to analyze, and inspect only the selected
+     feature's routes, UI or API handlers, validations, domain errors, fixtures,
+     existing tests, and environment-variable names. If the user already named
+     a repository, treat that as authorization for read-only inspection and do
+     not ask permission again.
+   - For documentation, ask the user to attach it, paste it, or provide an
+     exact accessible path or URL. Read the actual content before deriving a
+     scenario.
+   - For chat context, collect critical scenarios, expected behavior,
+     out-of-scope behavior, and test data or preconditions in one question
+     group.
+   - For combined context, collect every selected source and distinguish which
+     conclusion came from which source.
+   Never request secret values.
+6. Show a `Resumo dos insumos do planejamento` containing the selected sources,
+   concrete evidence, derived scenarios, expected behavior, assumptions, open
+   questions, and preconditions. Then offer exactly
+   `Confirmar insumos do planejamento` and end the response. The confirmation
+   must arrive in a new user message. Do not show a Test Plan draft yet.
+7. Only after that exact confirmation, present a complete Test Plan draft
+   containing at least one case with
    Arrange/Act/Assert.
-7. Ask the user to approve or revise that exact draft. Offer the exact approval
+8. Ask the user to approve or revise that exact draft. Offer the exact approval
    option `Aprovar este Test Plan` and end the response. A generic `Sim` is not
    approval. The approval must arrive in a new user message after the complete
    draft is visible.
-8. Only after explicit approval may the agent call
+9. Only after explicit approval may the agent call
    `test_plans_create_test_plan` and `test_plans_populate_test_plan`.
    The Voidr MCP provisions and links a private GitHub repository as part of
    `test_plans_create_test_plan`. Capture the returned `repository` object,
@@ -182,9 +206,10 @@ For a new Test Plan, use this mandatory sequence:
    Treat a missing repository as a failed creation flow and stop; do not create
    a second unrelated repository locally.
 
-The runtime hook blocks every `test_plans_*` mutation before this explicit
-approval. If blocked, do not retry or switch to lower-level create/update
-tools. Return to the visible draft and approval gate.
+The runtime hook blocks every `test_plans_*` mutation until planning inputs
+were explicitly confirmed and the Test Plan draft was explicitly approved. If
+blocked, do not retry or switch to lower-level create/update tools. Return to
+the missing visible gate.
 
 Do not infer a feature from the application name, product repository, route,
 README, or existing source code. Do not create an empty DRAFT and fill it later.

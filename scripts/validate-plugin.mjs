@@ -110,8 +110,9 @@ const guardScript = readFileSync(
 assert(
   /enforcePlanModeGate/.test(guardScript) &&
     /enforceTestPlanWriteApproval/.test(guardScript) &&
-    /Aprovo este Test Plan/.test(guardScript),
-  'The runtime hook must enforce plan-mode and explicit Test Plan approval gates.'
+    /Aprovo este Test Plan/.test(guardScript) &&
+    /Confirmar insumos do planejamento/.test(guardScript),
+  'The runtime hook must enforce plan-mode, planning-input, and explicit Test Plan approval gates.'
 )
 const promptHooks = hooks.hooks?.userPromptTransformed
 assert(
@@ -247,6 +248,38 @@ assert(
     ),
   'Entry skill must keep the platform environment separate from local smoke.'
 )
+const planningInputQuestionIndex = entrySkill.indexOf(
+  'Com base em quais insumos devo montar o Test Plan?'
+)
+const testPlanDraftIndex = entrySkill.indexOf(
+  'present a complete Test Plan draft'
+)
+assert(
+  planningInputQuestionIndex >= 0 &&
+    testPlanDraftIndex > planningInputQuestionIndex &&
+    /Analisar código-fonte do workspace[\s\S]*?Usar documentação ou requisitos[\s\S]*?Descrever regras e cenários no chat[\s\S]*?Combinar código, documentação e contexto do negócio/i.test(
+      entrySkill
+    ),
+  'Entry skill must select planning inputs before showing a Test Plan draft.'
+)
+assert(
+  /Application name, application type, environment,[\s\S]*?routing metadata, never sufficient test-design\s+evidence/i.test(
+    entrySkill
+  ) &&
+    /Resumo dos insumos do planejamento[\s\S]*?Confirmar insumos do planejamento[\s\S]*?Do not show a Test Plan draft yet/i.test(
+      entrySkill
+    ),
+  'Entry skill must reject routing metadata as evidence and confirm collected inputs before drafting.'
+)
+assert(
+  /Com base em quais insumos devo montar o Test Plan\?[\s\S]*?routing metadata[\s\S]*?never sufficient\s+evidence/i.test(
+    testPlanSkill
+  ) &&
+    /Confirmar insumos do planejamento[\s\S]*?new user message[\s\S]*?Do not render a Test Plan\s+draft before it/i.test(
+      testPlanSkill
+    ),
+  'Test Plan skill must enforce the planning-input evidence gate before its visible draft.'
+)
 assert(
   /Before calling any Test Plan mutation tool, explicitly load the[\s\S]*?`\/voidr-test-plan` skill/i.test(
     entrySkill
@@ -293,22 +326,22 @@ assert(
   'Entry skill must require the exact post-draft approval message.'
 )
 assert(
-  /explicitly names a product repository and asks to analyze[\s\S]*?authorization for immediate\s+read-only\s+inspection[\s\S]*?Do not ask permission again/i.test(
+  /user already named\s+a repository[\s\S]*?read-only inspection[\s\S]*?not ask permission again/i.test(
     entrySkill
   ) &&
-    /Ask only for material business decisions[\s\S]*?code cannot\s+establish/i.test(
+    /For combined context,[\s\S]*?distinguish which\s+conclusion came from which source/i.test(
       entrySkill
     ),
-  'Entry skill must analyze an explicitly authorized product repository before asking only unresolved business questions.'
+  'Entry skill must honor explicitly authorized repositories and preserve evidence provenance.'
 )
 assert(
   /Present this question[\s\S]*?immediately after the feature answer[\s\S]*?do not ask whether the user wants to[\s\S]*?see the options/i.test(
     entrySkill
   ) &&
-    /Do not ask whether to present the next[\s\S]*?questions or whether the user wants to answer now/i.test(
+    /Immediately after the local smoke answer, ask exactly:[\s\S]*?Com base em quais insumos devo montar o Test Plan\?[\s\S]*?End the response and wait/i.test(
       entrySkill
     ),
-  'Entry skill must not insert meta-confirmations before smoke or context questions.'
+  'Entry skill must ask smoke and planning-input questions without meta-confirmations.'
 )
 assert(
   /explicitly load[\s\S]*?`\/voidr-implement-tests` skill/i.test(entrySkill),

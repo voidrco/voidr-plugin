@@ -9,7 +9,8 @@ This plugin guides a developer from “I want to develop tests in Voidr” throu
 5. requiring a PR already merged into the repository default branch;
 6. deploying that exact commit as an immutable release after confirmation;
 7. verifying `latest` and platform sync independently;
-8. creating an execution after a second confirmation.
+8. creating an execution after a second confirmation;
+9. analyzing a failed execution from ClickHouse-backed Playwright evidence.
 
 The current build uses Voidr production for browser authentication, application
 discovery, Test Plans, repository provisioning, deploy, and execution. Service
@@ -20,6 +21,10 @@ not call `npx voidr login` and never returns a client secret to Copilot.
 callback state before starting Auth0 and asks the user to choose an organization
 when necessary. The temporary user token is kept only in the local Node process
 and discarded after the account is created and validated.
+
+To run an already-automated plan without the development workflow, invoke:
+
+> `/copilot:voidr-create-execution`
 
 ## Local development
 
@@ -105,9 +110,14 @@ keep the default store; `npm run validate` rejects a profile configured in
 
 ## Security
 
-The local MCP bridge exposes a small allowlist of application, Test Plan, and
-execution tools. A `preToolUse` hook independently blocks direct, nested, and
-shell-based attempts to dispatch Hive processes.
+The local MCP bridge exposes a small allowlist of application, Test Plan,
+execution, Playwright analytics, defect, and governance-tag tools. A
+`preToolUse` hook independently blocks direct, nested, and shell-based
+attempts to dispatch Hive processes.
+
+Failure analysis always links the exact platform execution used as evidence.
+Confirmed defects persist that link in their description and execution
+relation.
 
 See [architecture](docs/architecture.md), [E2E strategy](docs/e2e-strategy.md),
 and [authentication flow](docs/auth-roadmap.md).

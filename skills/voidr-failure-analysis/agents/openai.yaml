@@ -1,0 +1,4 @@
+interface:
+  display_name: "Voidr Failure Analysis"
+  short_description: "Analyze Playwright failures with Voidr evidence"
+  default_prompt: "Use $voidr-failure-analysis to investigate a failed Voidr test execution."

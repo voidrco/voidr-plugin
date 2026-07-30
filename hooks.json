@@ -16,6 +16,22 @@
         "powershell": "$voidrHookRoot = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:COPILOT_PLUGIN_ROOT) { $env:COPILOT_PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } elseif ($env:VOIDR_PLUGIN_ROOT) { $env:VOIDR_PLUGIN_ROOT } else { Join-Path $HOME '.copilot/installed-plugins/voidrco/copilot' }; node (Join-Path $voidrHookRoot 'scripts/guard-hive-tools.mjs')",
         "timeoutSec": 5
       }
+    ],
+    "postToolUse": [
+      {
+        "type": "command",
+        "bash": "VOIDR_HOOK_ROOT=\"${PLUGIN_ROOT:-${COPILOT_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-${VOIDR_PLUGIN_ROOT:-$HOME/.copilot/installed-plugins/voidrco/copilot}}}}\"; node \"$VOIDR_HOOK_ROOT/scripts/post-tool-execution-links.mjs\"",
+        "powershell": "$voidrHookRoot = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:COPILOT_PLUGIN_ROOT) { $env:COPILOT_PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } elseif ($env:VOIDR_PLUGIN_ROOT) { $env:VOIDR_PLUGIN_ROOT } else { Join-Path $HOME '.copilot/installed-plugins/voidrco/copilot' }; node (Join-Path $voidrHookRoot 'scripts/post-tool-execution-links.mjs')",
+        "timeoutSec": 5
+      }
+    ],
+    "stop": [
+      {
+        "type": "command",
+        "bash": "VOIDR_HOOK_ROOT=\"${PLUGIN_ROOT:-${COPILOT_PLUGIN_ROOT:-${CLAUDE_PLUGIN_ROOT:-${VOIDR_PLUGIN_ROOT:-$HOME/.copilot/installed-plugins/voidrco/copilot}}}}\"; node \"$VOIDR_HOOK_ROOT/scripts/require-execution-links.mjs\"",
+        "powershell": "$voidrHookRoot = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:COPILOT_PLUGIN_ROOT) { $env:COPILOT_PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } elseif ($env:VOIDR_PLUGIN_ROOT) { $env:VOIDR_PLUGIN_ROOT } else { Join-Path $HOME '.copilot/installed-plugins/voidrco/copilot' }; node (Join-Path $voidrHookRoot 'scripts/require-execution-links.mjs')",
+        "timeoutSec": 5
+      }
     ]
   }
 }

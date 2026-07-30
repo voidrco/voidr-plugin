@@ -77,6 +77,7 @@ export function recordUserPromptState(payload) {
 
     return {
       ...current,
+      requiredExecutionIds: [],
       workflowActive: current.workflowActive === true || workflowStarted,
       connectWorkflowActive: connectStarted
         ? true

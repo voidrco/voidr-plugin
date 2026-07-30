@@ -70,6 +70,7 @@ test('bridge filters discovery, keeps secrets local, and blocks forbidden calls'
           toolDefinition('test_plans_create_test_plan'),
           toolDefinition('test_plans_populate_test_plan'),
           toolDefinition('executions_create_execution'),
+          toolDefinition('playwright_get_test_timeline'),
           toolDefinition('agent_jobs_trigger_hive_automation'),
           toolDefinition('system_batch_execute')
         ]
@@ -262,6 +263,17 @@ test('bridge filters discovery, keeps secrets local, and blocks forbidden calls'
     }
   })
   assert.match(populated.content[0].text, /test_plans_populate_test_plan/)
+
+  const executionId = '6a6a839850a27b89d2d7df2b'
+  const evidenceCall = await client.request('tools/call', {
+    name: 'playwright_get_test_timeline',
+    arguments: { executionId, testCaseSlug: 'POLAR-182' }
+  })
+  const evidenceMetadata = JSON.parse(evidenceCall.content.at(-1).text)
+  assert.equal(
+    evidenceMetadata.executionEvidence[0].executionUrl,
+    `https://platform.voidr.co/execution/${executionId}`
+  )
 
   const forbidden = await client.requestRaw('tools/call', {
     name: 'agent_jobs_trigger_hive_automation',

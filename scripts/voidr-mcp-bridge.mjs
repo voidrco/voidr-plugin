@@ -23,6 +23,9 @@ import { prepareTestRepository } from './lib/prepare.mjs'
 import { publishTests } from './lib/publish.mjs'
 import { inspectReleaseReadiness } from './lib/release-inspect.mjs'
 import { collectGitContext } from './lib/git-context.mjs'
+import {
+  enrichToolResultWithExecutionLinks
+} from './lib/execution-links.mjs'
 
 const policy = loadPolicy()
 const safeRemote = new Set(policy.safeRemoteTools)
@@ -356,7 +359,7 @@ async function dispatch(method, params) {
         capabilities: { tools: { listChanged: true } },
         serverInfo: {
           name: 'voidr-safe-bridge',
-          version: '0.2.19-local.37'
+          version: '0.2.22-local.1'
         }
       }
     case 'ping':
@@ -452,7 +455,12 @@ async function callTool(params) {
         ]
       }
     }
-    return result
+    return enrichToolResultWithExecutionLinks(
+      name,
+      args,
+      result,
+      process.env.VOIDR_PLATFORM_URL
+    )
   }
 
   if (name === 'test_plans_populate_test_plan') {
@@ -497,7 +505,12 @@ async function callTool(params) {
   if (name === 'test_plans_populate_test_plan' && !result?.isError) {
     recordPlanSlugs(bridgeTestPlanId(args), remoteResultData(result))
   }
-  return result
+  return enrichToolResultWithExecutionLinks(
+    name,
+    args,
+    result,
+    process.env.VOIDR_PLATFORM_URL
+  )
 }
 
 function recordPlanSlugs(planId, data) {

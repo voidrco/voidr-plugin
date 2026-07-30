@@ -44,9 +44,21 @@
         "test_plans_get_case",
         "test_plans_create_case",
         "test_plans_update_case",
+        "test_plans_get_tag_history",
+        "test_plans_update_test_case_tag",
         "executions_list_executions",
         "executions_create_execution",
-        "executions_get_execution"
+        "executions_get_execution",
+        "playwright_get_execution_analytics",
+        "playwright_list_executions",
+        "playwright_list_test_results",
+        "playwright_list_execution_failures",
+        "playwright_get_test_timeline",
+        "playwright_get_test_history",
+        "playwright_get_test_dom",
+        "playwright_get_trace_events",
+        "defects_list_defects",
+        "defects_create_defect"
       ],
       "timeout": 360000,
       "disableToolCache": true

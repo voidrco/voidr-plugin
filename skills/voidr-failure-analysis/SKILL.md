@@ -130,9 +130,13 @@ Return:
 
 Creating a defect is a separate mutation:
 
-1. Call `defects_list_defects` with the selected test slug.
-2. If a non-closed defect already exists, show it and the required
-   `Execution` link instead of creating another.
+1. Call `defects_list_defects` with `testCaseId: testCaseSlug`, sorted by
+   `updatedAt` descending.
+2. If a non-closed defect already exists, call `defects_get_defect` with that
+   defect's `slug` or ID. Show the complete returned defect and the required
+   `Execution` link instead of creating another. If the list result has no
+   usable slug or ID, or the detail lookup fails, report that the existing
+   defect could not be loaded and do not create a duplicate.
 3. Otherwise draft title, severity, priority, application, environment,
    description, reproducibility, and relations to the execution and test.
    The draft must show the clickable `Execution` URL. Include that URL in the

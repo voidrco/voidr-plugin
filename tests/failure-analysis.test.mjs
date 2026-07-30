@@ -20,7 +20,8 @@ const analysisTools = [
   'playwright_get_test_dom',
   'playwright_get_trace_events',
   'test_plans_get_tag_history',
-  'defects_list_defects'
+  'defects_list_defects',
+  'defects_get_defect'
 ]
 
 test('failure analysis uses only exposed evidence tools', () => {
@@ -33,6 +34,11 @@ test('failure analysis uses only exposed evidence tools', () => {
 
   assert.doesNotMatch(skill, /\b(?:group|cluster)_diagnosis_/)
   assert.match(skill, /Do not group or deduplicate rows by `failureSignature`/)
+  assert.ok(
+    skill.indexOf('defects_get_defect') >
+      skill.indexOf('defects_list_defects'),
+    'existing defects must be listed before loading their full details'
+  )
 })
 
 test('failure analysis mutations are explicit and write-scoped', () => {
@@ -63,6 +69,8 @@ test('failure analysis always links the evidence execution', () => {
   assert.match(skill, /`relations\.executions: \[executionId\]`/)
   assert.match(skill, /`relations\.testCases: \[testCaseSlug\]`/)
   assert.match(skill, /description under `Evidence execution`/)
-  assert.match(skill, /show it and the required\s+`Execution` link/)
+  assert.match(skill, /call `defects_get_defect`/)
+  assert.match(skill, /Show the complete returned defect/)
+  assert.match(skill, /do not create a duplicate/)
   assert.match(skill, /Return the created defect and end with the same required/)
 })

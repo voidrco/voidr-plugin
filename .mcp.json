@@ -58,6 +58,7 @@
         "playwright_get_test_dom",
         "playwright_get_trace_events",
         "defects_list_defects",
+        "defects_get_defect",
         "defects_create_defect"
       ],
       "timeout": 360000,

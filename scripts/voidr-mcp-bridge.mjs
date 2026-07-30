@@ -44,6 +44,12 @@ let applicationsListed = false
 const seenApplicationIds = new Set()
 const seenEnvironments = new Map() // applicationId -> Set<slug>
 const seenPlanSlugs = new Map() // planId -> Set<slug> (modules/suites/cases)
+// Execution discipline: an execution requires the sync verification reads
+// first, and a "not automated" rejection means the cases need a deploy —
+// never a re-creation of the plan structure.
+let planReadAt = null
+let countsReadAt = null
+let executionNeedsDeploy = false
 
 const localTools = [
   {
@@ -322,7 +328,7 @@ async function dispatch(method, params) {
         capabilities: { tools: { listChanged: true } },
         serverInfo: {
           name: 'voidr-safe-bridge',
-          version: '0.2.19-local.31'
+          version: '0.2.19-local.32'
         }
       }
     case 'ping':
@@ -385,11 +391,39 @@ async function callTool(params) {
       'applications_list_applications',
       'applications_get_application',
       'applications_list_environments',
-      'test_plans_get_test_plan'
+      'test_plans_get_test_plan',
+      'test_plans_get_test_counts'
     ].includes(name)
   ) {
     const result = await remote.callTool(name, args)
-    if (!result?.isError) recordProvenance(name, args, result)
+    if (!result?.isError) {
+      recordProvenance(name, args, result)
+      if (name === 'test_plans_get_test_plan') planReadAt = Date.now()
+      if (name === 'test_plans_get_test_counts') countsReadAt = Date.now()
+    }
+    return result
+  }
+
+  if (name === 'executions_create_execution') {
+    if (!planReadAt || !countsReadAt) {
+      throw new Error(
+        'Blocked by Voidr workflow: an execution requires the sync verification first. Read the plan with test_plans_get_test_plan and the counts with test_plans_get_test_counts, confirm every selected case is automated, and only then create the execution. If cases are not automated, the fix is deploying the merged PR with voidr_release_deploy_merged_pr — never re-creating modules, suites, or cases.'
+      )
+    }
+    const result = await remote.callTool(name, args)
+    if (result?.isError && /only automated/i.test(structureResultText(result))) {
+      executionNeedsDeploy = true
+      return {
+        ...result,
+        content: [
+          ...(result.content || []),
+          {
+            type: 'text',
+            text: 'The selected cases exist in the Test Plan but are not deployed (not automated). Do NOT re-create modules, suites, or cases — that never fixes this. Merge the tests pull request, run voidr_release_deploy_merged_pr, verify sync with test_plans_get_test_plan and test_plans_get_test_counts, then retry the execution.'
+          }
+        ]
+      }
+    }
     return result
   }
 
@@ -444,6 +478,11 @@ const STRUCTURE_TOOLS = new Set([
 
 async function callStructureTool(name, args) {
   const planId = bridgeTestPlanId(args).toLowerCase()
+  if (executionNeedsDeploy) {
+    throw new Error(
+      'Blocked by Voidr workflow: the platform already reported that the cases exist but are not automated (not deployed). Creating modules, suites, or cases again will never fix that and duplicates the plan. Merge the tests pull request, run voidr_release_deploy_merged_pr, verify sync, and retry the execution.'
+    )
+  }
   enforceKnownStructureRefs(name, planId, args)
 
   let result
@@ -585,6 +624,9 @@ function resetStructureTracking() {
   seenApplicationIds.clear()
   seenEnvironments.clear()
   seenPlanSlugs.clear()
+  planReadAt = null
+  countsReadAt = null
+  executionNeedsDeploy = false
 }
 
 // Every platform identifier used in a mutating or preparing call must have
@@ -921,15 +963,16 @@ async function callLocal(name, args) {
           createPullRequest: args.createPullRequest !== false
         })
       )
-    case 'voidr_release_deploy_merged_pr':
-      return textResult(
-        await deployMergedPullRequest({
-          repositoryPath: String(args.repositoryPath || ''),
-          repositoryUrl: String(args.repositoryUrl || ''),
-          pullRequestNumber: Number(args.pullRequestNumber),
-          testPlanId: String(args.testPlanId || '')
-        })
-      )
+    case 'voidr_release_deploy_merged_pr': {
+      const deployed = await deployMergedPullRequest({
+        repositoryPath: String(args.repositoryPath || ''),
+        repositoryUrl: String(args.repositoryUrl || ''),
+        pullRequestNumber: Number(args.pullRequestNumber),
+        testPlanId: String(args.testPlanId || '')
+      })
+      if (deployed?.completed) executionNeedsDeploy = false
+      return textResult(deployed)
+    }
     default:
       throw new Error(`Unknown local Voidr tool: ${name}`)
   }

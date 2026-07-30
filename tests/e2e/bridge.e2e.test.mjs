@@ -606,6 +606,18 @@ test('bridge blocks platform data that was never returned by a tool this session
     }
     if (message.method === 'tools/call') {
       const { name } = message.params
+      if (name === 'executions_create_execution') {
+        sendResult(response, message.id, {
+          isError: true,
+          content: [
+            {
+              type: 'text',
+              text: 'Error executing executions_create_execution: Only automated test cases can be executed'
+            }
+          ]
+        })
+        return
+      }
       const data =
         name === 'applications_list_applications'
           ? { applications: [{ _id: '6a5113d133cfac0a5ec0fd7b', name: 'Portal' }] }
@@ -731,6 +743,15 @@ test('bridge blocks platform data that was never returned by a tool this session
   })
   assert.match(inventedEnvironment.error.message, /Use exactly one of: producao/i)
 
+  const executionBeforeSync = await client.requestRaw('tools/call', {
+    name: 'executions_create_execution',
+    arguments: { testPlanId: planId }
+  })
+  assert.match(
+    executionBeforeSync.error.message,
+    /sync verification first/i
+  )
+
   await client.request('tools/call', {
     name: 'test_plans_get_test_plan',
     arguments: { testPlanId: planId }
@@ -746,6 +767,30 @@ test('bridge blocks platform data that was never returned by a tool this session
   })
   assert.match(inventedCase.error.message, /ghost-99/)
   assert.match(inventedCase.error.message, /never invent slugs/i)
+
+  await client.request('tools/call', {
+    name: 'test_plans_get_test_counts',
+    arguments: { testPlanId: planId }
+  })
+  const notAutomated = await client.request('tools/call', {
+    name: 'executions_create_execution',
+    arguments: { testPlanId: planId }
+  })
+  assert.equal(notAutomated.isError, true)
+  const enriched = notAutomated.content
+    .map(item => item.text)
+    .join('\n')
+  assert.match(enriched, /Do NOT re-create modules/i)
+  assert.match(enriched, /voidr_release_deploy_merged_pr/)
+
+  const blockedRecreate = await client.requestRaw('tools/call', {
+    name: 'test_plans_create_module',
+    arguments: { planId, name: 'Recarga de Créditos' }
+  })
+  assert.match(
+    blockedRecreate.error.message,
+    /not automated \(not deployed\)/i
+  )
 })
 
 test('bridge blocks writes for an account without write scope before network', async t => {

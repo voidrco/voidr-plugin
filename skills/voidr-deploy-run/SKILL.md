@@ -106,7 +106,12 @@ Only after immutable release and latest verification:
 4. If verification fails or is ambiguous, stop. Report that artifacts may
    exist but synchronization is unverified.
 
-Never create an execution while sync is unverified.
+Never create an execution while sync is unverified. If
+`executions_create_execution` reports "Only automated test cases can be
+executed", the selected cases exist but were never deployed: complete the
+immutable deploy of the merged PR and re-verify sync. Never respond to that
+error by creating or re-creating modules, suites, or cases — the bridge
+blocks it.
 
 ## Execution gate
 

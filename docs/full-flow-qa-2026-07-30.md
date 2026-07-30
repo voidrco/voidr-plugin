@@ -486,6 +486,32 @@ Correção (mecânica, no bridge):
   terminal ficam proibidos na publicação;
 - o gate pós-smoke não bloqueia a publicação autorizada.
 
+### BUG-020 — “Deploy” pula a release, e o erro de execução vira recriação
+
+Severidade: bloqueadora
+Status: corrigido em `0.2.19-local.32` e validado por testes; pendente
+validação na UI
+
+Com o pedido “faça o deploy dos testes”, o agente pulou a release imutável e
+chamou `executions_create_execution` direto; a plataforma respondeu
+corretamente (`Only automated test cases can be executed`), e ele interpretou
+como “os casos não existem”, começando a recriar módulo/suite/casos
+duplicados.
+
+Correção (mecânica, no bridge):
+
+- `executions_create_execution` exige a verificação de sincronização prévia
+  na sessão (`test_plans_get_test_plan` + `test_plans_get_test_counts`);
+  sem isso é bloqueada com o procedimento correto na mensagem;
+- o erro `Only automated…` volta enriquecido: os casos existem e precisam de
+  deploy — nunca de recriação — apontando `voidr_release_deploy_merged_pr`;
+- após esse erro, as tools de criação de estrutura ficam travadas até um
+  deploy completo da sessão;
+- o roteador reconhece “deploy/publicar/subir os testes” e direciona para o
+  `/voidr-deploy-run`, com a ordem dos gates no prompt;
+- o skill de deploy proíbe explicitamente responder a esse erro com criação
+  de estrutura.
+
 ## Próximo checkpoint
 
 A criação, a população anonimizada, o provisionamento, a materialização e o smoke local

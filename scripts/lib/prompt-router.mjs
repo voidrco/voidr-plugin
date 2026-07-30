@@ -5,6 +5,16 @@ const voidrTestingIntent =
 
 const explicitVoidrSkill = /\/(?:copilot\s+)?voidr-[a-z-]+/i
 
+function isDeployTestsPrompt(prompt) {
+  const text = String(prompt || '')
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+  return /\b(?:deploy|publicar?|subir|implantar?)\b[\s\S]{0,50}\btestes?\b|\btestes?\b[\s\S]{0,30}\b(?:deploy|deployados?)\b|\bexecutar?\b[\s\S]{0,40}\btestes?\b[\s\S]{0,40}\bplataforma\b/.test(
+    text
+  )
+}
+
 export function routeVoidrPrompt(input) {
   const prompt = String(input?.prompt || '')
   const transformedPrompt = String(input?.transformedPrompt || prompt)
@@ -21,6 +31,21 @@ from the current Git branch and diff, confirm everything on one ask_user card,
 show plain-language test scenarios, and wait for the typed “Criar testes”
 approval. Never expose platform vocabulary such as Test Plan, scaffold,
 module, suite, or case slug to the user.`
+    }
+  }
+
+  if (isDeployTestsPrompt(prompt)) {
+    return {
+      modifiedTransformedPrompt: `${transformedPrompt}
+
+Use the /voidr-deploy-run skill for this request and follow its gates in
+order: merged-PR evidence, immutable deploy with
+voidr_release_deploy_merged_pr, independent sync verification
+(test_plans_get_test_plan + test_plans_get_test_counts), and only then the
+execution. Never call executions_create_execution before the deploy and sync
+verification, and never create or re-create Test Plan modules, suites, or
+cases during a deploy — an "Only automated test cases can be executed" error
+means the cases need the deploy, not re-creation.`
     }
   }
 

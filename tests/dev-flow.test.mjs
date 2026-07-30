@@ -74,6 +74,15 @@ test('routes developer intent to /voidr-test and keeps the classic route', () =>
   })
   assert.match(classic.modifiedTransformedPrompt, /\/voidr-develop-tests/)
 
+  const deploy = routeVoidrPrompt({
+    prompt: 'faca o deploy dos testes que desenvolvemos'
+  })
+  assert.match(deploy.modifiedTransformedPrompt, /\/voidr-deploy-run/)
+  assert.match(
+    deploy.modifiedTransformedPrompt,
+    /Never call executions_create_execution before the deploy/
+  )
+
   assert.deepEqual(routeVoidrPrompt({ prompt: 'Criar testes' }), {})
 })
 

@@ -388,6 +388,31 @@ Correção (mecânica, não instrucional):
 Observação: o cliente usa Claude Haiku 4.5 no Copilot — aderência fraca a
 instruções de skill; todo gate relevante precisa ser mecânico (tool/hook).
 
+### BUG-017 — Agente inventa slug de suite e re-tenta o mesmo not-found
+
+Severidade: alta
+Status: corrigido em `0.2.19-local.27` e validado por testes; pendente
+validação na UI
+
+No fluxo dev (`local.26`, Haiku 4.5), após criar módulo e suite, o agente
+referenciou a suite como `LIMITE` no `test_plans_create_case` — identificador
+inventado, diferente do slug retornado pelo `create_suite` — e, diante do
+erro `Suite with identifier 'LIMITE' not found`, repetiu a mesma chamada com
+o mesmo slug errado.
+
+Correção (mecânica, no bridge):
+
+- os slugs retornados por `test_plans_create_module`/`create_suite` são
+  registrados por sessão; um `create_case` que referencia uma suite
+  inexistente em módulo criado na sessão é bloqueado antes da rede, com os
+  slugs válidos na mensagem;
+- identificador que já falhou com not-found não pode ser repetido na sessão
+  (bloqueio pré-rede orientando `test_plans_get_test_plan`);
+- erros not-found de estrutura voltam enriquecidos com os slugs conhecidos
+  da sessão;
+- o skill `/voidr-test` exige usar exatamente o `slug` retornado por cada
+  criação.
+
 ## Próximo checkpoint
 
 A criação, a população anonimizada, o provisionamento, a materialização e o smoke local

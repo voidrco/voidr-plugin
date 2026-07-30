@@ -89,6 +89,11 @@ Only after `Criar testes`:
      `test_plans_create_module`, a suite with `test_plans_create_suite`, and
      one case per approved scenario with `test_plans_create_case`
      (Arrange/Act/Assert derived from the scenario, placeholders only).
+     Reference modules and suites only by the exact `slug` each creation
+     response returned — never invent, abbreviate, or re-case an identifier.
+     On a not-found error, read the plan with `test_plans_get_test_plan` to
+     get the real slugs; never retry the same identifier. The bridge blocks
+     invented slugs and not-found retries.
    - If none exists, call `test_plans_create_test_plan` named after the
      application and `test_plans_populate_test_plan` with the approved
      scenarios. Capture the returned `repository` object.

@@ -28,6 +28,12 @@ const provisionedTestPlans = new Set()
 let negotiatedProtocol = '2024-11-05'
 let selectedTestPlanId = null
 let planCreationFailed = false
+// Structure slugs actually returned by the platform this session. They are
+// the only identifiers the model may reference when adding cases to modules
+// it just created — invented slugs are blocked before any network call.
+const sessionModules = new Map() // planId -> Set<moduleSlug>
+const sessionSuites = new Map() // planId -> Map<moduleSlug, Set<suiteSlug>>
+const failedStructureRefs = new Set() // `${planId}|${slug}` that returned not-found
 
 const localTools = [
   {
@@ -284,7 +290,7 @@ async function dispatch(method, params) {
         capabilities: { tools: { listChanged: true } },
         serverInfo: {
           name: 'voidr-safe-bridge',
-          version: '0.2.19-local.26'
+          version: '0.2.19-local.27'
         }
       }
     case 'ping':
@@ -325,6 +331,7 @@ async function callTool(params) {
   if (name === 'voidr_auth_status') {
     selectedTestPlanId = null
     planCreationFailed = false
+    resetStructureTracking()
   }
   enforceBridgeTestPlanIdentity(name, args)
 
@@ -363,7 +370,154 @@ async function callTool(params) {
     return result
   }
 
+  if (STRUCTURE_TOOLS.has(name)) return callStructureTool(name, args)
+
   return remote.callTool(name, args)
+}
+
+const STRUCTURE_TOOLS = new Set([
+  'test_plans_create_module',
+  'test_plans_create_suite',
+  'test_plans_create_case'
+])
+
+async function callStructureTool(name, args) {
+  const planId = bridgeTestPlanId(args).toLowerCase()
+  enforceKnownStructureRefs(name, planId, args)
+
+  let result
+  try {
+    result = await remote.callTool(name, args)
+  } catch (error) {
+    recordFailedStructureRef(planId, error?.message)
+    throw new Error(appendStructureHint(planId, error?.message))
+  }
+  if (result?.isError) {
+    const text = structureResultText(result)
+    recordFailedStructureRef(planId, text)
+    return withStructureHint(result, planId, text)
+  }
+
+  recordCreatedStructure(name, planId, args, result)
+  return result
+}
+
+function enforceKnownStructureRefs(name, planId, args) {
+  const moduleSlug = String(args.moduleSlug || '').trim()
+  const suiteSlug = String(args.suiteSlug || '').trim()
+
+  for (const slug of [moduleSlug, suiteSlug]) {
+    if (slug && failedStructureRefs.has(`${planId}|${slug.toLowerCase()}`)) {
+      throw new Error(
+        `Blocked by Voidr workflow: identifier '${slug}' already failed with not-found in this session. Do not retry invented identifiers. Read the plan with test_plans_get_test_plan and use the exact slug the platform returns.${knownStructureHint(planId)}`
+      )
+    }
+  }
+
+  // A module created this session can only contain suites created this
+  // session, so an unknown suite slug is an invented one — block it before
+  // the network call and hand the model the valid slugs.
+  if (name === 'test_plans_create_case' && moduleSlug && suiteSlug) {
+    const sessionModule = sessionModules.get(planId)?.has(moduleSlug.toLowerCase())
+    const suites = sessionSuites.get(planId)?.get(moduleSlug.toLowerCase())
+    if (sessionModule && suites?.size && !suites.has(suiteSlug.toLowerCase())) {
+      throw new Error(
+        `Blocked by Voidr workflow: suite '${suiteSlug}' was never created in module '${moduleSlug}'. Use exactly one of the suite slugs returned by test_plans_create_suite: ${[...suites].join(', ')}. Never invent or re-case identifiers.`
+      )
+    }
+  }
+}
+
+function recordCreatedStructure(name, planId, args, result) {
+  const data = remoteResultData(result)
+  if (name === 'test_plans_create_module') {
+    const slug = structureSlug(data, args)
+    if (!slug) return
+    if (!sessionModules.has(planId)) sessionModules.set(planId, new Set())
+    sessionModules.get(planId).add(slug)
+    return
+  }
+  if (name === 'test_plans_create_suite') {
+    const moduleSlug = String(args.moduleSlug || '').trim().toLowerCase()
+    const slug = structureSlug(data, args)
+    if (!moduleSlug || !slug) return
+    if (!sessionSuites.has(planId)) sessionSuites.set(planId, new Map())
+    const modules = sessionSuites.get(planId)
+    if (!modules.has(moduleSlug)) modules.set(moduleSlug, new Set())
+    modules.get(moduleSlug).add(slug)
+  }
+}
+
+function structureSlug(data, args) {
+  for (const source of [data, args]) {
+    if (!source || typeof source !== 'object') continue
+    for (const key of ['slug', 'identifier']) {
+      const value = source[key]
+      if (typeof value === 'string' && value.trim()) {
+        return value.trim().toLowerCase()
+      }
+    }
+  }
+  return ''
+}
+
+function recordFailedStructureRef(planId, text) {
+  const match = String(text || '').match(
+    /(?:suite|module)\s+with\s+identifier\s+'([^']+)'\s+not\s+found/i
+  )
+  if (match) {
+    failedStructureRefs.add(`${planId}|${match[1].trim().toLowerCase()}`)
+  }
+}
+
+function knownStructureHint(planId) {
+  const parts = []
+  const modules = sessionModules.get(planId)
+  if (modules?.size) {
+    parts.push(`Module slugs created this session: ${[...modules].join(', ')}.`)
+  }
+  const suites = sessionSuites.get(planId)
+  if (suites?.size) {
+    for (const [moduleSlug, slugs] of suites) {
+      if (slugs.size) {
+        parts.push(
+          `Suite slugs created in module '${moduleSlug}': ${[...slugs].join(', ')}.`
+        )
+      }
+    }
+  }
+  return parts.length ? ` ${parts.join(' ')}` : ''
+}
+
+function appendStructureHint(planId, message) {
+  const base = String(message || 'Voidr structure call failed.')
+  if (!/not\s+found/i.test(base)) return base
+  return `${base}${knownStructureHint(planId)} Do not retry the same identifier; read the plan with test_plans_get_test_plan if the right slug is unknown.`
+}
+
+function withStructureHint(result, planId, text) {
+  if (!/not\s+found/i.test(String(text || ''))) return result
+  const hint = `${knownStructureHint(planId)} Do not retry the same identifier; read the plan with test_plans_get_test_plan if the right slug is unknown.`
+  return {
+    ...result,
+    content: [
+      ...(result.content || []),
+      { type: 'text', text: hint.trim() }
+    ]
+  }
+}
+
+function structureResultText(result) {
+  return (result?.content || [])
+    .filter(item => item?.type === 'text')
+    .map(item => String(item.text || ''))
+    .join('\n')
+}
+
+function resetStructureTracking() {
+  sessionModules.clear()
+  sessionSuites.clear()
+  failedStructureRefs.clear()
 }
 
 function enforceBridgeTestPlanIdentity(name, args) {
@@ -461,6 +615,7 @@ async function callLocal(name, args) {
       const selected = selectOrganization(String(args.organizationId || ''))
       selectedTestPlanId = null
       planCreationFailed = false
+      resetStructureTracking()
       remote.reset()
       announceToolsChanged()
       return textResult({
@@ -474,6 +629,7 @@ async function callLocal(name, args) {
       const imported = await connectWithBrowser()
       selectedTestPlanId = null
       planCreationFailed = false
+      resetStructureTracking()
       remote.reset()
       announceToolsChanged()
       return textResult(imported)

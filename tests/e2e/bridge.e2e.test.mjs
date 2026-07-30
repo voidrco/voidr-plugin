@@ -395,6 +395,169 @@ test('bridge blocks Test Plan listing after a failed creation instead of a silen
   )
 })
 
+test('bridge blocks invented module/suite slugs and not-found retries', async t => {
+  const receivedCalls = []
+  const server = createServer(async (request, response) => {
+    const message = JSON.parse(await readBody(request))
+    response.setHeader('content-type', 'application/json')
+    response.setHeader('mcp-session-id', 'synthetic-session')
+    if (message.method === 'notifications/initialized') {
+      response.writeHead(202)
+      response.end()
+      return
+    }
+    if (message.method === 'initialize') {
+      sendResult(response, message.id, {
+        protocolVersion: '2024-11-05',
+        capabilities: { tools: {} },
+        serverInfo: { name: 'mock', version: '1' }
+      })
+      return
+    }
+    if (message.method === 'tools/call') {
+      const { name, arguments: args } = message.params
+      receivedCalls.push({ name, args })
+      if (name === 'test_plans_create_module') {
+        sendResult(response, message.id, {
+          structuredContent: { data: { slug: 'antecipacao' } },
+          content: [{ type: 'text', text: JSON.stringify({ slug: 'antecipacao' }) }]
+        })
+        return
+      }
+      if (name === 'test_plans_create_suite') {
+        sendResult(response, message.id, {
+          structuredContent: { data: { slug: 'solicitacao-acima-limite' } },
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ slug: 'solicitacao-acima-limite' })
+            }
+          ]
+        })
+        return
+      }
+      if (name === 'test_plans_create_case') {
+        if (args.moduleSlug === 'legacy') {
+          sendResult(response, message.id, {
+            isError: true,
+            content: [
+              {
+                type: 'text',
+                text: `Error executing test_plans_create_case: Suite with identifier '${args.suiteSlug}' not found`
+              }
+            ]
+          })
+          return
+        }
+        sendResult(response, message.id, {
+          structuredContent: { data: { slug: 'case-1' } },
+          content: [{ type: 'text', text: JSON.stringify({ slug: 'case-1' }) }]
+        })
+        return
+      }
+      sendResult(response, message.id, { content: [] })
+      return
+    }
+    sendResult(response, message.id, { tools: [] })
+  })
+  server.listen(0, '127.0.0.1')
+  await once(server, 'listening')
+  t.after(() => server.close())
+
+  const temp = mkdtempSync(join(tmpdir(), 'voidr-bridge-structure-'))
+  const storePath = join(temp, 'service-accounts.json')
+  writeFileSync(
+    storePath,
+    JSON.stringify({
+      activeOrgId: 'org-structure',
+      accounts: {
+        'org-structure': {
+          clientId: 'sa_structure_e2e',
+          clientSecret: 'synthetic-structure-secret',
+          scopes: ['read', 'write']
+        }
+      }
+    })
+  )
+  const child = spawn(process.execPath, [bridgePath], {
+    cwd: temp,
+    env: {
+      ...process.env,
+      VOIDR_SERVICE_ACCOUNTS_PATH: storePath,
+      VOIDR_MCP_URL: `http://127.0.0.1:${server.address().port}/mcp`
+    },
+    stdio: ['pipe', 'pipe', 'pipe']
+  })
+  t.after(() => child.kill())
+  const client = jsonRpcClient(child)
+  await client.request('initialize', {
+    protocolVersion: '2024-11-05',
+    capabilities: {},
+    clientInfo: { name: 'e2e', version: '1' }
+  })
+
+  const planId = '6a5303e59a93b9f0daef3a53'
+  await client.request('tools/call', {
+    name: 'test_plans_create_module',
+    arguments: { planId, name: 'Antecipação' }
+  })
+  await client.request('tools/call', {
+    name: 'test_plans_create_suite',
+    arguments: { planId, moduleSlug: 'antecipacao', name: 'Solicitação acima do limite' }
+  })
+
+  const invented = await client.requestRaw('tools/call', {
+    name: 'test_plans_create_case',
+    arguments: { planId, moduleSlug: 'antecipacao', suiteSlug: 'LIMITE', name: 'Caso' }
+  })
+  assert.match(invented.error.message, /never created in module/i)
+  assert.match(invented.error.message, /solicitacao-acima-limite/)
+  assert.equal(
+    receivedCalls.filter(call => call.name === 'test_plans_create_case').length,
+    0,
+    'the invented suite slug must be blocked before any network call'
+  )
+
+  const validCase = await client.request('tools/call', {
+    name: 'test_plans_create_case',
+    arguments: {
+      planId,
+      moduleSlug: 'antecipacao',
+      suiteSlug: 'solicitacao-acima-limite',
+      name: 'Caso'
+    }
+  })
+  assert.match(validCase.content[0].text, /case-1/)
+
+  const legacyMiss = await client.request('tools/call', {
+    name: 'test_plans_create_case',
+    arguments: { planId, moduleSlug: 'legacy', suiteSlug: 'GHOST', name: 'Caso' }
+  })
+  assert.equal(legacyMiss.isError, true)
+  assert.match(
+    structureText(legacyMiss),
+    /Do not retry the same identifier/i
+  )
+
+  const blockedRetry = await client.requestRaw('tools/call', {
+    name: 'test_plans_create_case',
+    arguments: { planId, moduleSlug: 'legacy', suiteSlug: 'GHOST', name: 'Caso 2' }
+  })
+  assert.match(blockedRetry.error.message, /already failed with not-found/i)
+  assert.equal(
+    receivedCalls.filter(call => call.args?.suiteSlug === 'GHOST').length,
+    1,
+    'a not-found identifier must not be retried against the network'
+  )
+})
+
+function structureText(result) {
+  return (result.content || [])
+    .filter(item => item?.type === 'text')
+    .map(item => item.text)
+    .join('\n')
+}
+
 test('bridge blocks writes for an account without write scope before network', async t => {
   const receivedTools = []
   const server = createServer(async (request, response) => {

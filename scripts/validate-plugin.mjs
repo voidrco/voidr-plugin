@@ -153,6 +153,8 @@ assert(
 
 const skillFiles = findFiles(join(root, 'skills'), 'SKILL.md')
 assert(skillFiles.length >= 4, 'Expected the four MVP skills.')
+const toolReferencePattern =
+  /`((?:voidr|applications|test_plans|executions|playwright|defects)_[a-z0-9_]+)`/g
 for (const path of skillFiles) {
   const content = readFileSync(path, 'utf8')
   const frontmatter = parseFrontmatter(content)
@@ -169,10 +171,35 @@ for (const path of skillFiles) {
     /Never call a tool that starts a Hive process/i.test(content),
     `${relative(path)} must state the Hive invariant.`
   )
+  assert(
+    /^## Tool routing$/m.test(content),
+    `${relative(path)} must declare a "## Tool routing" section mapping every scenario to one exact MCP tool.`
+  )
+  for (const match of content.matchAll(toolReferencePattern)) {
+    assert(
+      configuredTools.has(match[1]),
+      `${relative(path)} references ${match[1]}, which is not in the MCP allowlist.`
+    )
+  }
   for (const forbidden of policy.forbiddenTools) {
     assert(
       !content.includes(forbidden),
       `${relative(path)} references forbidden tool ${forbidden}.`
+    )
+  }
+}
+
+const routingDocPath = join(root, 'docs/mcp-tool-routing.md')
+assert(
+  existsSync(routingDocPath),
+  'docs/mcp-tool-routing.md must document the canonical tool routing.'
+)
+if (existsSync(routingDocPath)) {
+  const routingDoc = readFileSync(routingDocPath, 'utf8')
+  for (const tool of configuredTools) {
+    assert(
+      routingDoc.includes(tool),
+      `docs/mcp-tool-routing.md must route the configured tool ${tool}.`
     )
   }
 }

@@ -112,7 +112,7 @@ export async function inspectReleaseReadiness({
         : !worktreeClean
           ? 'The worktree has uncommitted changes; publish them through voidr_workspace_publish_tests and merge the pull request before deploying.'
           : !mergedPullRequest
-            ? 'No merged pull request was found for the current HEAD. Publish the tests with voidr_workspace_publish_tests, merge the PR, run git pull on the default branch, and inspect again.'
-            : 'HEAD is not the merge commit of the merged PR. Check out the default branch and git pull so HEAD matches the merge commit, then inspect again.'
+            ? 'No merged pull request was found for the current HEAD. Publish the tests with voidr_workspace_publish_tests, ask the user to merge the PR, and inspect again.'
+            : 'HEAD is behind the merged PR commit. Call voidr_release_deploy_merged_pr directly: it fetches with the user credentials and fast-forwards the default branch to the exact merge commit. Never run git pull in the sandboxed terminal.'
   }
 }

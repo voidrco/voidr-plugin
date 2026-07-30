@@ -46,11 +46,34 @@ export async function deployMergedPullRequest({
     throw new Error('project.json does not match the explicitly selected Test Plan.')
   }
 
-  const source = await inspectMergedSource({
+  let source = await inspectMergedSource({
     repositoryPath: selected.path,
     pullRequestNumber: Number(pullRequestNumber),
     run
   })
+  // A clean checkout that is merely behind the merged PR commit is healed
+  // here: inspectMergedSource already fetched with the user's credentials
+  // (the bridge runs outside the sandbox), so a fast-forward to the exact
+  // merge commit is safe and deterministic. Divergent or dirty checkouts
+  // still fail closed.
+  if (
+    source.state === 'MERGED' &&
+    source.worktreeClean &&
+    source.mergeCommitOnRemoteDefault &&
+    source.mergeCommitSha &&
+    source.localHeadSha !== source.mergeCommitSha &&
+    (await fastForwardToMergeCommit({
+      repositoryPath: selected.path,
+      source,
+      run
+    }))
+  ) {
+    source = await inspectMergedSource({
+      repositoryPath: selected.path,
+      pullRequestNumber: Number(pullRequestNumber),
+      run
+    })
+  }
   const merged = assertMergedPullRequestEvidence(source)
   const effectiveCliEnvironment =
     cliEnvironment || voidrCliEnvironment()
@@ -126,6 +149,24 @@ export async function deployMergedPullRequest({
       ...completed,
       storagePrefix: candidate.prefix || null
     }
+  }
+}
+
+async function fastForwardToMergeCommit({ repositoryPath, source, run }) {
+  try {
+    await run('git', ['checkout', source.defaultBranch], {
+      cwd: repositoryPath,
+      timeout: 60_000
+    })
+    await run('git', ['merge', '--ff-only', source.mergeCommitSha], {
+      cwd: repositoryPath,
+      timeout: 60_000
+    })
+    return true
+  } catch {
+    // Not fast-forwardable (diverged local branch); the evidence check
+    // below reports the precise failure.
+    return false
   }
 }
 

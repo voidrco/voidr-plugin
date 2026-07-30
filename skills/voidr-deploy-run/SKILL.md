@@ -54,8 +54,14 @@ Require all of the following:
 - the selected repository is clean;
 - local `HEAD` equals the PR merge commit.
 
+When the local checkout is merely behind the merged PR commit (clean worktree,
+merge commit already on origin), call `voidr_release_deploy_merged_pr`
+directly: it fetches with the user credentials and fast-forwards the default
+branch to the exact merge commit. Never run `git pull`, `git fetch`, or
+`git checkout` in the sandboxed terminal — it has no credentials.
+
 If the PR is open, closed without merge, targets another branch, or the local
-checkout differs, stop before any platform upload or promotion. Ask the user
+checkout diverged, stop before any platform upload or promotion. Ask the user
 to merge/update the PR or explicitly select the correct merged PR. Never
 create, merge, or change a PR without separate explicit authorization.
 

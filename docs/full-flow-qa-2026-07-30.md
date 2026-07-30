@@ -532,6 +532,33 @@ deploy), que injetam a Service Account. A permissão antiga de
 `voidr deploy-candidate` no shell foi removida: o bridge o executa
 internamente sem passar pelo hook.
 
+### BUG-022 — Path do workspace com espaços quebra toda descoberta via shell
+
+Severidade: alta
+Status: corrigido em `0.2.19-local.36` e validado por testes; pendente
+validação na UI
+
+O workspace `Teste - Plugin Copilot` (espaços + hífen) fez o agente falhar em
+série nos `cd` do sandbox: escaping errado, hífen trocado por travessão (–)
+pelo modelo, e `ls` negado pelo sandbox — o fluxo dev patinava antes mesmo do
+card de confirmação, e o agente regrediu à pergunta "novo ou existente".
+
+Correção (mecânica, no bridge):
+
+- nova tool read-only `voidr_workspace_git_context`: recebe o path como JSON
+  (sem quoting de shell) e retorna, por repositório do workspace: branch
+  atual, branch default, estado sujo, commits à frente, arquivos alterados
+  vs a default e commits recentes, com flag `onFeatureBranch` para a
+  inferência de feature do fluxo dev;
+- `/voidr-test` infere a feature por essa tool e proíbe `cd`/`git` de
+  descoberta no terminal; o roteador reforça e reitera que o fluxo dev nunca
+  pergunta plano novo × existente;
+- o hook exige `workspaceRoot` na tool, injetando o cwd real.
+
+Recomendação ambiental: renomear o workspace de teste para um nome sem
+espaços (ex.: `teste-plugin-copilot`) elimina a classe inteira também para
+os comandos de shell legítimos restantes.
+
 ## Próximo checkpoint
 
 A criação, a população anonimizada, o provisionamento, a materialização e o smoke local

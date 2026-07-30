@@ -16,15 +16,20 @@ When this skill is invoked explicitly, follow this contract literally:
    scripts, manifests, tool definitions, or the MCP bridge implementation.
 3. The first operational action must be a direct MCP call to
    `voidr_auth_status` with `{}`.
-4. Use only `voidr_auth_status`, `voidr_auth_select_organization`, and
-   `voidr_auth_login` during this connection workflow.
+4. Use only `voidr_auth_status`, `voidr_auth_select_organization`,
+   `voidr_auth_login`, and `voidr_auth_login_complete` during this connection
+   workflow.
 5. Never use a shell, terminal, `node`, `npx`, `curl`, or a manually invoked
    `voidr-mcp-bridge.mjs` as an authentication fallback.
 6. Do not ask whether the user prefers a status check or browser login. The
    status result determines the next action automatically.
-7. If `voidr_auth_status` is not available as an MCP tool in the current
-   session, stop and say that the Voidr MCP tools are unavailable and that the
-   user must reload the plugin and start a new chat. Do not investigate through
+7. If calling `voidr_auth_status` produces a permission warning or the call
+   is blocked, the tool exists but Copilot has not been allowed to run it:
+   tell the user to approve the Voidr MCP tools when Copilot asks (or enable
+   them in the Copilot tool permissions) and retry in the same chat. Only if
+   the tool is truly absent from the session's MCP tool list, stop and say
+   that the Voidr MCP tools are unavailable and that the user must reload the
+   plugin and start a new chat. In both cases, do not investigate through
    files or the terminal.
 
 ## Connect
@@ -44,15 +49,23 @@ When this skill is invoked explicitly, follow this contract literally:
    without this status call.
 3. If `serviceAccountSelectionRequired` is true, follow the selection section
    before deciding whether login is needed.
-4. If `authenticated` is false, tell the user that the official Voidr login
-   will open in the browser, then call `voidr_auth_login`. When
+4. If `authenticated` is false, call `voidr_auth_login`. When
    `localCredentialPresent` is true, explain only that the selected local
    account was rejected or belongs to another organization; never expose it.
-5. The browser flow handles user login and explicit organization selection.
-   Wait for the tool to finish; do not ask the user for a credential or JSON.
-6. On success, call `voidr_auth_status` again and confirm the organization,
+5. `voidr_auth_login` returns immediately with `authorizationUrl`. In the
+   same response, ALWAYS show that URL to the user as a clickable link and
+   say that the login page should have opened in the browser — and that if
+   no window appeared (the operating system can block the automatic launch,
+   e.g. a Chrome permission on macOS), they must open the link manually.
+   Then call `voidr_auth_login_complete` to wait for the login to finish.
+6. The browser flow handles user login and explicit organization selection.
+   Wait for `voidr_auth_login_complete`; do not ask the user for a credential
+   or JSON.
+7. On success, call `voidr_auth_status` again and confirm the organization,
    Service Account name, scopes, and write access.
-7. If login fails, report only the returned safe error and offer to retry.
+8. If login fails or times out, report only the returned safe error, show the
+   returned `authorizationUrl` again as a clickable link, and offer to retry
+   with `voidr_auth_login` + `voidr_auth_login_complete`.
 
 The successful connection also supplies downstream Voidr Playwright framework
 commands. Repository setup tools inject this selected Service Account into

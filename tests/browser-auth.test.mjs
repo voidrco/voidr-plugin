@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import {
   buildBrowserConnectUrl,
   connectWithBrowser,
+  startBrowserConnect,
   startLocalBrowserAuthServer
 } from '../scripts/lib/browser-auth.mjs'
 
@@ -185,6 +186,86 @@ test('browser login preserves a viewer account as read-only', async t => {
   assert.equal(result.canRead, true)
   assert.equal(result.canWrite, false)
   assert.deepEqual(result.scopes, ['read'])
+})
+
+test('two-phase login completes through the manual URL when the browser launch is blocked', async t => {
+  const temp = mkdtempSync(join(tmpdir(), 'voidr-browser-manual-'))
+  const restore = setEnvironment({
+    VOIDR_SERVICE_ACCOUNTS_PATH: join(temp, 'service-accounts.json')
+  })
+  t.after(restore)
+
+  const session = await startBrowserConnect({
+    platformUrl: 'https://platform.test',
+    allowedOrigins: ['https://platform.test'],
+    apiUrl: 'https://api.test/v1',
+    // Simulates the client bug: the OS (e.g. a macOS Chrome permission)
+    // blocks the automatic launch, so the login must survive on the URL
+    // the user opens manually.
+    openBrowserImpl: async () => false,
+    fetchImpl: async (url, options = {}) => {
+      if (url.endsWith('/auth/me')) {
+        return jsonResponse({
+          data: {
+            name: 'Manual',
+            organizationId: 'org-manual',
+            organization: { id: 'org-manual' }
+          }
+        })
+      }
+      if (url.endsWith('/service-accounts') && options.method === 'POST') {
+        return jsonResponse({
+          data: {
+            organizationId: 'org-manual',
+            name: 'Manual - copilot',
+            clientId: 'sa_synthetic_manual',
+            clientSecret: 'synthetic-manual-secret',
+            scopes: ['read', 'write']
+          }
+        })
+      }
+      return jsonResponse({
+        access_token: jwt({
+          organizationId: 'org-manual',
+          scopes: ['read', 'write']
+        })
+      })
+    }
+  })
+
+  assert.equal(session.browserOpened, false)
+  const built = new URL(session.authorizationUrl)
+  assert.equal(`${built.origin}${built.pathname}`, 'https://platform.test/auth/cli-connect')
+  const state = JSON.parse(
+    Buffer.from(built.searchParams.get('state'), 'base64url').toString('utf8')
+  )
+
+  // The user opens the URL manually; the platform posts back to the loopback.
+  setImmediate(async () => {
+    await callbackRequest(state.port, {
+      origin: 'https://platform.test',
+      nonce: state.nonce,
+      accessToken: 'synthetic-manual-token'
+    })
+  })
+
+  const result = await session.waitAndImport()
+  assert.equal(result.connected, true)
+  assert.equal(result.organizationId, 'org-manual')
+  assert.equal(result.canWrite, true)
+})
+
+test('single-call login still fails fast when the browser cannot open', async () => {
+  await assert.rejects(
+    connectWithBrowser({
+      platformUrl: 'https://platform.test',
+      allowedOrigins: ['https://platform.test'],
+      apiUrl: 'https://api.test/v1',
+      openBrowserImpl: async () => false,
+      fetchImpl: async () => jsonResponse({})
+    }),
+    /Could not open the Voidr login page/
+  )
 })
 
 test('loopback callback rejects invalid origin and nonce before accepting one request', async () => {

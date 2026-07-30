@@ -459,10 +459,16 @@ assert(
   'Connect skill must force MCP-first authentication without filesystem or shell fallbacks.'
 )
 assert(
-  /voidr_auth_status` is not available as an MCP tool[\s\S]*?reload the plugin and start a new chat[\s\S]*?Do not investigate through\s+files or the terminal/i.test(
+  /permission warning[\s\S]*?approve the Voidr MCP tools[\s\S]*?reload the\s+plugin and start a new chat[\s\S]*?do not investigate through\s+files or the terminal/i.test(
     connectSkill
   ),
-  'Connect skill must stop cleanly when its MCP tools are unavailable.'
+  'Connect skill must distinguish blocked tool permissions from missing MCP tools and never fall back to the filesystem or terminal.'
+)
+assert(
+  /voidr_auth_login` returns immediately with `authorizationUrl`[\s\S]*?clickable link[\s\S]*?open the link manually[\s\S]*?voidr_auth_login_complete/i.test(
+    connectSkill
+  ),
+  'Connect skill must always surface the authorization URL as a manual fallback before completing the browser login.'
 )
 
 const devSkill = readFileSync(join(root, 'skills/voidr-test/SKILL.md'), 'utf8')

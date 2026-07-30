@@ -17,7 +17,7 @@ import {
   validateRepositorySelection
 } from './lib/workspace.mjs'
 import { deployMergedPullRequest } from './lib/release-deploy.mjs'
-import { connectWithBrowser } from './lib/browser-auth.mjs'
+import { startBrowserConnect } from './lib/browser-auth.mjs'
 import { buildTestRepository, scaffoldTestCases } from './lib/scaffold.mjs'
 import { prepareTestRepository } from './lib/prepare.mjs'
 import { publishTests } from './lib/publish.mjs'
@@ -56,6 +56,10 @@ const seenPlanSlugs = new Map() // planId -> Set<slug> (modules/suites/cases)
 let planReadAt = null
 let countsReadAt = null
 let executionNeedsDeploy = false
+// Two-phase browser login: voidr_auth_login starts the loopback server and
+// returns the authorization URL immediately (the OS can block the automatic
+// browser launch); voidr_auth_login_complete waits for the callback.
+let pendingBrowserLogin = null
 
 const localTools = [
   {
@@ -79,7 +83,13 @@ const localTools = [
   {
     name: 'voidr_auth_login',
     description:
-      'Open the official Voidr browser login, let the user choose an organization, then create, validate, and store a dedicated Copilot Service Account without exposing credentials.',
+      'Start the official Voidr browser login and return immediately with the authorization URL. Always show that URL to the user as a clickable link (the OS can block the automatic browser launch), then call voidr_auth_login_complete to finish.',
+    inputSchema: { type: 'object', properties: {} }
+  },
+  {
+    name: 'voidr_auth_login_complete',
+    description:
+      'Wait for the browser login started by voidr_auth_login to finish, then create, validate, and store a dedicated Copilot Service Account without exposing credentials. Call this right after showing the authorization URL to the user.',
     inputSchema: { type: 'object', properties: {} }
   },
   {
@@ -933,7 +943,46 @@ async function callLocal(name, args) {
       })
     }
     case 'voidr_auth_login': {
-      const imported = await connectWithBrowser()
+      if (pendingBrowserLogin) {
+        await pendingBrowserLogin.close().catch(() => {})
+        pendingBrowserLogin = null
+      }
+      const session = await startBrowserConnect()
+      pendingBrowserLogin = session
+      return textResult({
+        status: 'pending',
+        authorizationUrl: session.authorizationUrl,
+        browserOpened: session.browserOpened,
+        timeoutMs: session.timeoutMs,
+        instructions:
+          'MANDATORY: show authorizationUrl to the user as a clickable link in your next message — the operating system may have silently blocked the automatic browser launch (e.g. a macOS permission on Chrome). Tell the user to open it manually if no browser window appeared, then call voidr_auth_login_complete to wait for the login and finish the connection.'
+      })
+    }
+    case 'voidr_auth_login_complete': {
+      if (!pendingBrowserLogin) {
+        return textResult({
+          error: 'NO_PENDING_LOGIN',
+          message:
+            'There is no browser login in progress. Call voidr_auth_login first, show the returned authorizationUrl to the user, then call this tool.'
+        })
+      }
+      const session = pendingBrowserLogin
+      let imported
+      try {
+        imported = await session.waitAndImport()
+      } catch (error) {
+        pendingBrowserLogin = null
+        await session.close().catch(() => {})
+        const message = error instanceof Error ? error.message : String(error)
+        return textResult({
+          error: 'BROWSER_LOGIN_FAILED',
+          message,
+          authorizationUrl: session.authorizationUrl,
+          instructions:
+            'If the login timed out because no browser window ever opened, the OS likely blocked the launch (e.g. a macOS permission on Chrome). Show authorizationUrl to the user again as a clickable link, ask them to open it manually and finish the login, then call voidr_auth_login followed by voidr_auth_login_complete to retry.'
+        })
+      }
+      pendingBrowserLogin = null
       selectedTestPlanId = null
       planCreationFailed = false
       resetStructureTracking()

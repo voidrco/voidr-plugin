@@ -58,6 +58,7 @@
     "voidr_auth_status",
     "voidr_auth_select_organization",
     "voidr_auth_login",
+    "voidr_auth_login_complete",
     "voidr_workspace_inspect",
     "voidr_workspace_git_context",
     "voidr_workspace_bootstrap_test_repository",

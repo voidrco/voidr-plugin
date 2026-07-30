@@ -182,7 +182,7 @@ export async function startLocalBrowserAuthServer({
   }
 }
 
-export async function connectWithBrowser({
+export async function startBrowserConnect({
   fetchImpl = globalThis.fetch,
   openBrowserImpl = openBrowser,
   timeoutMs = Number(process.env.VOIDR_BROWSER_AUTH_TIMEOUT_MS) || 300000,
@@ -207,16 +207,39 @@ export async function connectWithBrowser({
     platformUrl,
     callbackUrl: resolvedCallbackUrl
   })
+  // Spawning the opener can succeed while the OS still blocks the browser
+  // (e.g. a macOS permission on Chrome), so the caller must always surface
+  // authorizationUrl to the user as a manual fallback.
+  const browserOpened = await openBrowserImpl(authorizationUrl)
 
-  const opened = await openBrowserImpl(authorizationUrl)
-  if (!opened) {
-    await local.close()
+  return {
+    authorizationUrl,
+    browserOpened,
+    timeoutMs,
+    close: local.close,
+    waitAndImport: async () => {
+      const { accessToken } = await local.waitForResult()
+      return importAuthenticatedUser({ fetchImpl, apiUrl, accessToken })
+    }
+  }
+}
+
+export async function connectWithBrowser(options = {}) {
+  const session = await startBrowserConnect(options)
+  if (!session.browserOpened) {
+    await session.close()
     throw new Error(
       'Could not open the Voidr login page. Check that a default browser is configured and try again.'
     )
   }
+  return session.waitAndImport()
+}
 
-  const { accessToken } = await local.waitForResult()
+async function importAuthenticatedUser({
+  fetchImpl = globalThis.fetch,
+  apiUrl = process.env.VOIDR_API_URL || DEFAULT_API_URL,
+  accessToken
+}) {
   const normalizedApiUrl = String(apiUrl).replace(/\/+$/, '')
   const me = await requestJson(fetchImpl, `${normalizedApiUrl}/auth/me`, {
     headers: bearerHeaders(accessToken)

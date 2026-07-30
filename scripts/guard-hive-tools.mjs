@@ -16,6 +16,7 @@ import {
 import {
   buildExecutionUrl,
   executionIdsFromToolInput,
+  isDefectCreationTool,
   uniqueExecutionIds
 } from './lib/execution-links.mjs'
 
@@ -753,7 +754,7 @@ function enforceTestPlanWriteApproval(hookPayload, canonicalName) {
 }
 
 function addDefectExecutionEvidence(hookPayload, canonicalName, args) {
-  if (canonicalName !== 'defects_create_defect') return null
+  if (!isDefectCreationTool(canonicalName)) return null
 
   const state = readSessionState(hookPayload)
   const knownIds = state.latestEvidenceExecutionIds || []

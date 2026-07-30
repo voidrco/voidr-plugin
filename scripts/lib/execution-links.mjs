@@ -14,6 +14,15 @@ const resultExecutionTools = new Set([
   'playwright_get_test_history'
 ])
 
+const defectCreationTools = new Set([
+  'defects_create_defect',
+  'defects_create_defect_with_issue'
+])
+
+export function isDefectCreationTool(toolName) {
+  return defectCreationTools.has(toolName)
+}
+
 export function buildExecutionUrl(
   executionId,
   platformUrl = process.env.VOIDR_PLATFORM_URL || 'https://platform.voidr.co'
@@ -35,7 +44,7 @@ export function executionIdsFromToolInput(
     addExecutionId(ids, args.executionId)
   }
 
-  if (toolName === 'defects_create_defect') {
+  if (isDefectCreationTool(toolName)) {
     for (const id of args.relations?.executions || []) {
       addExecutionId(ids, id)
     }

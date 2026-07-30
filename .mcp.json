@@ -58,7 +58,14 @@
         "playwright_get_test_dom",
         "playwright_get_trace_events",
         "defects_list_defects",
-        "defects_create_defect"
+        "defects_get_defect",
+        "issue_tracker_list",
+        "issue_tracker_list_projects",
+        "defects_create_defect",
+        "defects_create_defect_with_issue",
+        "defects_update_defect",
+        "defects_update_defect_status",
+        "defects_assign_defect"
       ],
       "timeout": 360000,
       "disableToolCache": true

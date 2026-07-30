@@ -1,7 +1,7 @@
 {
   "name": "copilot",
   "description": "Develop, deploy, and execute Voidr Playwright tests with MCP-backed application and Test Plan selection.",
-  "version": "0.2.22-local.1",
+  "version": "0.2.22-local.3",
   "author": {
     "name": "Voidr"
   },

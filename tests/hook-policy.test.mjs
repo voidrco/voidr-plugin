@@ -614,51 +614,56 @@ test('execution evidence blocks a response without its link', () => {
   )
 })
 
-test('defect creation receives execution relations from analyzed evidence', () => {
-  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
-  const sessionId = 'defect-execution-link'
-  const executionId = '6a6a814011024018378d4e19'
+for (const defectTool of [
+  'defects_create_defect',
+  'defects_create_defect_with_issue'
+]) {
+  test(`${defectTool} receives execution relations from analyzed evidence`, () => {
+    const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
+    const sessionId = `defect-execution-link-${defectTool}`
+    const executionId = '6a6a814011024018378d4e19'
 
-  runScript(
-    postToolHook,
-    {
-      session_id: sessionId,
-      tool_name: 'mcp_voidr-safe-br_playwright_get_test_timeline',
-      tool_input: { executionId, testCaseSlug: 'SAUDE-02' },
-      tool_response: { content: [] }
-    },
-    dataRoot
-  )
+    runScript(
+      postToolHook,
+      {
+        session_id: sessionId,
+        tool_name: 'mcp_voidr-safe-br_playwright_get_test_timeline',
+        tool_input: { executionId, testCaseSlug: 'SAUDE-02' },
+        tool_response: { content: [] }
+      },
+      dataRoot
+    )
 
-  const output = runHook(
-    {
-      session_id: sessionId,
-      cwd: process.cwd(),
-      tool_name: 'mcp_voidr-safe-br_defects_create_defect',
-      tool_input: {
-        title: 'SAUDE-02 timeout',
-        applicationId: 'app-serasa',
-        severity: 'high',
-        priority: 'p2',
-        sessions: [executionId]
-      }
-    },
-    dataRoot
-  )
+    const output = runHook(
+      {
+        session_id: sessionId,
+        cwd: process.cwd(),
+        tool_name: `mcp_voidr-safe-br_${defectTool}`,
+        tool_input: {
+          title: 'SAUDE-02 timeout',
+          applicationId: 'app-serasa',
+          severity: 'high',
+          priority: 'p2',
+          sessions: [executionId]
+        }
+      },
+      dataRoot
+    )
 
-  assert.equal(
-    output.hookSpecificOutput.updatedInput.relations.executions[0],
-    executionId
-  )
-  assert.deepEqual(
-    output.hookSpecificOutput.updatedInput.relations.testCases,
-    ['SAUDE-02']
-  )
-  assert.match(
-    output.hookSpecificOutput.updatedInput.description,
-    new RegExp(`https://platform\\.voidr\\.co/execution/${executionId}`)
-  )
-})
+    assert.equal(
+      output.hookSpecificOutput.updatedInput.relations.executions[0],
+      executionId
+    )
+    assert.deepEqual(
+      output.hookSpecificOutput.updatedInput.relations.testCases,
+      ['SAUDE-02']
+    )
+    assert.match(
+      output.hookSpecificOutput.updatedInput.description,
+      new RegExp(`https://platform\\.voidr\\.co/execution/${executionId}`)
+    )
+  })
+}
 
 for (const forbidden of [
   'agent_jobs_trigger_automation',

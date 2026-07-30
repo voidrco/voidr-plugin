@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   buildExecutionUrl,
   enrichToolResultWithExecutionLinks,
+  executionIdsFromToolInput,
   executionIdsFromToolResult
 } from '../scripts/lib/execution-links.mjs'
 
@@ -56,4 +57,19 @@ test('derives the latest execution from test history results', () => {
     }),
     [executionId]
   )
+})
+
+test('derives execution evidence from both defect creation tools', () => {
+  const executionId = '6a6a814011024018378d4e19'
+  for (const tool of [
+    'defects_create_defect',
+    'defects_create_defect_with_issue'
+  ]) {
+    assert.deepEqual(
+      executionIdsFromToolInput(tool, {
+        relations: { executions: [executionId] }
+      }),
+      [executionId]
+    )
+  }
 })

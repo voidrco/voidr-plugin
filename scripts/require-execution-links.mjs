@@ -5,6 +5,7 @@ import { canonicalToolName } from './lib/policy.mjs'
 import {
   executionIdsFromToolInput,
   executionLinkLines,
+  isDefectCreationTool,
   uniqueExecutionIds
 } from './lib/execution-links.mjs'
 import {
@@ -83,7 +84,7 @@ function collectKnownExecutionIds(entries) {
   for (const entry of entries) {
     if (entry.type !== 'tool.execution_start') continue
     const toolName = canonicalToolName(entry.data?.toolName)
-    if (toolName === 'defects_create_defect') continue
+    if (isDefectCreationTool(toolName)) continue
     ids.push(
       ...executionIdsFromToolInput(
         toolName,

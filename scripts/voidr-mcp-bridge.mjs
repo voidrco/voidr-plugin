@@ -284,7 +284,7 @@ async function dispatch(method, params) {
         capabilities: { tools: { listChanged: true } },
         serverInfo: {
           name: 'voidr-safe-bridge',
-          version: '0.2.19-local.24'
+          version: '0.2.19-local.25'
         }
       }
     case 'ping':

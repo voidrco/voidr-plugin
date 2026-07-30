@@ -357,6 +357,25 @@ function enforceExplicitEnvironmentSelection(hookPayload, name, args) {
   const state = readSessionState(hookPayload)
   if (state.workflowActive !== true) return
 
+  // In the dev-first auto flow the environment is displayed on the single
+  // confirmation card, so the typed "Criar testes" approval covers it as long
+  // as environments were actually listed first.
+  if (state.planMode === 'auto') {
+    const cardApproved =
+      state.planWriteApproved === true &&
+      Number.isFinite(state.planWriteApprovedAt) &&
+      Date.now() - state.planWriteApprovedAt <= 4 * 60 * 60 * 1000
+    if (
+      Number.isFinite(state.environmentSelectionRequestedAt) &&
+      cardApproved
+    ) {
+      return
+    }
+    deny(
+      'Blocked by Voidr workflow: list environments with applications_list_environments, show the selected environment on the confirmation card, and wait for the user to type “Criar testes” before repository setup, scaffold, or smoke/build.'
+    )
+  }
+
   const selectionFresh =
     typeof state.selectedEnvironmentSlug === 'string' &&
     state.selectedEnvironmentSlug.length > 0 &&
@@ -668,7 +687,9 @@ function enforceTestPlanWriteApproval(hookPayload, canonicalName) {
     !approvalFresh
   ) {
     deny(
-      'Blocked by Voidr workflow: Test Plan writes require a visible draft followed by a new user message explicitly saying “Aprovo este Test Plan”. A generic “sim” is not approval.'
+      state.planMode === 'auto'
+        ? 'Blocked by Voidr workflow: show the user the list of test scenarios for the feature and wait for a new user message saying exactly “Criar testes” before writing anything to the platform.'
+        : 'Blocked by Voidr workflow: Test Plan writes require a visible draft followed by a new user message explicitly saying “Aprovo este Test Plan”. A generic “sim” is not approval.'
     )
   }
 }

@@ -52,7 +52,8 @@ export function recordUserPromptState(payload) {
       return current
     }
 
-    const workflowStarted = isVoidrTestingPrompt(prompt)
+    const devFlowStarted = isDevTestFlowPrompt(prompt)
+    const workflowStarted = isVoidrTestingPrompt(prompt) || devFlowStarted
     const connectStarted = isVoidrConnectPrompt(prompt)
     const smokeRemediationAuthorized = isSmokeRemediationPrompt(prompt)
     const planningInputsConfirmed =
@@ -63,6 +64,7 @@ export function recordUserPromptState(payload) {
         ? extractEnvironmentSelection(prompt)
         : null)
     let planMode = workflowStarted ? null : current.planMode || null
+    if (devFlowStarted) planMode = 'auto'
     if (isNewPlanChoice(prompt)) planMode = 'new'
     if (isExistingPlanChoice(prompt)) planMode = 'existing'
     const promptTestPlanId = extractExplicitTestPlanId(prompt)
@@ -119,10 +121,14 @@ export function recordUserPromptState(payload) {
         : planningInputsConfirmed
           ? timestamp || Date.now()
           : current.planContextConfirmedAt || null,
-      planWriteApproved: isExplicitTestPlanApproval(prompt),
-      planWriteApprovedAt: isExplicitTestPlanApproval(prompt)
-        ? timestamp || Date.now()
-        : null,
+      planWriteApproved:
+        isExplicitTestPlanApproval(prompt) ||
+        (planMode === 'auto' && isDevTestsApproval(prompt)),
+      planWriteApprovedAt:
+        isExplicitTestPlanApproval(prompt) ||
+        (planMode === 'auto' && isDevTestsApproval(prompt))
+          ? timestamp || Date.now()
+          : null,
       lastPromptAt: timestamp || Date.now()
     }
   })
@@ -150,6 +156,29 @@ export function isExplicitTestPlanApproval(prompt) {
 
 export function isPlanningInputsConfirmation(prompt) {
   return /\bconfirmar\s+insumos\s+do\s+planejamento\b/i.test(prompt)
+}
+
+// Single approval gate of the dev-first /voidr-test flow. It must be the
+// whole user message so ordinary sentences never count as approval.
+export function isDevTestsApproval(prompt) {
+  const text = normalizeText(extractUserAuthoredPrompt(prompt)).trim()
+  return /^criar (?:os )?testes[.!]?$/.test(text)
+}
+
+export function isDevTestFlowPrompt(prompt) {
+  const text = normalizeText(prompt)
+  if (/\/(?:copilot\s+)?voidr-test\b(?!-plan)/.test(text)) return true
+  const create =
+    /\b(?:criar?|crie|gerar?|gere|escrever?|escreva|fazer|faca|montar?|monte)\b/
+  const tests = /\btestes?\b/
+  const feature =
+    /\b(?:feature|feat|funcionalidade|historia|story|branch|meu codigo|minha implementacao)\b/
+  return (
+    (create.test(text) && tests.test(text) && feature.test(text)) ||
+    /\btestar\b[\s\S]{0,40}\b(?:minha|essa|esta|a)\s+(?:feature|feat|funcionalidade)\b/.test(
+      text
+    )
+  )
 }
 
 export function extractEnvironmentSelection(prompt) {

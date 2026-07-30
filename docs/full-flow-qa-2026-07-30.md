@@ -381,6 +381,13 @@ foram validados. Ainda falta registrar:
   após falha de criação (BUG-003), diagnóstico de sandbox sem rede (BUG-007),
   `npx voidr` direto sem scripts do skeleton (BUG-008) e erro claro de Node
   incompatível (BUG-010).
+- [ ] Validar na UI o fluxo dev-first `/voidr-test` (`0.2.19-local.25`):
+  "cria os testes da minha feature" a partir de um branch de feat → card
+  único de confirmação → cenários em linguagem simples → `Criar testes` →
+  implementação + smoke automático → correção sob demanda → PR → publicação
+  e execução. Conferir que nenhum vocabulário de plataforma (Test Plan,
+  scaffold, suite, slug) aparece nas mensagens e que o plano é reusado por
+  aplicação (módulo novo por feature).
 - [ ] Validar que arquivos com credenciais, PII e `.env*` não são lidos durante
   o planejamento.
 - [ ] Validar que nenhuma edição local ocorre antes da seleção e preparação do

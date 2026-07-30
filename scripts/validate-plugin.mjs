@@ -439,6 +439,28 @@ assert(
   'Connect skill must stop cleanly when its MCP tools are unavailable.'
 )
 
+const devSkill = readFileSync(join(root, 'skills/voidr-test/SKILL.md'), 'utf8')
+assert(
+  /Never expose platform vocabulary/i.test(devSkill) &&
+    /Do not say Test Plan, module,\s+suite, case slug, scaffold/i.test(devSkill),
+  'Dev skill must hide platform vocabulary from the user.'
+)
+assert(
+  /reply exactly `Criar testes`/i.test(devSkill) &&
+    /Do not use `ask_user` for this approval/i.test(devSkill),
+  'Dev skill must gate platform writes behind the typed “Criar testes” approval.'
+)
+assert(
+  /Infer the feature|current branch name/i.test(devSkill) &&
+    /default planning evidence/i.test(devSkill),
+  'Dev skill must infer the feature from the Git branch and diff.'
+)
+assert(
+  /One smoke run per user message/i.test(devSkill) &&
+    /Never auto-deploy, never auto-execute/i.test(devSkill),
+  'Dev skill must keep the smoke-stop and deploy/execution gates.'
+)
+
 const allRepositoryText = findFiles(root)
   .filter(path => !path.includes(`${join(root, 'tests')}/`))
   .map(path => {

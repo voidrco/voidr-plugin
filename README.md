@@ -43,7 +43,25 @@ This build uses these production endpoints through the plugin MCP process:
   `https://api.voidr.co/v1/mcp`.
 
 Start Copilot from the workspace containing the relevant product and test
-repositories, then say:
+repositories.
+
+## Developer-first flow (recommended for feature developers)
+
+After finishing a feature, say:
+
+> Cria os testes da minha feature.
+
+The `/voidr-test` skill infers the feature from the current branch and diff,
+auto-selects the application and environment when only one exists, confirms
+everything on a single card, and shows plain-language scenarios. The only
+phrase the developer ever types is `Criar testes`. Test Plans, scaffolding,
+and repository provisioning happen silently with the same runtime guarantees;
+after the tests pass locally, the flow assists with PR, immutable publish, and
+platform execution through the existing gates.
+
+## Full control flow
+
+Say:
 
 > Quero desenvolver testes na Voidr.
 

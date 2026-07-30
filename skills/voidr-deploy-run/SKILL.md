@@ -8,6 +8,14 @@ description: Deploys a locally validated Voidr Playwright suite from an already-
 Never call a tool that starts a Hive process. Platform execution is created
 only with `executions_create_execution`.
 
+Never ask the user for the Test Plan ID, the repository URL, or the pull
+request number. When a test repository is selected or attached, call
+`voidr_release_inspect` with its path (and `workspaceRoot`): it reads
+`project.json`, the Git origin, the default branch, HEAD/worktree state, and
+locates the merged PR for the current HEAD. Show the returned summary for
+confirmation and use exactly those values. When it reports `ready: false`,
+follow its `next` guidance instead of guessing.
+
 ## Preconditions
 
 Require:

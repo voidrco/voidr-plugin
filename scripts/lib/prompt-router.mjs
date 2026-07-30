@@ -42,10 +42,13 @@ Use the /voidr-deploy-run skill for this request and follow its gates in
 order: merged-PR evidence, immutable deploy with
 voidr_release_deploy_merged_pr, independent sync verification
 (test_plans_get_test_plan + test_plans_get_test_counts), and only then the
-execution. Never call executions_create_execution before the deploy and sync
-verification, and never create or re-create Test Plan modules, suites, or
-cases during a deploy — an "Only automated test cases can be executed" error
-means the cases need the deploy, not re-creation.`
+execution. Start by calling voidr_release_inspect on the selected test
+repository — never ask the user for the Test Plan ID, repository URL, or PR
+number; the inspection discovers all of them. Never call
+executions_create_execution before the deploy and sync verification, and
+never create or re-create Test Plan modules, suites, or cases during a
+deploy — an "Only automated test cases can be executed" error means the
+cases need the deploy, not re-creation.`
     }
   }
 

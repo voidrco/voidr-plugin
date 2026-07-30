@@ -179,6 +179,7 @@ function enforceExplicitWorkspaceRoot(hookPayload, canonicalName, args) {
     canonicalName === 'voidr_workspace_inspect' ||
     canonicalName === 'voidr_workspace_bootstrap_test_repository' ||
     canonicalName === 'voidr_workspace_prepare_test_repository' ||
+    canonicalName === 'voidr_release_inspect' ||
     (canonicalName === 'voidr_workspace_select_test_repository' &&
       !String(args?.repositoryUrl || '').trim())
   if (!needsRoot) return

@@ -173,7 +173,10 @@ When all scenarios pass locally:
    branch is forbidden — the tool runs outside the sandbox, enforces the
    feature branch, and opens (or reuses) the pull request. Report the
    returned pull request link.
-2. After the user confirms the PR is merged, load `/voidr-deploy-run` and
+2. After the user confirms the PR is merged, call `voidr_release_inspect`
+   on the test repository to rediscover the merged PR, Test Plan ID, and
+   repository URL — never ask the user for identifiers — then load
+   `/voidr-deploy-run` and
    follow its gates to publish the merged commit as an immutable release and
    create the platform execution. Translate its questions into simple terms
    ("Publicar os testes na Voidr?", "Rodar os testes na plataforma?") but keep

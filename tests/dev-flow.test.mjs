@@ -80,8 +80,9 @@ test('routes developer intent to /voidr-test and keeps the classic route', () =>
   assert.match(deploy.modifiedTransformedPrompt, /\/voidr-deploy-run/)
   assert.match(
     deploy.modifiedTransformedPrompt,
-    /Never call executions_create_execution before the deploy/
+    /Never call\s+executions_create_execution before the deploy/
   )
+  assert.match(deploy.modifiedTransformedPrompt, /voidr_release_inspect/)
 
   assert.deepEqual(routeVoidrPrompt({ prompt: 'Criar testes' }), {})
 })

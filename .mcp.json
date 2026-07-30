@@ -24,6 +24,7 @@
         "voidr_workspace_prepare_test_repository",
         "voidr_workspace_scaffold_test_cases",
         "voidr_smoke_build",
+        "voidr_release_inspect",
         "voidr_workspace_publish_tests",
         "voidr_release_deploy_merged_pr",
         "applications_list_applications",

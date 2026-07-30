@@ -21,6 +21,7 @@ import { connectWithBrowser } from './lib/browser-auth.mjs'
 import { buildTestRepository, scaffoldTestCases } from './lib/scaffold.mjs'
 import { prepareTestRepository } from './lib/prepare.mjs'
 import { publishTests } from './lib/publish.mjs'
+import { inspectReleaseReadiness } from './lib/release-inspect.mjs'
 
 const policy = loadPolicy()
 const safeRemote = new Set(policy.safeRemoteTools)
@@ -240,6 +241,19 @@ const localTools = [
     }
   },
   {
+    name: 'voidr_release_inspect',
+    description:
+      'Read-only release readiness inspection of the selected test repository: reads project.json (Test Plan/organization/application IDs), the Git origin URL, the default branch, HEAD and worktree state, and locates the merged pull request for the current HEAD via gh. Call this instead of asking the user for a Test Plan ID, repository URL, or PR number. Pass workspaceRoot with the absolute path of the open VS Code workspace folder.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        repositoryPath: { type: 'string' },
+        workspaceRoot: { type: 'string' }
+      },
+      required: ['repositoryPath']
+    }
+  },
+  {
     name: 'voidr_workspace_publish_tests',
     description:
       'Publish the implemented tests from the linked checkout after the user explicitly authorized it in chat: create or reuse a feature branch, commit, push with an explicit refspec, and open (or reuse) a pull request to the default branch. Runs outside the Copilot shell sandbox with the user Git credentials. Pushing to the default branch is refused; the immutable deploy requires a merged pull request.',
@@ -328,7 +342,7 @@ async function dispatch(method, params) {
         capabilities: { tools: { listChanged: true } },
         serverInfo: {
           name: 'voidr-safe-bridge',
-          version: '0.2.19-local.32'
+          version: '0.2.19-local.33'
         }
       }
     case 'ping':
@@ -945,6 +959,15 @@ async function callLocal(name, args) {
           testPlanId: String(args.testPlanId || ''),
           specs: Array.isArray(args.specs) ? args.specs : [],
           baseUrl: String(args.baseUrl || '')
+        })
+      )
+    case 'voidr_release_inspect':
+      return textResult(
+        await inspectReleaseReadiness({
+          repositoryPath: String(args.repositoryPath || ''),
+          workspaceRoot: args.workspaceRoot
+            ? String(args.workspaceRoot)
+            : undefined
         })
       )
     case 'voidr_workspace_publish_tests':

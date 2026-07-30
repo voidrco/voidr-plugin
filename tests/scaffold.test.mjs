@@ -265,7 +265,32 @@ test('lists and runs only selected Playwright specs outside the agent shell', as
       }
       return {
         stdout: JSON.stringify({
-          suites: [],
+          suites: [
+            {
+              file: 'modules/selected.spec.js',
+              specs: [
+                {
+                  file: 'modules/selected.spec.js',
+                  title: 'selected case',
+                  tests: [
+                    {
+                      results: [
+                        {
+                          status: 'passed',
+                          attachments: [
+                            {
+                              name: 'trace',
+                              path: '/tmp/test-results/selected/trace.zip'
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
           errors: [],
           stats: { expected: 1, unexpected: 0, skipped: 0, flaky: 0 }
         }),
@@ -293,6 +318,16 @@ test('lists and runs only selected Playwright specs outside the agent shell', as
     '--list'
   ])
   assert.equal(calls[2].args.includes('--reporter=json'), true)
+  assert.deepEqual(calls[2].args.slice(-2), ['--trace', 'on'])
+  assert.deepEqual(result.traces, [
+    {
+      spec: 'modules/selected.spec.js',
+      title: 'selected case',
+      status: 'passed',
+      path: '/tmp/test-results/selected/trace.zip'
+    }
+  ])
+  assert.match(result.traceHint, /show-trace/)
 })
 
 test('rejects selected specs outside the linked repository', async () => {

@@ -209,7 +209,9 @@ export async function validateSelectedPlaywrightTests({
       'playwright',
       'test',
       ...selectedSpecs,
-      '--reporter=json'
+      '--reporter=json',
+      '--trace',
+      'on'
     ],
     {
       cwd: selected.path,
@@ -221,6 +223,7 @@ export async function validateSelectedPlaywrightTests({
   const stats = report?.stats || {}
   const failures = collectPlaywrightFailures(report)
   const failed = Number(stats.unexpected || failures.length || 0)
+  const traces = collectPlaywrightTraces(report)
 
   return {
     completed:
@@ -236,7 +239,10 @@ export async function validateSelectedPlaywrightTests({
     failed,
     skipped: Number(stats.skipped || 0),
     flaky: Number(stats.flaky || 0),
-    failures
+    failures,
+    traces,
+    traceHint:
+      'Analyze each run in the Playwright trace viewer: npx playwright show-trace <trace path>, executed from the test repository. Always share these commands with the user, failures first.'
   }
 }
 
@@ -319,6 +325,31 @@ function collectPlaywrightFailures(report) {
     })
   }
   return failures
+}
+
+function collectPlaywrightTraces(report) {
+  const traces = []
+  const visitSuite = suite => {
+    for (const spec of suite?.specs || []) {
+      for (const test of spec?.tests || []) {
+        for (const result of test?.results || []) {
+          for (const attachment of result?.attachments || []) {
+            if (attachment?.name === 'trace' && attachment?.path) {
+              traces.push({
+                spec: String(spec.file || suite.file || ''),
+                title: String(spec.title || ''),
+                status: String(result.status || ''),
+                path: String(attachment.path)
+              })
+            }
+          }
+        }
+      }
+    }
+    for (const child of suite?.suites || []) visitSuite(child)
+  }
+  for (const suite of report?.suites || []) visitSuite(suite)
+  return traces
 }
 
 function classifyPlaywrightFailure(message) {

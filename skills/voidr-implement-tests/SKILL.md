@@ -172,7 +172,12 @@ Service Account secret model-invisible and binds the build to the plugin's
 configured Voidr environment.
 
 After the first `voidr_smoke_build` call, stop immediately and report its exact
-result, whether it passed or failed. Do not inspect more files, modify specs, or
+result, whether it passed or failed. Always close that report by directing the
+user to the Playwright traces the tool returns: show one ready-to-run
+`npx playwright show-trace <trace path>` command per executed scenario,
+failures first, and explain that the trace replays every step with
+screenshots, network calls, and console logs. Never omit the trace section,
+even when everything passed. Do not inspect more files, modify specs, or
 retry in the same turn. A failure may only be investigated after a new user
 message explicitly asks to investigate or correct it. Do not retry with a
 relative path, run

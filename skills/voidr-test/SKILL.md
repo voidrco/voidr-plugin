@@ -135,7 +135,19 @@ testes…", "Escrevendo os testes…"), not tool-by-tool narration.
    each failure the classification the tool returns (problema no teste ×
    comportamento do produto × dado/ambiente) with the exact error line and a
    suggested next step.
-3. Stop after presenting. One smoke run per user message: investigate, edit,
+3. Always close the smoke report by directing the user to the Playwright
+   trace for analysis. The tool returns a `traces` list with one trace per
+   scenario; show the exact ready-to-run command for each one, failures
+   first:
+
+   ```sh
+   npx playwright show-trace <trace path>
+   ```
+
+   Explain in one line that the trace replays every step with screenshots,
+   network calls, and console logs. Never omit this section, even when all
+   scenarios pass.
+4. Stop after presenting. One smoke run per user message: investigate, edit,
    or rerun only after the user asks (for example "corrige e roda de novo").
 4. When a failure looks like real product behavior, say so explicitly — that
    is the developer's bug to decide on, not something to paper over in the

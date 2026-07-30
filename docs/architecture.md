@@ -80,22 +80,20 @@ authenticated: a unique Service Account must first be provisioned.
 
 An empty legacy scope list remains read-only under the current MCP contract.
 If no account exists, or if its scopes do not explicitly include `write`, the
-plugin stops before any platform mutation. The `/voidr-connect` skill opens a
-protected local JSON outside the workspace. A local MCP tool reads that file,
-validates the Service Account and its scopes, writes the existing store format,
-and removes the temporary JSON. The skill prohibits model-visible file tools
-from reading the file, so the secret never passes through the model.
-
-A future zero-copy onboarding flow should use a device authorization endpoint
-that creates a scoped Service Account and writes it to the same store. The
-current browser/callback implementation of `npx voidr login` is deliberately
-not called by this plugin.
+plugin stops before any platform mutation. The `/voidr-connect` skill starts a
+one-shot loopback callback and opens the official browser authentication route
+already used by the CLI. After explicit organization selection, the temporary
+user token is delivered directly to the local process. That process creates
+and validates a dedicated, role-scoped Copilot Service Account, writes the
+existing store format, and discards the user token. Neither token nor secret
+passes through the model.
 
 ## Security boundaries
 
-The MCP bridge exposes only the allowlisted application, Test Plan, and
-execution tools in `policy/tool-policy.json`. It rejects every other remote
-tool before any network request.
+The MCP bridge exposes only the allowlisted application, Test Plan, execution,
+Playwright analytics, defect, and governance-tag tools in
+`policy/tool-policy.json`. It rejects every other remote tool before any
+network request.
 
 The plugin hook independently denies:
 
@@ -173,6 +171,10 @@ Included:
 - verify that `latest` points to that release;
 - verify automation sync;
 - create and observe a platform execution.
+- analyze one failed test from ClickHouse-backed Playwright evidence;
+- always link the exact platform execution that supports the analysis;
+- optionally create a confirmed defect with that execution linked in its
+  description and relations, or change a confirmed governance tag.
 
 Not included:
 
@@ -182,4 +184,4 @@ Not included:
 - automatic repository creation;
 - creating or merging pull requests;
 - automatic deploy or execution;
-- diagnosis and repair after execution failure.
+- automatic diagnosis, repair, or failure grouping after execution failure.

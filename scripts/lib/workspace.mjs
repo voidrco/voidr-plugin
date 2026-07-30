@@ -5,6 +5,7 @@ import {
   readFileSync,
   realpathSync
 } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { basename, dirname, join, relative, resolve, sep } from 'node:path'
 
 export function inspectWorkspace(root = process.cwd(), maxDepth = 2) {
@@ -53,7 +54,8 @@ export function inspectWorkspace(root = process.cwd(), maxDepth = 2) {
         path: current,
         relativePath: relative(resolvedRoot, current),
         score,
-        indicators
+        indicators,
+        originUrl: indicators.git ? readSafeOriginUrl(current) : null
       })
       if (indicators.git) return
     }
@@ -62,6 +64,27 @@ export function inspectWorkspace(root = process.cwd(), maxDepth = 2) {
       if (!entry.isDirectory() || shouldSkip(entry.name)) continue
       walk(join(current, entry.name), depth + 1)
     }
+  }
+}
+
+function readSafeOriginUrl(repositoryPath) {
+  const result = spawnSync(
+    'git',
+    ['-C', repositoryPath, 'remote', 'get-url', 'origin'],
+    { encoding: 'utf8' }
+  )
+  if (result.status !== 0) return null
+  const raw = String(result.stdout || '').trim()
+  if (!raw) return null
+  if (/^git@github\.com:[^/]+\/[^/]+(?:\.git)?$/i.test(raw)) return raw
+  try {
+    const url = new URL(raw)
+    if (url.protocol !== 'https:' || url.hostname !== 'github.com') return null
+    url.username = ''
+    url.password = ''
+    return url.toString().replace(/\/$/, '')
+  } catch {
+    return null
   }
 }
 

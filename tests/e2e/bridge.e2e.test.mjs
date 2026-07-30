@@ -26,6 +26,19 @@ test('bridge filters discovery, keeps secrets local, and blocks forbidden calls'
   const server = createServer(async (request, response) => {
     const body = await readBody(request)
     const message = JSON.parse(body)
+    if (request.url === '/token') {
+      response.setHeader('content-type', 'application/json')
+      response.end(
+        JSON.stringify({
+          access_token: jwt({
+            organizationId:
+              message.clientId === secondClientId ? 'org-second' : 'org-e2e',
+            scopes: ['read', 'write']
+          })
+        })
+      )
+      return
+    }
     received.push({
       method: message.method,
       tool: message.params?.name || null,
@@ -54,6 +67,7 @@ test('bridge filters discovery, keeps secrets local, and blocks forbidden calls'
           toolDefinition('applications_list_applications'),
           toolDefinition('test_plans_create_test_plan'),
           toolDefinition('executions_create_execution'),
+          toolDefinition('playwright_get_test_timeline'),
           toolDefinition('agent_jobs_trigger_hive_automation'),
           toolDefinition('system_batch_execute')
         ]
@@ -108,7 +122,8 @@ test('bridge filters discovery, keeps secrets local, and blocks forbidden calls'
       ...process.env,
       VOIDR_SERVICE_ACCOUNTS_PATH: storePath,
       VOIDR_MCP_URL: `http://127.0.0.1:${address.port}/mcp`,
-      VOIDR_MCP_ORIGIN: 'https://example.test'
+      VOIDR_MCP_ORIGIN: 'https://example.test',
+      VOIDR_TOKEN_URL: `http://127.0.0.1:${address.port}/token`
     },
     stdio: ['pipe', 'pipe', 'pipe']
   })
@@ -121,14 +136,16 @@ test('bridge filters discovery, keeps secrets local, and blocks forbidden calls'
     clientInfo: { name: 'e2e', version: '1.0.0' }
   })
   assert.equal(initialized.serverInfo.name, 'voidr-safe-bridge')
+  assert.equal(initialized.capabilities.tools.listChanged, true)
 
   const listed = await client.request('tools/list', {})
   const names = listed.tools.map(tool => tool.name)
   assert.equal(names.includes('applications_list_applications'), true)
   assert.equal(names.includes('test_plans_create_test_plan'), true)
   assert.equal(names.includes('voidr_auth_status'), true)
-  assert.equal(names.includes('voidr_auth_prepare_service_account'), true)
-  assert.equal(names.includes('voidr_auth_import_service_account'), true)
+  assert.equal(names.includes('voidr_auth_login'), true)
+  assert.equal(names.includes('voidr_auth_prepare_service_account'), false)
+  assert.equal(names.includes('voidr_auth_import_service_account'), false)
   assert.equal(names.includes('agent_jobs_trigger_hive_automation'), false)
   assert.equal(names.includes('system_batch_execute'), false)
 
@@ -168,6 +185,17 @@ test('bridge filters discovery, keeps secrets local, and blocks forbidden calls'
   })
   assert.match(safeCall.content[0].text, /test_plans_create_test_plan/)
 
+  const executionId = '6a6a839850a27b89d2d7df2b'
+  const evidenceCall = await client.request('tools/call', {
+    name: 'playwright_get_test_timeline',
+    arguments: { executionId, testCaseSlug: 'POLAR-182' }
+  })
+  const evidenceMetadata = JSON.parse(evidenceCall.content.at(-1).text)
+  assert.equal(
+    evidenceMetadata.executionEvidence[0].executionUrl,
+    `https://platform.voidr.co/execution/${executionId}`
+  )
+
   const forbidden = await client.requestRaw('tools/call', {
     name: 'agent_jobs_trigger_hive_automation',
     arguments: { applicationId: 'app-e2e' }
@@ -182,6 +210,10 @@ test('bridge filters discovery, keeps secrets local, and blocks forbidden calls'
     name: 'voidr_auth_select_organization',
     arguments: { organizationId: 'org-second' }
   })
+  const toolsChanged = await client.waitForNotification(
+    'notifications/tools/list_changed'
+  )
+  assert.equal(toolsChanged.method, 'notifications/tools/list_changed')
   await client.request('tools/call', {
     name: 'applications_list_applications',
     arguments: {}
@@ -287,12 +319,21 @@ test('bridge blocks writes for an account without write scope before network', a
 function jsonRpcClient(child) {
   let nextId = 1
   const pending = new Map()
+  const notifications = []
+  const notificationWaiters = new Map()
   let stdout = ''
   let stderr = ''
   const lines = createInterface({ input: child.stdout, crlfDelay: Infinity })
   lines.on('line', line => {
     stdout += `${line}\n`
     const message = JSON.parse(line)
+    if (!Object.hasOwn(message, 'id')) {
+      notifications.push(message)
+      const waiters = notificationWaiters.get(message.method) || []
+      notificationWaiters.delete(message.method)
+      for (const resolve of waiters) resolve(message)
+      return
+    }
     const waiter = pending.get(message.id)
     if (waiter) {
       pending.delete(message.id)
@@ -327,6 +368,27 @@ function jsonRpcClient(child) {
         })
       })
     },
+    waitForNotification(method) {
+      const existing = notifications.find(item => item.method === method)
+      if (existing) return Promise.resolve(existing)
+      return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          const waiters = notificationWaiters.get(method) || []
+          notificationWaiters.set(
+            method,
+            waiters.filter(waiter => waiter !== onNotification)
+          )
+          reject(new Error(`Timed out waiting for notification ${method}`))
+        }, 5000)
+        const onNotification = value => {
+          clearTimeout(timeout)
+          resolve(value)
+        }
+        const waiters = notificationWaiters.get(method) || []
+        waiters.push(onNotification)
+        notificationWaiters.set(method, waiters)
+      })
+    },
     stdoutText: () => stdout,
     stderrText: () => stderr
   }
@@ -338,6 +400,16 @@ function toolDefinition(name) {
     description: `Mock ${name}`,
     inputSchema: { type: 'object', properties: {} }
   }
+}
+
+function jwt(payload) {
+  return [
+    Buffer.from(JSON.stringify({ alg: 'RS256', typ: 'JWT' })).toString(
+      'base64url'
+    ),
+    Buffer.from(JSON.stringify(payload)).toString('base64url'),
+    'synthetic-signature'
+  ].join('.')
 }
 
 function sendResult(response, id, result) {

@@ -1,6 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync
+} from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -91,4 +97,81 @@ test('refuses to overwrite a non-empty destination', () => {
   assert.notEqual(second.status, 0)
   assert.match(second.stderr, /Refusing to bootstrap a non-empty directory/)
   assert.equal(readFileSync(join(target, 'user-file.txt'), 'utf8'), 'preserve me')
+})
+
+test('initializes the exact Git repository provisioned by Voidr', async () => {
+  const parent = mkdtempSync(join(tmpdir(), 'voidr-bootstrap-provisioned-'))
+  const target = join(parent, 'provisioned-tests')
+  const repositoryUrl = 'https://github.com/acme/provisioned-tests'
+  const initialized = spawnSync('git', ['init', target], { encoding: 'utf8' })
+  assert.equal(initialized.status, 0, initialized.stderr)
+  const remote = spawnSync(
+    'git',
+    ['-C', target, 'remote', 'add', 'origin', `${repositoryUrl}.git`],
+    { encoding: 'utf8' }
+  )
+  assert.equal(remote.status, 0, remote.stderr)
+  writeFileSync(join(target, 'README.md'), '# Provisioned by Voidr\n')
+
+  const { bootstrapTestRepository } = await import(
+    '../scripts/lib/bootstrap.mjs'
+  )
+  const result = bootstrapTestRepository({
+    target,
+    name: 'Provisioned Tests',
+    organizationId: 'org-preview',
+    applicationId: 'app-preview',
+    testPlanId: '0123456789abcdef01234567',
+    allowExistingGitRepository: true,
+    repositoryUrl,
+    workspaceRoot: parent
+  })
+
+  assert.equal(result.target, realpathSync(target))
+  assert.equal(
+    readFileSync(join(target, 'README.md'), 'utf8'),
+    '# Provisioned by Voidr\n'
+  )
+  assert.equal(existsSync(join(target, 'playwright.config.js')), true)
+})
+
+test('rejects a checkout whose origin differs from the provisioned repository', async () => {
+  const parent = mkdtempSync(join(tmpdir(), 'voidr-bootstrap-wrong-origin-'))
+  const target = join(parent, 'wrong-origin')
+  assert.equal(
+    spawnSync('git', ['init', target], { encoding: 'utf8' }).status,
+    0
+  )
+  assert.equal(
+    spawnSync(
+      'git',
+      [
+        '-C',
+        target,
+        'remote',
+        'add',
+        'origin',
+        'https://github.com/acme/another-repository.git'
+      ],
+      { encoding: 'utf8' }
+    ).status,
+    0
+  )
+
+  const { bootstrapTestRepository } = await import(
+    '../scripts/lib/bootstrap.mjs'
+  )
+  assert.throws(
+    () =>
+      bootstrapTestRepository({
+        target,
+        organizationId: 'org-preview',
+        applicationId: 'app-preview',
+        testPlanId: '0123456789abcdef01234567',
+        allowExistingGitRepository: true,
+        repositoryUrl: 'https://github.com/acme/provisioned-tests',
+        workspaceRoot: parent
+      }),
+    /origin does not match/
+  )
 })

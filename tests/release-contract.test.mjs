@@ -96,6 +96,11 @@ test('release tool binds build, immutable candidate, promotion, and latest to me
     pullRequestNumber: 42,
     testPlanId,
     workspaceRoot: workspace,
+    cliEnvironment: {
+      VOIDR_API_URL: 'https://preview.example.test/v1',
+      VOIDR_CLIENT_ID: 'synthetic-client',
+      VOIDR_CLIENT_SECRET: 'synthetic-secret'
+    },
     run: async (file, args) => {
       calls.push([file, ...args])
       if (file === 'gh' && args[0] === 'repo') {

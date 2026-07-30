@@ -512,6 +512,26 @@ Correção (mecânica, no bridge):
 - o skill de deploy proíbe explicitamente responder a esse erro com criação
   de estrutura.
 
+### BUG-021 — Agente roda o CLI da Voidr no terminal e tenta login interativo
+
+Severidade: crítica
+Status: corrigido em `0.2.19-local.35` e validado por testes; pendente
+validação na UI
+
+Durante o deploy, o agente executou
+`node ./node_modules/@voidrco/playwright/cli/voidr.js build` no sandbox,
+recebeu `Not signed in` e escalou para `voidr.js login` interativo — que
+criaria uma sessão de credencial de usuário fora do modelo de Service
+Account do plugin.
+
+Correção (mecânica, no hook): toda invocação do CLI da Voidr no shell é
+negada em qualquer forma — `npx voidr`, binário `voidr` no PATH, `node
+.../voidr.js`, `@voidrco/playwright/cli` — além de `npx playwright test`,
+sempre apontando as bridge tools corretas (prepare, smoke, publish,
+deploy), que injetam a Service Account. A permissão antiga de
+`voidr deploy-candidate` no shell foi removida: o bridge o executa
+internamente sem passar pelo hook.
+
 ## Próximo checkpoint
 
 A criação, a população anonimizada, o provisionamento, a materialização e o smoke local

@@ -1,12 +1,12 @@
 ---
 name: voidr-create-execution
-description: Creates one confirmed Voidr platform execution with executions_create_execution. Use when the user asks to run an already-automated Test Plan or selected test cases and the application, plan, environment, and optional target slugs are already known.
+description: Creates one confirmed Voidr platform execution with executions_create_execution, after the mandatory automation-sync verification with test_plans_get_test_plan and test_plans_get_test_counts. Use when the user asks to run an already-automated Test Plan or selected test cases and the application, plan, environment, and optional target slugs are already known.
 ---
 
 # Create a Voidr execution
 
-Never call a tool that starts a Hive process. Use only
-`executions_create_execution`.
+Never call a tool that starts a Hive process. Use only the sync-verification
+reads and `executions_create_execution`, as routed below.
 
 ## Collect the request
 
@@ -26,8 +26,25 @@ per case with all three fields:
 - `suiteSlug`;
 - `moduleSlug`.
 
-Do not call another tool to discover or validate missing values. Ask the user
-for them and stop.
+Do not call another tool to discover missing request values: `applicationId`,
+`planId`, environment, and target slugs come from the user. Ask the user for
+them and stop.
+
+## Verify automation sync
+
+The bridge blocks execution creation until the plan and its counts were read
+in this session. With the supplied `planId`:
+
+1. Call `test_plans_get_test_plan` and confirm the plan exists and every
+   requested target case is present.
+2. Call `test_plans_get_test_counts` and confirm the selected scope is
+   automated and available for platform execution.
+3. If a requested case is missing or not automated, stop and report exactly
+   that. The fix is deploying the merged tests through `/voidr-deploy-run`,
+   never re-creating modules, suites, or cases, and never retrying the
+   execution call.
+
+These two reads are the only permitted calls besides the execution itself.
 
 ## Confirm
 
@@ -56,3 +73,24 @@ On success, return the execution ID, initial status, and:
 `Execution: [Open execution](<VOIDR_PLATFORM_URL>/execution/<executionId>)`
 
 Use `https://platform.voidr.co` when `VOIDR_PLATFORM_URL` is unavailable.
+
+## Tool routing
+
+This skill calls exactly three MCP tools:
+
+| When you need | Call exactly |
+| --- | --- |
+| Verify the plan and requested cases exist | `test_plans_get_test_plan` |
+| Verify the selected scope is automated | `test_plans_get_test_counts` |
+| Create the single confirmed platform execution | `executions_create_execution` |
+
+Any other Voidr MCP tool is out of scope for this skill:
+
+- Never call another `executions_*` tool to list executions or observe the
+  created one, and never call `applications_*` or another `test_plans_*` tool
+  to discover, validate, or confirm missing request values. Ask the user and
+  stop.
+- Never call `playwright_*` tools; analyzing a failed execution belongs to
+  `/voidr-failure-analysis`.
+- Never call workspace, release, or deploy tools; deploying belongs to
+  `/voidr-deploy-run`.

@@ -27,10 +27,13 @@ export function routeVoidrPrompt(input) {
 
 Use the /voidr-test skill for this request. Load that skill before inspecting
 files or calling any tool. It is the developer-first flow: infer the feature
-from the current Git branch and diff, confirm everything on one ask_user card,
-show plain-language test scenarios, and wait for the typed “Criar testes”
-approval. Never expose platform vocabulary such as Test Plan, scaffold,
-module, suite, or case slug to the user.`
+with the voidr_workspace_git_context tool (never cd or run git in the
+terminal — workspace paths with spaces break shell quoting), confirm
+everything on one ask_user card, show plain-language test scenarios, and wait
+for the typed “Criar testes” approval. Never ask whether the Test Plan is new
+or existing — the flow decides that silently — and never expose platform
+vocabulary such as Test Plan, scaffold, module, suite, or case slug to the
+user.`
     }
   }
 

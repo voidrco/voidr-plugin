@@ -42,10 +42,15 @@ When the flow starts:
    > conectar. Depois volte e peça os testes de novo.
 
    If multiple organizations exist, ask which one with `ask_user`.
-2. Infer the feature from the repository the developer is working in,
-   read-only: current branch name, commits not on the default branch, and
-   `git diff <default-branch>...HEAD` (names and structure first; read file
-   contents only as needed). This diff is the default planning evidence — do
+2. Infer the feature with `voidr_workspace_git_context`, passing
+   `workspaceRoot` (the absolute path of the open VS Code workspace folder).
+   It returns, per repository: current branch, default branch, commits
+   ahead, changed files versus the default branch, and recent commits. The
+   repository whose `onFeatureBranch` is true and whose changed files match
+   the developer's request is the feature. Never `cd` or run `git` in the
+   terminal for discovery — workspace paths with spaces break shell quoting
+   and the sandbox may deny reads; the tool takes the path as data. Read the
+   changed files' contents (read-only) as the default planning evidence — do
    not ask the user which inputs to use.
 3. Call `applications_list_applications`. If exactly one application exists,
    select it automatically. Otherwise ask with `ask_user` using the returned

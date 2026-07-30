@@ -22,6 +22,7 @@ import { buildTestRepository, scaffoldTestCases } from './lib/scaffold.mjs'
 import { prepareTestRepository } from './lib/prepare.mjs'
 import { publishTests } from './lib/publish.mjs'
 import { inspectReleaseReadiness } from './lib/release-inspect.mjs'
+import { collectGitContext } from './lib/git-context.mjs'
 
 const policy = loadPolicy()
 const safeRemote = new Set(policy.safeRemoteTools)
@@ -241,6 +242,18 @@ const localTools = [
     }
   },
   {
+    name: 'voidr_workspace_git_context',
+    description:
+      'Read-only Git discovery for the workspace repositories: current branch, default branch, dirty state, commits ahead, changed files versus the default branch, and recent commits. Use this to infer the developer feature — never cd or run git in the terminal, where paths with spaces break quoting and the sandbox may deny access. Pass workspaceRoot with the absolute path of the open VS Code workspace folder; optionally pass repositoryPath to inspect a single repository.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        workspaceRoot: { type: 'string' },
+        repositoryPath: { type: 'string' }
+      }
+    }
+  },
+  {
     name: 'voidr_release_inspect',
     description:
       'Read-only release readiness inspection of the selected test repository: reads project.json (Test Plan/organization/application IDs), the Git origin URL, the default branch, HEAD and worktree state, and locates the merged pull request for the current HEAD via gh. Call this instead of asking the user for a Test Plan ID, repository URL, or PR number. Pass workspaceRoot with the absolute path of the open VS Code workspace folder.',
@@ -342,7 +355,7 @@ async function dispatch(method, params) {
         capabilities: { tools: { listChanged: true } },
         serverInfo: {
           name: 'voidr-safe-bridge',
-          version: '0.2.19-local.35'
+          version: '0.2.19-local.36'
         }
       }
     case 'ping':
@@ -959,6 +972,17 @@ async function callLocal(name, args) {
           testPlanId: String(args.testPlanId || ''),
           specs: Array.isArray(args.specs) ? args.specs : [],
           baseUrl: String(args.baseUrl || '')
+        })
+      )
+    case 'voidr_workspace_git_context':
+      return textResult(
+        await collectGitContext({
+          workspaceRoot: args.workspaceRoot
+            ? String(args.workspaceRoot)
+            : undefined,
+          repositoryPath: args.repositoryPath
+            ? String(args.repositoryPath)
+            : undefined
         })
       )
     case 'voidr_release_inspect':

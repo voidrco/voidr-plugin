@@ -87,3 +87,18 @@ their CLI child processes, so downstream skills must never run
 - Never choose an account from `project.json`, repository names, or workspace
   folders.
 - Do not continue to a platform mutation unless `canWrite` is true.
+
+## Tool routing
+
+This skill uses exactly three MCP tools:
+
+| When you need | Call exactly |
+| --- | --- |
+| Check authentication, list local Service Accounts, validate the selected credential | `voidr_auth_status` |
+| Apply the user's choice among the accounts/organizations returned by `voidr_auth_status` | `voidr_auth_select_organization` |
+| Connect through the official browser login (missing, rejected, or different-organization credential) | `voidr_auth_login` |
+
+Any other Voidr MCP tool is out of scope for this skill. Never call
+`applications_*`, `test_plans_*`, workspace, release, execution, `playwright_*`,
+or `defects_*` tools while connecting, and never use them to infer an
+organization or account.

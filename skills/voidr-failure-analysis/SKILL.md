@@ -159,3 +159,41 @@ Changing a tag is a separate mutation:
 
 Never set `PENDING`; only automation synchronization can leave that state.
 Never change a tag automatically because a failure occurred.
+
+## Tool routing
+
+Use exactly these tools for these needs. Any Voidr MCP tool not listed here is
+out of scope for this skill.
+
+| When you need | Call exactly |
+| --- | --- |
+| Check authentication | `voidr_auth_status` |
+| Resolve the application when no execution ID was supplied | `applications_list_applications` |
+| List failed executions for user selection | `playwright_list_executions` |
+| Load execution analytics and the canonical execution ID | `playwright_get_execution_analytics` |
+| List the execution's recorded failures | `playwright_list_execution_failures` |
+| Read steps, console, network, stdout, stderr for one test | `playwright_get_test_timeline` |
+| Read the trace-backed step and DOM timeline | `playwright_get_trace_events` |
+| Check cross-execution recurrence | `playwright_get_test_history` |
+| Read the DOM snapshot the failure row reports | `playwright_get_test_dom` |
+| Resolve the selected row's module and suite | `playwright_list_test_results` |
+| Read the expected behavior from the Test Plan case | `test_plans_get_case` |
+| Read governance tag history | `test_plans_get_tag_history` |
+| Check for an existing defect before drafting one | `defects_list_defects` |
+| Create the confirmed defect | `defects_create_defect` |
+| Apply the confirmed governance tag change | `test_plans_update_test_case_tag` |
+
+Disambiguation:
+
+- Failure analysis reads only the analytical store: use
+  `playwright_list_executions` and `playwright_get_execution_analytics`, never
+  `executions_list_executions` or `executions_get_execution`, which report
+  platform lifecycle status without the evidence this skill requires.
+- Never call `executions_create_execution`; re-running belongs to
+  `/voidr-create-execution` or `/voidr-deploy-run` after a new user request.
+- Never call `test_plans_create_*`, `test_plans_update_test_plan`,
+  `test_plans_update_module`, `test_plans_update_suite`,
+  `test_plans_update_case`, or `test_plans_populate_test_plan`; the only
+  mutations allowed here are `defects_create_defect` and
+  `test_plans_update_test_case_tag`, each behind its own confirmation.
+- Never call workspace, release, or deploy tools from this skill.

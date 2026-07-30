@@ -199,3 +199,35 @@ Finish with:
 - files changed;
 - unresolved blockers;
 - whether the build artifact is ready for deployment.
+
+## Tool routing
+
+Use exactly these tools for these needs. Any Voidr MCP tool not listed here is
+out of scope for this skill.
+
+| When you need | Call exactly |
+| --- | --- |
+| Read the approved plan and its literal case content | `test_plans_get_test_plan` |
+| Run the mandatory repository setup gate before touching any spec | `voidr_workspace_prepare_test_repository` |
+| Scaffold a selected case that is missing after initial preparation | `voidr_workspace_scaffold_test_cases` |
+| Validate locally and run the authenticated build | `voidr_smoke_build` |
+
+Disambiguation:
+
+- The initial scaffold happens inside
+  `voidr_workspace_prepare_test_repository`; call
+  `voidr_workspace_scaffold_test_cases` only for a case added after that gate
+  completed.
+- Never call `test_plans_list_test_plans` here: the plan was already
+  explicitly selected, and listing is not an error fallback.
+- Never call `test_plans_create_*`, `test_plans_update_*`, or
+  `test_plans_populate_test_plan`; plan content changes belong to
+  `/voidr-test-plan`.
+- Never call `voidr_workspace_select_test_repository` or
+  `voidr_workspace_bootstrap_test_repository`; repository selection was already
+  confirmed by the preparation gate.
+- Never call `voidr_workspace_publish_tests`, `voidr_release_inspect`,
+  `voidr_release_deploy_merged_pr`, or `executions_*` tools; publishing,
+  deploying, and executing belong to `/voidr-deploy-run`.
+- Never call `playwright_*` or `defects_*` tools; platform failure analysis
+  belongs to `/voidr-failure-analysis`.

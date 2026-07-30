@@ -293,3 +293,42 @@ at least one case before the first mutation.
 
 Do not create automation, generate code remotely, deploy, or execute from
 this skill.
+
+## Tool routing
+
+Use exactly these tools for these needs. Any Voidr MCP tool not listed here is
+out of scope for this skill.
+
+| When you need | Call exactly |
+| --- | --- |
+| Confirm authentication before any platform read | `voidr_auth_status` |
+| List applications for user selection | `applications_list_applications` |
+| Resolve a missing `type` on the selected application | `applications_get_application` |
+| List environments of the selected application | `applications_list_environments` |
+| List existing Test Plans for user selection | `test_plans_list_test_plans` |
+| Read one explicitly selected Test Plan, or verify persisted content | `test_plans_get_test_plan` |
+| List workspace repository candidates for read-only code context | `voidr_workspace_inspect` |
+| Persist the approved new plan (first mutation) | `test_plans_create_test_plan` |
+| Persist the approved structure right after a complete creation response | `test_plans_populate_test_plan` |
+| Add a module, suite, or case to an already-persisted plan on an explicit user request | `test_plans_create_module`, `test_plans_create_suite`, `test_plans_create_case` |
+| Edit an already-persisted plan, module, suite, or case only when the user explicitly requests that exact change | `test_plans_update_test_plan`, `test_plans_update_module`, `test_plans_update_suite`, `test_plans_update_case` |
+
+Disambiguation:
+
+- `test_plans_populate_test_plan` is only the bulk write that immediately
+  follows a complete `test_plans_create_test_plan` response in the same
+  approved flow. Any later addition uses the incremental `test_plans_create_*`
+  tools; any later edit uses the matching `test_plans_update_*` tool.
+- `test_plans_update_*` tools never repair a failed creation, a not-found
+  slug, or a blocked mutation; on those errors, read the plan with
+  `test_plans_get_test_plan`, stop, and report.
+- `test_plans_list_test_plans` is only for user selection, never a fallback
+  after a not-found, authorization, or creation error.
+- Never call `executions_*`, `playwright_*`, or `defects_*` tools from this
+  skill.
+- Never call `voidr_workspace_prepare_test_repository`,
+  `voidr_workspace_bootstrap_test_repository`,
+  `voidr_workspace_select_test_repository`,
+  `voidr_workspace_scaffold_test_cases`, or `voidr_smoke_build`; repository
+  setup and implementation belong to `/voidr-develop-tests` and
+  `/voidr-implement-tests`.

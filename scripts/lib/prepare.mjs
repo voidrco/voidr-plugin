@@ -3,11 +3,17 @@ import {
   readdirSync,
   readFileSync
 } from 'node:fs'
-import { join } from 'node:path'
+import { basename, join, resolve } from 'node:path'
 import { runCommand } from './command.mjs'
 import { voidrCliEnvironment } from './credentials.mjs'
 import { assertSupportedNodeRuntime } from './node-runtime.mjs'
 import {
+  assertOutsidePluginInstallation,
+  canonicalizePotentialPath,
+  findCheckoutByOrigin,
+  isInside,
+  normalizeGitHubRepositoryUrl,
+  resolveWorkspaceRoot,
   validateProvisionedRepositorySelection,
   validateRepositorySelection
 } from './workspace.mjs'
@@ -20,13 +26,27 @@ export async function prepareTestRepository({
   environmentSlug,
   cases,
   repositoryUrl,
-  workspaceRoot = process.cwd(),
+  workspaceRoot,
   cliEnvironment,
   run = runCommand
 }) {
+  const resolvedRoot = resolveWorkspaceRoot({ explicit: workspaceRoot })
+  const materialized = repositoryUrl
+    ? await materializeLinkedCheckout({
+        workspaceRoot: resolvedRoot,
+        repositoryPath,
+        repositoryUrl,
+        run
+      })
+    : null
   const selected = repositoryUrl
-    ? validateProvisionedRepositorySelection(repositoryPath, repositoryUrl)
-    : validateRepositorySelection(repositoryPath, workspaceRoot)
+    ? validateProvisionedRepositorySelection(materialized.path, repositoryUrl)
+    : validateRepositorySelection(repositoryPath, resolvedRoot)
+  if (!isInside(selected.path, resolvedRoot)) {
+    throw new Error(
+      `The test repository must live inside the open workspace (${resolvedRoot}), never in a temporary directory. Found: ${selected.path}.`
+    )
+  }
   const identifiers = validateIdentifiers({
     organizationId,
     applicationId,
@@ -142,6 +162,7 @@ export async function prepareTestRepository({
   return {
     completed: true,
     repositoryPath: selected.path,
+    checkoutSource: materialized?.how || 'given-path',
     organizationId: identifiers.organizationId,
     applicationId: identifiers.applicationId,
     testPlanId: identifiers.testPlanId,
@@ -149,6 +170,7 @@ export async function prepareTestRepository({
     cases: selectedCases,
     specCount,
     steps: {
+      checkoutMaterialized: materialized?.how || 'given-path',
       dependenciesInstalled: true,
       authenticationResolvedFromPluginServiceAccount: true,
       interactiveLoginExecuted: false,
@@ -158,6 +180,45 @@ export async function prepareTestRepository({
       secretsPulled: true
     }
   }
+}
+
+// Finds or clones the platform-linked repository inside the workspace. The
+// tool, not the model, decides where the checkout lives: an existing clone is
+// located by Git origin anywhere in the workspace, and a fresh clone always
+// lands inside the workspace root — never in /tmp or another external path.
+async function materializeLinkedCheckout({
+  workspaceRoot,
+  repositoryPath,
+  repositoryUrl,
+  run
+}) {
+  const existing = findCheckoutByOrigin(workspaceRoot, repositoryUrl)
+  if (existing) return { path: existing, how: 'existing-checkout' }
+
+  const requested = String(repositoryPath || '').trim()
+  const destination = canonicalizePotentialPath(
+    resolve(
+      workspaceRoot,
+      requested || basename(normalizeGitHubRepositoryUrl(repositoryUrl))
+    )
+  )
+  if (!isInside(destination, workspaceRoot)) {
+    throw new Error(
+      `The clone destination must be inside the open workspace (${workspaceRoot}). Never clone the linked repository into /tmp or another external directory.`
+    )
+  }
+  assertOutsidePluginInstallation(destination, 'clone destination')
+  if (existsSync(destination)) {
+    throw new Error(
+      `The destination ${destination} already exists but is not a checkout of the linked repository (no matching Git origin). Ask the user whether to remove the stale directory or pick another repositoryPath inside the workspace. Never delete it automatically and never clone outside the workspace.`
+    )
+  }
+
+  await run('git', ['clone', repositoryUrl, destination], {
+    timeout: 300_000,
+    env: process.env
+  })
+  return { path: destination, how: 'cloned' }
 }
 
 function validateIdentifiers({

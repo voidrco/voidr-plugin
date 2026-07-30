@@ -179,20 +179,21 @@ test('rejects a Service Account selected for another organization', async () => 
   )
 })
 
-test('accepts a provisioned checkout outside the MCP process cwd when origin matches', async () => {
-  const checkoutParent = mkdtempSync(join(tmpdir(), 'voidr-provisioned-'))
-  const unrelatedServerCwd = mkdtempSync(join(tmpdir(), 'voidr-server-cwd-'))
-  const repositoryPath = createRepository(checkoutParent)
+test('locates the provisioned checkout by origin anywhere inside the workspace', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-provisioned-'))
+  const repositoryPath = createRepository(workspace)
   const repositoryUrl =
     'https://github.com/voidrco/voidr-tp-synthetic-01234567.git'
   initializeOrigin(repositoryPath, repositoryUrl)
   const calls = []
 
   const result = await prepareTestRepository({
-    repositoryPath,
+    // The model's belief about the path is irrelevant: the tool locates the
+    // checkout by Git origin.
+    repositoryPath: join(workspace, 'some-wrong-guess'),
     ...context,
     repositoryUrl,
-    workspaceRoot: unrelatedServerCwd,
+    workspaceRoot: workspace,
     cliEnvironment: {
       VOIDR_CLIENT_ID: 'sa_synthetic_provisioned',
       VOIDR_CLIENT_SECRET: 'synthetic-provisioned-secret',
@@ -203,11 +204,43 @@ test('accepts a provisioned checkout outside the MCP process cwd when origin mat
 
   assert.equal(result.completed, true)
   assert.equal(result.repositoryPath, realpathSync(repositoryPath))
+  assert.equal(result.checkoutSource, 'existing-checkout')
+  assert.equal(
+    calls.some(call => call.args.includes('clone')),
+    false
+  )
 })
 
-test('rejects a checkout whose origin does not match the Voidr repository', async () => {
-  const checkoutParent = mkdtempSync(join(tmpdir(), 'voidr-wrong-origin-'))
-  const repositoryPath = createRepository(checkoutParent)
+test('rejects a provisioned checkout outside the open workspace', async () => {
+  const outsideParent = mkdtempSync(join(tmpdir(), 'voidr-outside-'))
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-real-root-'))
+  const repositoryPath = createRepository(outsideParent)
+  const repositoryUrl =
+    'https://github.com/voidrco/voidr-tp-synthetic-01234567.git'
+  initializeOrigin(repositoryPath, repositoryUrl)
+
+  await assert.rejects(
+    prepareTestRepository({
+      repositoryPath,
+      ...context,
+      repositoryUrl,
+      workspaceRoot: workspace,
+      cliEnvironment: {
+        VOIDR_CLIENT_ID: 'sa_synthetic_outside',
+        VOIDR_CLIENT_SECRET: 'synthetic-outside-secret',
+        VOIDR_ORG_ID: context.organizationId
+      },
+      run: async () => {
+        throw new Error('setup must not run for an external checkout')
+      }
+    }),
+    /inside the open workspace/
+  )
+})
+
+test('rejects a stale destination that is not a checkout of the linked repository', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-stale-'))
+  const repositoryPath = createRepository(workspace)
   initializeOrigin(
     repositoryPath,
     'https://github.com/voidrco/a-different-repository.git'
@@ -219,18 +252,57 @@ test('rejects a checkout whose origin does not match the Voidr repository', asyn
       ...context,
       repositoryUrl:
         'https://github.com/voidrco/voidr-tp-synthetic-01234567.git',
-      workspaceRoot: mkdtempSync(join(tmpdir(), 'voidr-server-cwd-')),
+      workspaceRoot: workspace,
       cliEnvironment: {
         VOIDR_CLIENT_ID: 'sa_synthetic_wrong_origin',
         VOIDR_CLIENT_SECRET: 'synthetic-wrong-origin-secret',
         VOIDR_ORG_ID: context.organizationId
       },
       run: async () => {
-        throw new Error('setup must not run for a mismatched origin')
+        throw new Error('setup must not run for a stale destination')
       }
     }),
-    /origin does not match/
+    /already exists but is not a checkout/
   )
+})
+
+test('clones the linked repository inside the workspace when no checkout exists', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-clone-'))
+  const destination = join(workspace, 'tests')
+  const repositoryUrl =
+    'https://github.com/voidrco/voidr-tp-synthetic-01234567.git'
+  const calls = []
+  const innerRun = fakeVoidrRun({ repositoryPath: destination, calls, context })
+
+  const result = await prepareTestRepository({
+    repositoryPath: destination,
+    ...context,
+    repositoryUrl,
+    workspaceRoot: workspace,
+    cliEnvironment: {
+      VOIDR_CLIENT_ID: 'sa_synthetic_clone',
+      VOIDR_CLIENT_SECRET: 'synthetic-clone-secret',
+      VOIDR_ORG_ID: context.organizationId
+    },
+    run: async (file, args, options) => {
+      if (file === 'git' && args[0] === 'clone') {
+        calls.push({ file, args, options })
+        mkdirSync(destination, { recursive: true })
+        writeFileSync(
+          join(destination, 'package.json'),
+          JSON.stringify({ name: 'cloned-tests' })
+        )
+        initializeOrigin(destination, repositoryUrl)
+        return { stdout: '' }
+      }
+      return innerRun(file, args, options)
+    }
+  })
+
+  assert.equal(result.completed, true)
+  assert.equal(result.checkoutSource, 'cloned')
+  assert.equal(result.repositoryPath, realpathSync(destination))
+  assert.deepEqual(calls[0].args.slice(0, 2), ['clone', repositoryUrl])
 })
 
 function createRepository(workspace) {

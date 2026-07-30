@@ -99,24 +99,18 @@ Only after `Criar testes`:
      scenarios. Capture the returned `repository` object.
    - If a creation call fails, stop, show the exact error, and offer retry or
      cancel. Never silently switch to another plan.
-2. Materialize the linked test repository. Never use terminal `find`, `ls`,
-   or directory names to decide whether a checkout exists — a failed or empty
-   shell command is not evidence of absence. Call
-   `voidr_workspace_bootstrap_test_repository` with the server-returned
-   `repositoryUrl`, `allowExistingGitRepository: true`, and `workspaceRoot`
-   set to the absolute path of the open VS Code workspace folder: the tool
-   itself scans the workspace for a checkout whose Git `origin` matches and
-   returns `reusedExistingCheckout: true` with the existing path instead of
-   creating anything. Only when it reports no existing checkout, clone the
-   server-returned URL (one confirmation for the destination, only on first
-   use) and call it again. Always pass `workspaceRoot` on
-   `voidr_workspace_inspect`, `voidr_workspace_select_test_repository`, and
-   `voidr_workspace_bootstrap_test_repository`; if a tool reports it cannot
-   resolve the workspace root, repeat the call with the exact path the error
-   or the hook message provides.
-3. Call `voidr_workspace_prepare_test_repository` once with the confirmed
-   checkout, selected IDs, environment slug, linked repository URL, and the
-   approved case slugs. Never run `npx voidr login` or manual setup commands.
+2. Call `voidr_workspace_prepare_test_repository` once with the selected IDs,
+   environment slug, the server-returned linked `repositoryUrl`, the approved
+   case slugs, and `workspaceRoot` set to the absolute path of the open
+   VS Code workspace folder. This single tool materializes and prepares the
+   repository itself: it locates an existing checkout by Git `origin`
+   anywhere in the workspace, or clones the linked repository inside the
+   workspace when none exists. Never run `git clone`, `npx voidr login`, or
+   any manual setup command, never use terminal `find`/`ls` to decide whether
+   a checkout exists, and never place the repository outside the workspace
+   (the tool rejects `/tmp`). If it reports that the destination exists but
+   is not a checkout of the linked repository, ask the user what to do with
+   that stale directory — do not delete it and do not clone elsewhere.
 4. Implement one Playwright spec per approved scenario inside the test
    repository only. Read the product code read-only for selectors and flows.
    No literal credentials or fallbacks; API endpoints come from the deployed

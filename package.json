@@ -1,6 +1,6 @@
 {
   "name": "@voidr/copilot-plugin",
-  "version": "0.2.19-local.27",
+  "version": "0.2.19-local.28",
   "private": true,
   "type": "module",
   "scripts": {

@@ -10,6 +10,7 @@ import { canonicalToolName, isWriteTool, loadPolicy } from './lib/policy.mjs'
 import { RemoteMcpClient } from './lib/remote-mcp.mjs'
 import { bootstrapTestRepository } from './lib/bootstrap.mjs'
 import {
+  canonicalizePotentialPath,
   inspectWorkspace,
   resolveWorkspaceRoot,
   validateProvisionedRepositorySelection,
@@ -34,6 +35,7 @@ let planCreationFailed = false
 const sessionModules = new Map() // planId -> Set<moduleSlug>
 const sessionSuites = new Map() // planId -> Map<moduleSlug, Set<suiteSlug>>
 const failedStructureRefs = new Set() // `${planId}|${slug}` that returned not-found
+let preparedRepositoryPath = null
 
 const localTools = [
   {
@@ -126,11 +128,12 @@ const localTools = [
   {
     name: 'voidr_workspace_prepare_test_repository',
     description:
-      'Prepare an explicitly selected cloned Voidr test repository in one mandatory sequence: install dependencies, authenticate Voidr CLI child processes through the selected plugin Service Account without interactive login, link only when project.json is absent, scaffold exact platform cases, and pull the selected environment secrets without exposing values.',
+      'Materialize and prepare the platform-linked Voidr test repository in one mandatory sequence: locate an existing checkout by Git origin anywhere in the workspace or clone the linked repository inside it, install dependencies, authenticate Voidr CLI child processes through the selected plugin Service Account without interactive login, link only when project.json is absent, scaffold exact platform cases, and pull the selected environment secrets without exposing values. Pass workspaceRoot with the absolute path of the open VS Code workspace folder.',
     inputSchema: {
       type: 'object',
       properties: {
         repositoryPath: { type: 'string' },
+        workspaceRoot: { type: 'string' },
         organizationId: { type: 'string' },
         applicationId: { type: 'string' },
         testPlanId: {
@@ -290,7 +293,7 @@ async function dispatch(method, params) {
         capabilities: { tools: { listChanged: true } },
         serverInfo: {
           name: 'voidr-safe-bridge',
-          version: '0.2.19-local.27'
+          version: '0.2.19-local.28'
         }
       }
     case 'ping':
@@ -518,6 +521,19 @@ function resetStructureTracking() {
   sessionModules.clear()
   sessionSuites.clear()
   failedStructureRefs.clear()
+  preparedRepositoryPath = null
+}
+
+// The smoke must run against the checkout the session actually prepared. A
+// stray clone in /tmp (or anywhere else) is rejected with the correct path.
+function enforcePreparedRepository(repositoryPath) {
+  if (!preparedRepositoryPath) return
+  const requested = canonicalizePotentialPath(repositoryPath)
+  if (requested !== preparedRepositoryPath) {
+    throw new Error(
+      `Blocked by Voidr workflow: run the smoke against the repository prepared in this session: ${preparedRepositoryPath}. Do not use ${requested}.`
+    )
+  }
 }
 
 function enforceBridgeTestPlanIdentity(name, args) {
@@ -669,18 +685,22 @@ async function callLocal(name, args) {
               resolveWorkspaceRoot({ explicit: args.workspaceRoot })
             )
       )
-    case 'voidr_workspace_prepare_test_repository':
-      return textResult(
-        await prepareTestRepository({
-          repositoryPath: String(args.repositoryPath || ''),
-          organizationId: String(args.organizationId || ''),
-          applicationId: String(args.applicationId || ''),
-          testPlanId: String(args.testPlanId || ''),
-          environmentSlug: String(args.environmentSlug || ''),
-          repositoryUrl: String(args.repositoryUrl || ''),
-          cases: Array.isArray(args.cases) ? args.cases : []
-        })
-      )
+    case 'voidr_workspace_prepare_test_repository': {
+      const prepared = await prepareTestRepository({
+        repositoryPath: String(args.repositoryPath || ''),
+        organizationId: String(args.organizationId || ''),
+        applicationId: String(args.applicationId || ''),
+        testPlanId: String(args.testPlanId || ''),
+        environmentSlug: String(args.environmentSlug || ''),
+        repositoryUrl: String(args.repositoryUrl || ''),
+        cases: Array.isArray(args.cases) ? args.cases : [],
+        workspaceRoot: args.workspaceRoot
+          ? String(args.workspaceRoot)
+          : undefined
+      })
+      preparedRepositoryPath = prepared.repositoryPath
+      return textResult(prepared)
+    }
     case 'voidr_workspace_scaffold_test_cases':
       return textResult(
         await scaffoldTestCases({
@@ -691,6 +711,7 @@ async function callLocal(name, args) {
         })
       )
     case 'voidr_smoke_build':
+      enforcePreparedRepository(String(args.repositoryPath || ''))
       return textResult(
         await buildTestRepository({
           repositoryPath: String(args.repositoryPath || ''),

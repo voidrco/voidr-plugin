@@ -413,6 +413,35 @@ Correção (mecânica, no bridge):
 - o skill `/voidr-test` exige usar exatamente o `slug` retornado por cada
   criação.
 
+### BUG-018 — Clone do repositório provisionado fora do workspace (/tmp)
+
+Severidade: bloqueadora
+Status: corrigido em `0.2.19-local.28` e validado por testes; pendente
+validação na UI
+
+No fluxo dev (`local.27`, Haiku 4.5), o destino canônico no workspace estava
+ocupado por uma pasta stale de template (sem `.git`); o `git clone` do agente
+falhou e ele "resolveu" clonando em `/private/tmp/voidr-test-repo`. O prepare
+e o smoke aceitaram o caminho externo porque a validação conferia apenas a
+origin do Git.
+
+Correção (mecânica, no bridge):
+
+- `voidr_workspace_prepare_test_repository` agora materializa o checkout
+  sozinho: localiza um clone existente pela origin em qualquer lugar do
+  workspace ou clona o repositório vinculado dentro do workspace (o processo
+  MCP roda fora do sandbox e tem rede); o caminho informado pelo modelo é só
+  uma sugestão de destino;
+- destino ocupado sem origin correspondente falha com instrução de perguntar
+  ao usuário sobre a pasta stale (nunca deletar, nunca clonar fora);
+- checkout fora do workspace é rejeitado (`/tmp` incluído);
+- o `voidr_smoke_build` fica pinado no repositório preparado na sessão;
+- o hook exige `workspaceRoot` no prepare, injetando o cwd real do VS Code;
+- o skill `/voidr-test` proíbe `git clone` manual.
+
+Pendência ambiental: remover manualmente a pasta stale
+`voidr-tp-serasa-consulta-cnpj` (template sem `.git`) do workspace de teste.
+
 ## Próximo checkpoint
 
 A criação, a população anonimizada, o provisionamento, a materialização e o smoke local

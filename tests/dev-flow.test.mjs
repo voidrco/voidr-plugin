@@ -197,7 +197,8 @@ test('the approved card also covers the displayed environment in auto mode', () 
       applicationId: 'app-1',
       testPlanId: '0123456789abcdef01234567',
       environmentSlug: 'staging',
-      cases: ['checkout-001']
+      cases: ['checkout-001'],
+      workspaceRoot: workspace
     }
   }
 

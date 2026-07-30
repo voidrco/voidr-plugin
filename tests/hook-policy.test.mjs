@@ -816,7 +816,8 @@ test('blocks repository setup until a listed environment is explicitly selected'
         toolArgs: {
           repositoryPath: testRepo,
           applicationId: 'app-1',
-          environmentSlug: 'producao'
+          environmentSlug: 'producao',
+          workspaceRoot: workspace
         }
       },
       dataRoot

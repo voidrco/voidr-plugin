@@ -24,6 +24,7 @@ const policy = loadPolicy()
 const safeRemote = new Set(policy.safeRemoteTools)
 const localNames = new Set(policy.localTools)
 const remote = new RemoteMcpClient()
+const provisionedTestPlans = new Set()
 let negotiatedProtocol = '2024-11-05'
 
 const localTools = [
@@ -203,7 +204,7 @@ async function dispatch(method, params) {
         capabilities: { tools: { listChanged: true } },
         serverInfo: {
           name: 'voidr-safe-bridge',
-          version: '0.2.17'
+          version: '0.2.19'
         }
       }
     case 'ping':
@@ -252,7 +253,65 @@ async function callTool(params) {
     throw new Error(`Tool ${rawName} is not allowed by the Voidr plugin policy.`)
   }
 
-  return remote.callTool(name, args)
+  if (name === 'test_plans_populate_test_plan') {
+    const planId = String(args.planId || '').trim()
+    if (!planId || !provisionedTestPlans.has(planId)) {
+      throw new Error(
+        'Blocked by Voidr workflow: populate_test_plan requires a successful create_test_plan response in this session containing the linked repository URL, owner, name, and default branch.'
+      )
+    }
+  }
+
+  const result = await remote.callTool(name, args)
+  if (name === 'test_plans_create_test_plan') {
+    const provisioned = validateProvisionedTestPlan(result)
+    provisionedTestPlans.add(provisioned.planId)
+  }
+  return result
+}
+
+function validateProvisionedTestPlan(result) {
+  if (result?.isError) {
+    throw new Error(
+      'Voidr did not create the Test Plan and linked repository. Population remains blocked.'
+    )
+  }
+  const data = remoteResultData(result)
+  const repository = data?.repository
+  const planId = String(data?._id || data?.testPlanId || data?.id || '').trim()
+  if (
+    !planId ||
+    !repository ||
+    !String(repository.url || '').trim() ||
+    !String(repository.owner || '').trim() ||
+    !String(repository.name || '').trim() ||
+    !String(repository.defaultBranch || '').trim()
+  ) {
+    throw new Error(
+      'Incomplete Voidr creation response: the Test Plan is not usable until the server returns its ID and a linked repository with URL, owner, name, and default branch. populate_test_plan was blocked.'
+    )
+  }
+  return { planId, repository }
+}
+
+function remoteResultData(result) {
+  if (result?.structuredContent?.data) return result.structuredContent.data
+  for (const item of result?.content || []) {
+    if (item?.type !== 'text') continue
+    const lines = String(item.text || '')
+      .split(/\r?\n/)
+      .map(line => line.trim())
+      .filter(Boolean)
+      .reverse()
+    for (const line of lines) {
+      try {
+        return JSON.parse(line)
+      } catch {
+        // Continue until the last serialized MCP data line is found.
+      }
+    }
+  }
+  return null
 }
 
 async function callLocal(name, args) {

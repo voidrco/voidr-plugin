@@ -266,7 +266,7 @@ assert(
   /Application name, application type, environment,[\s\S]*?routing metadata, never sufficient test-design\s+evidence/i.test(
     entrySkill
   ) &&
-    /Resumo dos insumos do planejamento[\s\S]*?Confirmar insumos do planejamento[\s\S]*?Do not show a Test Plan draft yet/i.test(
+    /Resumo dos insumos do planejamento[\s\S]*?type exactly[\s\S]*?Confirmar insumos do planejamento[\s\S]*?normal chat input[\s\S]*?Do not use `ask_user`[\s\S]*?Do not show a Test Plan draft yet/i.test(
       entrySkill
     ),
   'Entry skill must reject routing metadata as evidence and confirm collected inputs before drafting.'
@@ -275,7 +275,7 @@ assert(
   /Com base em quais insumos devo montar o Test Plan\?[\s\S]*?routing metadata[\s\S]*?never sufficient\s+evidence/i.test(
     testPlanSkill
   ) &&
-    /Confirmar insumos do planejamento[\s\S]*?new user message[\s\S]*?Do not render a Test Plan\s+draft before it/i.test(
+    /type exactly `Confirmar insumos do planejamento`[\s\S]*?normal chat input[\s\S]*?Do not use `ask_user`[\s\S]*?new user-authored\s+chat\s+message[\s\S]*?Do not render a Test Plan\s+draft\s+before it/i.test(
       testPlanSkill
     ),
   'Test Plan skill must enforce the planning-input evidence gate before its visible draft.'
@@ -320,10 +320,13 @@ assert(
   'Test Plan skill must verify and return the linked repository as a clickable URL.'
 )
 assert(
-  /exact approval[\s\S]*?Aprovar este Test Plan[\s\S]*?generic `Sim` is not[\s\S]*?new user message/i.test(
+  /type exactly `Aprovo este Test Plan`[\s\S]*?normal chat input[\s\S]*?Do not use `ask_user`[\s\S]*?generic `Sim` is not[\s\S]*?new user-authored chat message/i.test(
     entrySkill
-  ),
-  'Entry skill must require the exact post-draft approval message.'
+  ) &&
+    /type exactly[\s\S]*?`Aprovo este Test Plan`[\s\S]*?normal chat input[\s\S]*?Do not use `ask_user`[\s\S]*?tool-result selections do not reach the runtime approval hook/i.test(
+      testPlanSkill
+    ),
+  'Both Test Plan skills must require a user-typed post-draft approval message.'
 )
 assert(
   /user already named\s+a repository[\s\S]*?read-only inspection[\s\S]*?not ask permission again/i.test(

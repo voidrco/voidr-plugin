@@ -231,6 +231,24 @@ test('blocks Test Plan writes until inputs and draft are explicitly approved', (
   assert.equal(output.permissionDecision, 'deny')
   assert.match(output.permissionDecisionReason, /Confirmar insumos/i)
 
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId,
+        cwd: process.cwd(),
+        toolName: 'ask_user',
+        toolArgs: {
+          selectedAnswer: 'Confirmar insumos do planejamento'
+        }
+      },
+      dataRoot
+    ),
+    {}
+  )
+  output = runHook(mutation, dataRoot)
+  assert.equal(output.permissionDecision, 'deny')
+  assert.match(output.permissionDecisionReason, /Confirmar insumos/i)
+
   submitPrompt(
     {
       sessionId,
@@ -252,6 +270,24 @@ test('blocks Test Plan writes until inputs and draft are explicitly approved', (
       transformedPrompt: 'Confirmar insumos do planejamento'
     },
     dataRoot
+  )
+  output = runHook(mutation, dataRoot)
+  assert.equal(output.permissionDecision, 'deny')
+  assert.match(output.permissionDecisionReason, /Aprovo este Test Plan/i)
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId,
+        cwd: process.cwd(),
+        toolName: 'ask_user',
+        toolArgs: {
+          selectedAnswer: 'Aprovo este Test Plan'
+        }
+      },
+      dataRoot
+    ),
+    {}
   )
   output = runHook(mutation, dataRoot)
   assert.equal(output.permissionDecision, 'deny')

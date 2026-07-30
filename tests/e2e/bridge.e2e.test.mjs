@@ -66,6 +66,7 @@ test('bridge filters discovery, keeps secrets local, and blocks forbidden calls'
         tools: [
           toolDefinition('applications_list_applications'),
           toolDefinition('test_plans_create_test_plan'),
+          toolDefinition('test_plans_populate_test_plan'),
           toolDefinition('executions_create_execution'),
           toolDefinition('agent_jobs_trigger_hive_automation'),
           toolDefinition('system_batch_execute')
@@ -74,11 +75,24 @@ test('bridge filters discovery, keeps secrets local, and blocks forbidden calls'
       return
     }
     if (message.method === 'tools/call') {
+      const data =
+        message.params.name === 'test_plans_create_test_plan'
+          ? {
+              _id: '0123456789abcdef01234567',
+              repository: {
+                url: 'https://github.com/voidrco/voidr-tp-e2e',
+                owner: 'voidrco',
+                name: 'voidr-tp-e2e',
+                defaultBranch: 'main'
+              }
+            }
+          : { called: message.params.name }
       sendResult(response, message.id, {
+        structuredContent: { data },
         content: [
           {
             type: 'text',
-            text: JSON.stringify({ called: message.params.name })
+            text: JSON.stringify(data)
           }
         ]
       })
@@ -178,11 +192,33 @@ test('bridge filters discovery, keeps secrets local, and blocks forbidden calls'
     }
   )
 
+  const blockedPopulation = await client.requestRaw('tools/call', {
+    name: 'test_plans_populate_test_plan',
+    arguments: {
+      planId: '0123456789abcdef01234567',
+      modules: [{ name: 'Login', severity: 'HIGH' }]
+    }
+  })
+  assert.match(blockedPopulation.error.message, /successful create_test_plan response/i)
+  assert.equal(
+    received.some(item => item.tool === 'test_plans_populate_test_plan'),
+    false
+  )
+
   const safeCall = await client.request('tools/call', {
     name: 'test_plans_create_test_plan',
     arguments: { applicationId: 'app-e2e', name: 'E2E Plan' }
   })
-  assert.match(safeCall.content[0].text, /test_plans_create_test_plan/)
+  assert.match(safeCall.content[0].text, /voidr-tp-e2e/)
+
+  const populated = await client.request('tools/call', {
+    name: 'test_plans_populate_test_plan',
+    arguments: {
+      planId: '0123456789abcdef01234567',
+      modules: [{ name: 'Login', severity: 'HIGH' }]
+    }
+  })
+  assert.match(populated.content[0].text, /test_plans_populate_test_plan/)
 
   const forbidden = await client.requestRaw('tools/call', {
     name: 'agent_jobs_trigger_hive_automation',

@@ -13,6 +13,7 @@ export const States = Object.freeze({
   PLAN_DRAFTED: 'PLAN_DRAFTED',
   PLAN_LOADED: 'PLAN_LOADED',
   PLAN_APPROVED: 'PLAN_APPROVED',
+  PLAN_REPOSITORY_PROVISIONED: 'PLAN_REPOSITORY_PROVISIONED',
   TEST_REPOSITORY_SELECTED: 'TEST_REPOSITORY_SELECTED',
   REPOSITORY_LINK_VALIDATED: 'REPOSITORY_LINK_VALIDATED',
   LOCAL_VALIDATION_PASSED: 'LOCAL_VALIDATION_PASSED',
@@ -48,6 +49,7 @@ export function createWorkflow() {
       outOfScope: null,
       preconditions: [],
       planId: null,
+      provisionedRepository: null,
       selectedCases: [],
       testRepository: null,
       projectLink: null,
@@ -215,7 +217,7 @@ export function transition(workflow, event) {
       next.context.preconditions = [...event.preconditions]
       next.state = States.PLAN_CONTEXT_COLLECTED
       next.prompt =
-        'Mostre o Resumo dos insumos do planejamento e aguarde a opção exata “Confirmar insumos do planejamento”. Ainda não apresente o draft.'
+        'Mostre o Resumo dos insumos do planejamento e peça que o usuário digite “Confirmar insumos do planejamento” em uma nova mensagem normal do chat. Não use ask_user e ainda não apresente o draft.'
       return next
 
     case 'PLAN_CONTEXT_CONFIRMED':
@@ -236,20 +238,35 @@ export function transition(workflow, event) {
       }
       next.state = States.PLAN_DRAFTED
       next.context.selectedCases = [...event.caseSlugs]
-      next.prompt = `Aprova este Test Plan para a feature "${next.context.feature}" e estes casos para criação na Voidr?`
+      next.prompt =
+        'Peça que o usuário digite “Aprovo este Test Plan” em uma nova mensagem normal do chat. Não use ask_user. Um “sim” genérico não é aprovação.'
       return next
 
     case 'NEW_PLAN_APPROVED':
       requireState(next, States.PLAN_DRAFTED)
       next.state = States.PLAN_APPROVED
+      next.actions.push({ tool: 'test_plans_create_test_plan', mutation: true })
+      next.prompt =
+        'Valide o ID e o objeto repository retornados por create_test_plan. Não popule nem prossiga se o repositório vinculado estiver ausente.'
+      return next
+
+    case 'NEW_PLAN_REPOSITORY_PROVISIONED':
+      requireState(next, States.PLAN_APPROVED)
+      requireProvisionedRepository(event)
+      next.state = States.PLAN_REPOSITORY_PROVISIONED
       next.context.planId = event.planId
+      next.context.provisionedRepository = {
+        url: event.repository.url,
+        owner: event.repository.owner,
+        name: event.repository.name,
+        defaultBranch: event.repository.defaultBranch
+      }
       next.actions.push(
-        { tool: 'test_plans_create_test_plan', mutation: true },
         { tool: 'test_plans_populate_test_plan', mutation: true },
         { tool: 'test_plans_get_test_plan', mutation: false }
       )
       next.prompt =
-        'Para implementar os testes, você quer usar um repositório de testes existente ou criar um novo?'
+        'Popule apenas o Test Plan retornado e verifique que o vínculo persistido corresponde ao repository.url.'
       return next
 
     case 'EXISTING_PLAN_SELECTED':
@@ -271,7 +288,15 @@ export function transition(workflow, event) {
       return next
 
     case 'TEST_REPOSITORY_SELECTED':
-      requireState(next, States.PLAN_APPROVED)
+      if (
+        ![States.PLAN_APPROVED, States.PLAN_REPOSITORY_PROVISIONED].includes(
+          next.state
+        )
+      ) {
+        throw new Error(
+          `Expected PLAN_APPROVED or PLAN_REPOSITORY_PROVISIONED, received ${next.state}.`
+        )
+      }
       next.context.testRepository = event.path
       next.state = States.TEST_REPOSITORY_SELECTED
       next.actions.push({
@@ -436,6 +461,21 @@ function requireNewPlanContext(event) {
   ) {
     throw new Error(
       'New Test Plan context requires a selected source, concrete evidence, scenarios, expected behavior, preconditions, and source-specific scope.'
+    )
+  }
+}
+
+function requireProvisionedRepository(event) {
+  if (
+    !String(event.planId || '').trim() ||
+    !event.repository ||
+    !isHttpUrl(event.repository.url) ||
+    !String(event.repository.owner || '').trim() ||
+    !String(event.repository.name || '').trim() ||
+    !String(event.repository.defaultBranch || '').trim()
+  ) {
+    throw new Error(
+      'Test Plan population requires the server-returned plan ID and linked repository URL, owner, name, and default branch.'
     )
   }
 }

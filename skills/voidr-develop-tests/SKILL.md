@@ -188,23 +188,31 @@ For a new Test Plan, use this mandatory sequence:
    Never request secret values.
 6. Show a `Resumo dos insumos do planejamento` containing the selected sources,
    concrete evidence, derived scenarios, expected behavior, assumptions, open
-   questions, and preconditions. Then offer exactly
-   `Confirmar insumos do planejamento` and end the response. The confirmation
-   must arrive in a new user message. Do not show a Test Plan draft yet.
+   questions, and preconditions. Then instruct the user to type exactly
+   `Confirmar insumos do planejamento` in the normal chat input and end the
+   response. Do not use `ask_user`, selectable options, or an agent-authored
+   message for this confirmation: tool-result selections do not reach the
+   runtime approval hook. The confirmation must arrive as a new user-authored
+   chat message. Do not show a Test Plan draft yet.
 7. Only after that exact confirmation, present a complete Test Plan draft
    containing at least one case with
    Arrange/Act/Assert.
-8. Ask the user to approve or revise that exact draft. Offer the exact approval
-   option `Aprovar este Test Plan` and end the response. A generic `Sim` is not
-   approval. The approval must arrive in a new user message after the complete
-   draft is visible.
+8. Ask the user to approve or revise that exact draft. Instruct the user to
+   type exactly `Aprovo este Test Plan` in the normal chat input and end the
+   response. Do not use `ask_user`, selectable options, or an agent-authored
+   message for this approval: tool-result selections do not reach the runtime
+   approval hook. A generic `Sim` is not approval. The approval must arrive as
+   a new user-authored chat message after the complete draft is visible.
 9. Only after explicit approval may the agent call
    `test_plans_create_test_plan` and `test_plans_populate_test_plan`.
    The Voidr MCP provisions and links a private GitHub repository as part of
    `test_plans_create_test_plan`. Capture the returned `repository` object,
    including `url`, `cloneUrl`, `defaultBranch`, `destination`, and `created`.
    Treat a missing repository as a failed creation flow and stop; do not create
-   a second unrelated repository locally.
+   a second unrelated repository locally. Do not call
+   `test_plans_populate_test_plan` after an incomplete create response and do
+   not retry creation with a different name or ID. The plugin bridge enforces
+   this ordering even if the model attempts to continue.
 
 The runtime hook blocks every `test_plans_*` mutation until planning inputs
 were explicitly confirmed and the Test Plan draft was explicitly approved. If

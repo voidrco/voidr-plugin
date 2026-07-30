@@ -180,9 +180,12 @@ After collecting the inputs, show a `Resumo dos insumos do planejamento` with:
 - assumptions and open questions;
 - data and technical preconditions.
 
-Offer the exact option `Confirmar insumos do planejamento` and end the response.
-This confirmation must arrive in a new user message. Do not render a Test Plan
-draft before it.
+Instruct the user to type exactly `Confirmar insumos do planejamento` in the
+normal chat input and end the response. Do not use `ask_user`, selectable
+options, or an agent-authored message for this confirmation: tool-result
+selections do not reach the runtime approval hook. This confirmation must
+arrive as a new user-authored chat message. Do not render a Test Plan draft
+before it.
 
 ### Gate 4: visible draft and approval
 
@@ -201,10 +204,13 @@ Only after `Confirmar insumos do planejamento`, create a visible draft with:
 - source or evidence for each case;
 - total case count.
 
-Ask the user to approve or revise the draft using the exact approval option
-`Aprovar este Test Plan`. A generic `Sim` is not approval. End the response and
-wait for that new user message. Do not persist a partial or unapproved plan. Do
-not call `test_plans_create_test_plan`,
+Ask the user to approve or revise the draft by typing exactly
+`Aprovo este Test Plan` in the normal chat input. Do not use `ask_user`,
+selectable options, or an agent-authored message for this approval:
+tool-result selections do not reach the runtime approval hook. A generic `Sim`
+is not approval. End the response and wait for that new user-authored chat
+message. Do not persist a partial or unapproved plan. Do not call
+`test_plans_create_test_plan`,
 `test_plans_create_module`, `test_plans_create_suite`,
 `test_plans_create_case`, or `test_plans_populate_test_plan` before this
 approval.
@@ -220,7 +226,11 @@ After approval:
    `repository` object. On the configured production backend, creation is successful only
    when the server also provisions or reuses and links a private GitHub
    repository. If `repository` is absent, stop and report the incomplete
-   server response; never compensate by inventing a repository URL.
+   server response; never compensate by inventing a repository URL. Do not
+   retry `create_test_plan` and do not call `populate_test_plan`: the server
+   rolls back newly created Test Plans and repositories when provisioning
+   fails, and the plugin bridge rejects population without a complete
+   repository-bearing creation response.
 3. Call `test_plans_populate_test_plan` with the approved structure.
 4. Read it back with `test_plans_get_test_plan`.
 5. Compare the persisted modules, suites, and case slugs to the approved

@@ -56,7 +56,9 @@ them, the plugin asks what inputs should support the plan: product code,
 documentation or requirements, business context supplied in chat, or a
 combination. It summarizes the evidence and requires the exact confirmation
 `Confirmar insumos do planejamento` before it may generate a draft. Persisting
-the draft still requires the separate approval `Aprovar Test Plan`.
+the draft still requires the separate approval `Aprovo este Test Plan`. Both
+phrases must be typed by the user in the normal chat input; `ask_user`
+selections do not satisfy these runtime gates.
 
 Before deploy, the selected test changes must be in a merged GitHub pull
 request. The plugin rebuilds from that exact merge commit, uploads a

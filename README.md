@@ -22,6 +22,10 @@ callback state before starting Auth0 and asks the user to choose an organization
 when necessary. The temporary user token is kept only in the local Node process
 and discarded after the account is created and validated.
 
+To run an already-automated plan without the development workflow, invoke:
+
+> `/copilot:voidr-create-execution`
+
 ## Local development
 
 ```sh

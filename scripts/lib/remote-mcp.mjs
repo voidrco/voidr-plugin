@@ -27,7 +27,7 @@ export class RemoteMcpClient {
       capabilities: {},
       clientInfo: {
         name: 'voidr-copilot-plugin',
-        version: '0.2.20'
+        version: '0.2.21'
       }
     })
     await this.notify('notifications/initialized', {})

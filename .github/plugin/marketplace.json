@@ -5,7 +5,7 @@
   },
   "metadata": {
     "description": "Official Voidr plugins for GitHub Copilot CLI",
-    "version": "0.2.20",
+    "version": "0.2.21",
     "pluginRoot": "."
   },
   "plugins": [
@@ -13,7 +13,7 @@
       "name": "copilot",
       "source": "./",
       "description": "Develop, deploy, execute, and analyze Voidr Playwright tests with MCP-backed workflows and explicit safety gates.",
-      "version": "0.2.20",
+      "version": "0.2.21",
       "author": {
         "name": "Voidr"
       },

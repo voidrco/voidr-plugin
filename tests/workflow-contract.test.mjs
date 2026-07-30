@@ -100,7 +100,8 @@ test('new plan requires approval before platform mutations', () => {
   })
   assert.equal(workflow.state, States.PLAN_DRAFTED)
   assert.deepEqual(workflow.actions, [])
-  assert.match(workflow.prompt, /Aprova/)
+  assert.match(workflow.prompt, /Aprovo este Test Plan/)
+  assert.match(workflow.prompt, /Não use ask_user/)
 
   workflow = transition(workflow, {
     type: 'NEW_PLAN_APPROVED',
@@ -109,11 +110,33 @@ test('new plan requires approval before platform mutations', () => {
   assert.equal(workflow.state, States.PLAN_APPROVED)
   assert.deepEqual(
     workflow.actions.map(action => action.tool),
-    [
-      'test_plans_create_test_plan',
-      'test_plans_populate_test_plan',
-      'test_plans_get_test_plan'
-    ]
+    ['test_plans_create_test_plan']
+  )
+
+  assert.throws(
+    () =>
+      transition(workflow, {
+        type: 'NEW_PLAN_REPOSITORY_PROVISIONED',
+        planId: '0123456789abcdef01234567',
+        repository: {}
+      }),
+    /linked repository/i
+  )
+
+  workflow = transition(workflow, {
+    type: 'NEW_PLAN_REPOSITORY_PROVISIONED',
+    planId: '0123456789abcdef01234567',
+    repository: {
+      url: 'https://github.com/voidrco/voidr-tp-login',
+      owner: 'voidrco',
+      name: 'voidr-tp-login',
+      defaultBranch: 'main'
+    }
+  })
+  assert.equal(workflow.state, States.PLAN_REPOSITORY_PROVISIONED)
+  assert.deepEqual(
+    workflow.actions.map(action => action.tool),
+    ['test_plans_populate_test_plan', 'test_plans_get_test_plan']
   )
 })
 

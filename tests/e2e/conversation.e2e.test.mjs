@@ -105,9 +105,24 @@ test('natural-language greenfield journey reaches deploy and execution through e
 
   workflow = transition(workflow, {
     type: 'NEW_PLAN_APPROVED',
-    planId: '0123456789abcdef01234567'
   })
-  assert.match(workflow.prompt, /repositório de testes existente.*novo/i)
+  assert.deepEqual(workflow.actions, [
+    { tool: 'test_plans_create_test_plan', mutation: true }
+  ])
+  workflow = transition(workflow, {
+    type: 'NEW_PLAN_REPOSITORY_PROVISIONED',
+    planId: '0123456789abcdef01234567',
+    repository: {
+      url: 'https://github.com/voidrco/voidr-tp-monitor',
+      owner: 'voidrco',
+      name: 'voidr-tp-monitor',
+      defaultBranch: 'main'
+    }
+  })
+  assert.deepEqual(
+    workflow.actions.map(action => action.tool),
+    ['test_plans_populate_test_plan', 'test_plans_get_test_plan']
+  )
 
   workflow = transition(workflow, {
     type: 'TEST_REPOSITORY_SELECTED',

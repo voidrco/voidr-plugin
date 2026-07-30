@@ -9,7 +9,13 @@ import {
 import { spawnSync } from 'node:child_process'
 import { basename, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { canonicalizePotentialPath, isInside } from './workspace.mjs'
+import {
+  assertOutsidePluginInstallation,
+  canonicalizePotentialPath,
+  findCheckoutByOrigin,
+  isInside,
+  normalizeGitHubRepositoryUrl
+} from './workspace.mjs'
 
 const moduleDir = dirname(fileURLToPath(import.meta.url))
 const templateRoot = resolve(moduleDir, '../../templates/test-repository')
@@ -39,6 +45,45 @@ export function bootstrapTestRepository({
   )
   if (!isInside(resolvedTarget, resolvedWorkspace)) {
     throw new Error('The new test repository must be inside the current workspace.')
+  }
+  assertOutsidePluginInstallation(resolvedTarget, 'test repository destination')
+
+  // The workspace scan, not the model's belief, decides whether a checkout of
+  // the linked repository already exists. A failed shell listing must never
+  // lead to a duplicate clone or bootstrap.
+  if (repositoryUrl) {
+    const existingCheckout = findCheckoutByOrigin(
+      resolvedWorkspace,
+      repositoryUrl
+    )
+    if (existingCheckout && existingCheckout !== resolvedTarget) {
+      return {
+        created: false,
+        reusedExistingCheckout: true,
+        target: existingCheckout,
+        repositoryUrl,
+        next: ['voidr_workspace_prepare_test_repository'],
+        note:
+          'A checkout of the linked repository already exists in the workspace. Use this path; do not clone or bootstrap again.'
+      }
+    }
+    if (
+      existingCheckout === resolvedTarget &&
+      existsSync(resolvedTarget) &&
+      readdirSync(resolvedTarget).some(entry =>
+        ['package.json', 'project.json', 'modules'].includes(entry)
+      )
+    ) {
+      return {
+        created: false,
+        reusedExistingCheckout: true,
+        target: resolvedTarget,
+        repositoryUrl,
+        next: ['voidr_workspace_prepare_test_repository'],
+        note:
+          'The destination is already a prepared checkout of the linked repository. Use it as-is.'
+      }
+    }
   }
   if (existsSync(resolvedTarget) && readdirSync(resolvedTarget).length > 0) {
     validateExistingProvisionedRepository({
@@ -148,15 +193,6 @@ function validateExistingProvisionedRepository({
       'The local origin does not match the repository provisioned by Voidr.'
     )
   }
-}
-
-function normalizeGitHubRepositoryUrl(value) {
-  return String(value)
-    .trim()
-    .replace(/^git@github\.com:/i, 'https://github.com/')
-    .replace(/\.git$/i, '')
-    .replace(/\/+$/g, '')
-    .toLowerCase()
 }
 
 function sanitizePackageName(value) {

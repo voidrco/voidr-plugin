@@ -292,7 +292,7 @@ assert(
   /Application name, application type, environment,[\s\S]*?routing metadata, never sufficient test-design\s+evidence/i.test(
     entrySkill
   ) &&
-    /Resumo dos insumos do planejamento[\s\S]*?Confirmar insumos do planejamento[\s\S]*?Do not show a Test Plan draft yet/i.test(
+    /Resumo dos insumos do planejamento[\s\S]*?type exactly[\s\S]*?Confirmar insumos do planejamento[\s\S]*?normal chat input[\s\S]*?Do not use `ask_user`[\s\S]*?Do not show a Test Plan draft yet/i.test(
       entrySkill
     ),
   'Entry skill must reject routing metadata as evidence and confirm collected inputs before drafting.'
@@ -301,7 +301,7 @@ assert(
   /Com base em quais insumos devo montar o Test Plan\?[\s\S]*?routing metadata[\s\S]*?never sufficient\s+evidence/i.test(
     testPlanSkill
   ) &&
-    /Confirmar insumos do planejamento[\s\S]*?new user message[\s\S]*?Do not render a Test Plan\s+draft before it/i.test(
+    /type exactly `Confirmar insumos do planejamento`[\s\S]*?normal chat input[\s\S]*?Do not use `ask_user`[\s\S]*?new user-authored\s+chat\s+message[\s\S]*?Do not render a Test Plan\s+draft\s+before it/i.test(
       testPlanSkill
     ),
   'Test Plan skill must enforce the planning-input evidence gate before its visible draft.'
@@ -346,10 +346,13 @@ assert(
   'Test Plan skill must verify and return the linked repository as a clickable URL.'
 )
 assert(
-  /exact approval[\s\S]*?Aprovar este Test Plan[\s\S]*?generic `Sim` is not[\s\S]*?new user message/i.test(
+  /type exactly `Aprovo este Test Plan`[\s\S]*?normal chat input[\s\S]*?Do not use `ask_user`[\s\S]*?generic `Sim` is not[\s\S]*?new user-authored chat message/i.test(
     entrySkill
-  ),
-  'Entry skill must require the exact post-draft approval message.'
+  ) &&
+    /type exactly[\s\S]*?`Aprovo este Test Plan`[\s\S]*?normal chat input[\s\S]*?Do not use `ask_user`[\s\S]*?tool-result selections do not reach the runtime approval hook/i.test(
+      testPlanSkill
+    ),
+  'Both Test Plan skills must require a user-typed post-draft approval message.'
 )
 assert(
   /user already named\s+a repository[\s\S]*?read-only inspection[\s\S]*?not ask permission again/i.test(
@@ -372,6 +375,37 @@ assert(
 assert(
   /explicitly load[\s\S]*?`\/voidr-implement-tests` skill/i.test(entrySkill),
   'Entry skill must explicitly load the implementation skill before code work.'
+)
+assert(
+  /voidr_workspace_prepare_test_repository[\s\S]*?install repository dependencies[\s\S]*?Service Account[\s\S]*?link[\s\S]*?project\.json[\s\S]*?scaffold[\s\S]*?env pull/i.test(
+    entrySkill
+  ),
+  'Entry skill must require the deterministic repository setup gate.'
+)
+assert(
+  /Never run `npx voidr login`[\s\S]*?Never run[\s\S]*?npm install[\s\S]*?npx voidr link[\s\S]*?npx voidr scaffold[\s\S]*?npx voidr env pull/i.test(
+    entrySkill
+  ),
+  'Entry skill must keep framework setup and Service Account injection inside the bridge.'
+)
+const implementationSkill = readFileSync(
+  join(root, 'skills/voidr-implement-tests/SKILL.md'),
+  'utf8'
+)
+assert(
+  /Before reading or editing a generated spec, call[\s\S]*?voidr_workspace_prepare_test_repository/i.test(
+    implementationSkill
+  ) &&
+    /dependency installation[\s\S]*?Service Account[\s\S]*?link[\s\S]*?scaffold[\s\S]*?environment pull/i.test(
+      implementationSkill
+    ),
+  'Implementation skill must block code work until repository preparation completes.'
+)
+assert(
+  /Never run `npx voidr login`[\s\S]*?Never ask for a Client ID or Client Secret[\s\S]*?never read or print `\.env` values/i.test(
+    implementationSkill
+  ),
+  'Implementation skill must protect CLI and environment credentials.'
 )
 assert(
   /If it returns `authenticated: false`, stop the current workflow and reply[\s\S]*?\/copilot voidr-connect/i.test(
@@ -429,6 +463,28 @@ assert(
     connectSkill
   ),
   'Connect skill must stop cleanly when its MCP tools are unavailable.'
+)
+
+const devSkill = readFileSync(join(root, 'skills/voidr-test/SKILL.md'), 'utf8')
+assert(
+  /Never expose platform vocabulary/i.test(devSkill) &&
+    /Do not say Test Plan, module,\s+suite, case slug, scaffold/i.test(devSkill),
+  'Dev skill must hide platform vocabulary from the user.'
+)
+assert(
+  /reply exactly `Criar testes`/i.test(devSkill) &&
+    /Do not use `ask_user` for this approval/i.test(devSkill),
+  'Dev skill must gate platform writes behind the typed “Criar testes” approval.'
+)
+assert(
+  /Infer the feature|current branch name/i.test(devSkill) &&
+    /default planning evidence/i.test(devSkill),
+  'Dev skill must infer the feature from the Git branch and diff.'
+)
+assert(
+  /One smoke run per user message/i.test(devSkill) &&
+    /Never auto-deploy, never auto-execute/i.test(devSkill),
+  'Dev skill must keep the smoke-stop and deploy/execution gates.'
 )
 
 const allRepositoryText = findFiles(root)

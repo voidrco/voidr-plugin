@@ -48,7 +48,25 @@ This build uses these production endpoints through the plugin MCP process:
   `https://api.voidr.co/v1/mcp`.
 
 Start Copilot from the workspace containing the relevant product and test
-repositories, then say:
+repositories.
+
+## Developer-first flow (recommended for feature developers)
+
+After finishing a feature, say:
+
+> Cria os testes da minha feature.
+
+The `/voidr-test` skill infers the feature from the current branch and diff,
+auto-selects the application and environment when only one exists, confirms
+everything on a single card, and shows plain-language scenarios. The only
+phrase the developer ever types is `Criar testes`. Test Plans, scaffolding,
+and repository provisioning happen silently with the same runtime guarantees;
+after the tests pass locally, the flow assists with PR, immutable publish, and
+platform execution through the existing gates.
+
+## Full control flow
+
+Say:
 
 > Quero desenvolver testes na Voidr.
 
@@ -61,7 +79,9 @@ them, the plugin asks what inputs should support the plan: product code,
 documentation or requirements, business context supplied in chat, or a
 combination. It summarizes the evidence and requires the exact confirmation
 `Confirmar insumos do planejamento` before it may generate a draft. Persisting
-the draft still requires the separate approval `Aprovar Test Plan`.
+the draft still requires the separate approval `Aprovo este Test Plan`. Both
+phrases must be typed by the user in the normal chat input; `ask_user`
+selections do not satisfy these runtime gates.
 
 Before deploy, the selected test changes must be in a merged GitHub pull
 request. The plugin rebuilds from that exact merge commit, uploads a
@@ -79,6 +99,14 @@ or read-only, the plugin stops before a mutation.
 Never paste a Service Account secret into the chat. Provision or rotate it in
 the Voidr platform, or run `/copilot voidr-connect` and complete the official
 browser login.
+
+`voidr_auth_status` reports the active `credentialStore` path and
+`credentialProfile`. For an isolated first-access test, set
+`VOIDR_CREDENTIAL_PROFILE=<name>` (which resolves to
+`~/.voidr/service-accounts.<name>.json`) or point
+`VOIDR_SERVICE_ACCOUNTS_PATH` at a dedicated file. Production installs must
+keep the default store; `npm run validate` rejects a profile configured in
+`.mcp.json`.
 
 ## Security
 

@@ -63,6 +63,14 @@ Never substitute localhost for the selected Voidr `applicationUrl`.
 
 ## Existing plan
 
+If the user already supplied an explicit Test Plan ID, call
+`test_plans_get_test_plan` with that exact ID. If it is absent from the current
+Voidr environment, stop and report that exact result. Do not list plans, search
+for a similarly named plan, or substitute another ID. Continue only after a
+new user-authored message explicitly selects a different Test Plan.
+
+Otherwise:
+
 1. Call `test_plans_list_test_plans` for the selected application.
 2. Use `ask_user` when available to show each returned plan name, status, and
    test count as selectable options. Keep IDs internally and never ask the user
@@ -72,6 +80,8 @@ Never substitute localhost for the selected Voidr `applicationUrl`.
 5. Repeat the exact selected case slugs and wait for confirmation.
 
 Never resolve the plan from `project.json`.
+Never silently replace a Test Plan after any not-found, authorization, or
+environment mismatch response.
 
 ## New plan
 
@@ -142,6 +152,12 @@ feature:
 2. Derive candidate critical scenarios and observable expected behavior.
 3. Derive technical preconditions and environment-variable names, but never
    read or request secret values.
+   Never open `.env`, `.env.*`, credential stores, source fixtures, or source
+   files containing literal accounts, passwords, tokens, personal names,
+   emails, CPF/CNPJ, phone numbers, or other identifiers. If a relevant file
+   is blocked by policy, continue from routes, schemas, public interfaces,
+   errors, and existing placeholder names. Never quote, summarize, echo, or
+   display a literal value discovered in source, even temporarily.
 4. Cite files or symbols as evidence and label every conclusion as
    `code-derived` or `user-confirmed`.
 5. Treat business priority, intended policy, and explicit exclusions as
@@ -180,9 +196,18 @@ After collecting the inputs, show a `Resumo dos insumos do planejamento` with:
 - assumptions and open questions;
 - data and technical preconditions.
 
-Offer the exact option `Confirmar insumos do planejamento` and end the response.
-This confirmation must arrive in a new user message. Do not render a Test Plan
-draft before it.
+Represent every test datum only as `{{env.VARIABLE_NAME}}`. Never include an
+`Exemplo`, `Sample`, or default-value column and never invent sample emails,
+passwords, tokens, CPF/CNPJ, phone numbers, personal names, or URLs. A
+placeholder table may contain only the placeholder name and a non-sensitive
+description.
+
+Instruct the user to type exactly `Confirmar insumos do planejamento` in the
+normal chat input and end the response. Do not use `ask_user`, selectable
+options, or an agent-authored message for this confirmation: tool-result
+selections do not reach the runtime approval hook. This confirmation must
+arrive as a new user-authored chat message. Do not render a Test Plan draft
+before it.
 
 ### Gate 4: visible draft and approval
 
@@ -201,10 +226,13 @@ Only after `Confirmar insumos do planejamento`, create a visible draft with:
 - source or evidence for each case;
 - total case count.
 
-Ask the user to approve or revise the draft using the exact approval option
-`Aprovar este Test Plan`. A generic `Sim` is not approval. End the response and
-wait for that new user message. Do not persist a partial or unapproved plan. Do
-not call `test_plans_create_test_plan`,
+Ask the user to approve or revise the draft by typing exactly
+`Aprovo este Test Plan` in the normal chat input. Do not use `ask_user`,
+selectable options, or an agent-authored message for this approval:
+tool-result selections do not reach the runtime approval hook. A generic `Sim`
+is not approval. End the response and wait for that new user-authored chat
+message. Do not persist a partial or unapproved plan. Do not call
+`test_plans_create_test_plan`,
 `test_plans_create_module`, `test_plans_create_suite`,
 `test_plans_create_case`, or `test_plans_populate_test_plan` before this
 approval.
@@ -213,6 +241,12 @@ The runtime hook blocks all Test Plan mutations without both the planning-input
 confirmation and this draft approval. If a mutation is denied, do not retry
 with another create or update tool; return to the missing visible gate.
 
+Before the linked test repository has been selected and prepared, do not
+create, edit, delete, or rewrite any local file, including memory documents,
+policy files, README files, `.env.example`, fixtures, product source, or the
+test repository. Research and the visible draft are read-only conversation
+steps.
+
 After approval:
 
 1. Call `test_plans_create_test_plan`.
@@ -220,7 +254,11 @@ After approval:
    `repository` object. On the configured production backend, creation is successful only
    when the server also provisions or reuses and links a private GitHub
    repository. If `repository` is absent, stop and report the incomplete
-   server response; never compensate by inventing a repository URL.
+   server response; never compensate by inventing a repository URL. Do not
+   retry `create_test_plan` and do not call `populate_test_plan`: the server
+   rolls back newly created Test Plans and repositories when provisioning
+   fails, and the plugin bridge rejects population without a complete
+   repository-bearing creation response.
 3. Call `test_plans_populate_test_plan` with the approved structure.
 4. Read it back with `test_plans_get_test_plan`.
 5. Compare the persisted modules, suites, and case slugs to the approved

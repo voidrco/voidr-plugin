@@ -66,6 +66,174 @@ test('falls through for a safe Voidr read tool', () => {
   assert.deepEqual(output, {})
 })
 
+test('ignores skill context when recording user approval and environment choices', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
+  const sessionId = 'ignore-skill-context'
+  const now = Date.now()
+  const skillContext = `<skill-context name="voidr-develop-tests">
+The workflow example says “Aprovo este Test Plan”.
+Example environment: produção — producao — https://prod.example.test
+</skill-context>`
+
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now,
+      prompt: `${skillContext}\nQuero desenvolver testes na Voidr`,
+      transformedPrompt: `${skillContext}\nQuero desenvolver testes na Voidr`
+    },
+    dataRoot
+  )
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 1,
+      prompt: `${skillContext}\nUsar Test Plan existente`,
+      transformedPrompt: `${skillContext}\nUsar Test Plan existente`
+    },
+    dataRoot
+  )
+
+  const output = runHook(
+    {
+      sessionId,
+      cwd: process.cwd(),
+      toolName: 'voidr-test_plans_update_case',
+      toolArgs: { testPlanId: 'plan-1' }
+    },
+    dataRoot
+  )
+  assert.equal(output.permissionDecision, 'deny')
+  assert.match(output.permissionDecisionReason, /visible draft/i)
+})
+
+test('pins an explicitly selected existing Test Plan and blocks silent substitution', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
+  const sessionId = 'selected-test-plan-identity'
+  const firstId = '111111111111111111111111'
+  const secondId = '222222222222222222222222'
+  const now = Date.now()
+
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now,
+      prompt:
+        `Quero desenvolver testes na Voidr. Usar Test Plan existente ${firstId}.`,
+      transformedPrompt:
+        `Quero desenvolver testes na Voidr. Usar Test Plan existente ${firstId}.`
+    },
+    dataRoot
+  )
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId,
+        cwd: process.cwd(),
+        toolName: 'voidr-test_plans_get_test_plan',
+        toolArgs: { testPlanId: firstId }
+      },
+      dataRoot
+    ),
+    {}
+  )
+
+  for (const request of [
+    {
+      toolName: 'voidr-test_plans_list_test_plans',
+      toolArgs: { applicationId: 'application-1' }
+    },
+    {
+      toolName: 'voidr-test_plans_get_test_plan',
+      toolArgs: { testPlanId: secondId }
+    },
+    {
+      toolName: 'voidr-voidr_workspace_prepare_test_repository',
+      toolArgs: {
+        testPlanId: secondId,
+        repositoryPath: '/tmp/test-repository'
+      }
+    }
+  ]) {
+    const output = runHook(
+      {
+        sessionId,
+        cwd: process.cwd(),
+        ...request
+      },
+      dataRoot
+    )
+    assert.equal(output.permissionDecision, 'deny')
+    assert.match(output.permissionDecisionReason, /Never|Do not substitute/i)
+  }
+
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 1,
+      prompt: `Usar Test Plan existente ${secondId}`,
+      transformedPrompt: `Usar Test Plan existente ${secondId}`
+    },
+    dataRoot
+  )
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId,
+        cwd: process.cwd(),
+        toolName: 'voidr-test_plans_get_test_plan',
+        toolArgs: { testPlanId: secondId }
+      },
+      dataRoot
+    ),
+    {}
+  )
+})
+
+test('pins the first Test Plan read when the UI omits the prompt-state hook', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
+  const sessionId = 'selected-test-plan-without-prompt-hook'
+  const firstId = 'aaaaaaaaaaaaaaaaaaaaaaaa'
+  const secondId = 'bbbbbbbbbbbbbbbbbbbbbbbb'
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId,
+        cwd: process.cwd(),
+        toolName: 'voidr-test_plans_get_test_plan',
+        toolArgs: { testPlanId: firstId }
+      },
+      dataRoot
+    ),
+    {}
+  )
+
+  for (const request of [
+    {
+      toolName: 'voidr-test_plans_list_test_plans',
+      toolArgs: { applicationId: 'application-1' }
+    },
+    {
+      toolName: 'voidr-test_plans_get_test_plan',
+      toolArgs: { testPlanId: secondId }
+    }
+  ]) {
+    const output = runHook(
+      {
+        sessionId,
+        cwd: process.cwd(),
+        ...request
+      },
+      dataRoot
+    )
+    assert.equal(output.permissionDecision, 'deny')
+    assert.match(output.permissionDecisionReason, /silently|substitute/i)
+  }
+})
+
 test('blocks platform and codebase tools until plan mode is selected', () => {
   const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
   const now = Date.now()
@@ -252,6 +420,24 @@ test('blocks Test Plan writes until inputs and draft are explicitly approved', (
   assert.equal(output.permissionDecision, 'deny')
   assert.match(output.permissionDecisionReason, /Confirmar insumos/i)
 
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId,
+        cwd: process.cwd(),
+        toolName: 'ask_user',
+        toolArgs: {
+          selectedAnswer: 'Confirmar insumos do planejamento'
+        }
+      },
+      dataRoot
+    ),
+    {}
+  )
+  output = runHook(mutation, dataRoot)
+  assert.equal(output.permissionDecision, 'deny')
+  assert.match(output.permissionDecisionReason, /Confirmar insumos/i)
+
   submitPrompt(
     {
       sessionId,
@@ -273,6 +459,24 @@ test('blocks Test Plan writes until inputs and draft are explicitly approved', (
       transformedPrompt: 'Confirmar insumos do planejamento'
     },
     dataRoot
+  )
+  output = runHook(mutation, dataRoot)
+  assert.equal(output.permissionDecision, 'deny')
+  assert.match(output.permissionDecisionReason, /Aprovo este Test Plan/i)
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId,
+        cwd: process.cwd(),
+        toolName: 'ask_user',
+        toolArgs: {
+          selectedAnswer: 'Aprovo este Test Plan'
+        }
+      },
+      dataRoot
+    ),
+    {}
   )
   output = runHook(mutation, dataRoot)
   assert.equal(output.permissionDecision, 'deny')
@@ -544,6 +748,9 @@ test('denies legacy mutable deploy commands but permits immutable candidates', (
     assert.match(output.permissionDecisionReason, /immutable latest release gate/i)
   }
 
+  // Since BUG-021 no Voidr CLI invocation leaves the agent shell at all —
+  // deploy-candidate runs inside the bridge, which does not pass through
+  // this hook.
   const candidate = runHook({
     sessionId: 'immutable-candidate',
     cwd: process.cwd(),
@@ -552,7 +759,11 @@ test('denies legacy mutable deploy commands but permits immutable candidates', (
       command: 'npx --no-install voidr deploy-candidate --json'
     }
   })
-  assert.deepEqual(candidate, {})
+  assert.equal(candidate.permissionDecision, 'deny')
+  assert.match(
+    candidate.permissionDecisionReason,
+    /never run the Voidr CLI or Playwright from the terminal/i
+  )
 })
 
 test('denies direct HTTP calls to process-dispatch endpoints', () => {
@@ -610,7 +821,7 @@ test('restricts edit paths after a test repository is selected', () => {
       sessionId: 'repo-boundary',
       cwd: workspace,
       toolName: 'voidr-voidr_workspace_select_test_repository',
-      toolArgs: { path: testRepo }
+      toolArgs: { path: testRepo, workspaceRoot: workspace }
     },
     dataRoot
   )
@@ -658,6 +869,450 @@ test('restricts edit paths after a test repository is selected', () => {
   assert.equal(patchOutside.permissionDecision, 'deny')
 })
 
+test('blocks repository setup until a listed environment is explicitly selected', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-workspace-'))
+  const testRepo = join(workspace, 'tests-e2e')
+  mkdirSync(testRepo)
+  const sessionId = 'explicit-environment-gate'
+  const now = Date.now()
+
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now,
+      prompt: 'Quero implementar testes na Voidr',
+      transformedPrompt: 'Quero implementar testes na Voidr'
+    },
+    dataRoot
+  )
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 1,
+      prompt: 'Usar Test Plan existente',
+      transformedPrompt: 'Usar Test Plan existente'
+    },
+    dataRoot
+  )
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId,
+        cwd: workspace,
+        toolName: 'voidr-applications_list_environments',
+        toolArgs: { applicationId: 'app-1' }
+      },
+      dataRoot
+    ),
+    {}
+  )
+
+  let output = runHook(
+    {
+      sessionId,
+      cwd: workspace,
+      toolName: 'voidr-voidr_workspace_select_test_repository',
+      toolArgs: { path: testRepo }
+    },
+    dataRoot
+  )
+  assert.equal(output.permissionDecision, 'deny')
+  assert.match(output.permissionDecisionReason, /explicitly select/i)
+
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 2,
+      prompt: 'produção — producao — https://prod.example.test',
+      transformedPrompt: 'produção — producao — https://prod.example.test'
+    },
+    dataRoot
+  )
+
+  output = runHook(
+    {
+      sessionId,
+      cwd: workspace,
+      toolName: 'voidr-voidr_workspace_prepare_test_repository',
+      toolArgs: {
+        repositoryPath: testRepo,
+        applicationId: 'app-1',
+        environmentSlug: 'staging'
+      }
+    },
+    dataRoot
+  )
+  assert.equal(output.permissionDecision, 'deny')
+  assert.match(output.permissionDecisionReason, /producao/i)
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId,
+        cwd: workspace,
+        toolName: 'voidr-voidr_workspace_prepare_test_repository',
+        toolArgs: {
+          repositoryPath: testRepo,
+          applicationId: 'app-1',
+          environmentSlug: 'producao',
+          workspaceRoot: workspace
+        }
+      },
+      dataRoot
+    ),
+    {}
+  )
+})
+
+test('blocks local writes before a test repository is selected', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-workspace-'))
+  const sessionId = 'pre-selection-write-gate'
+  const now = Date.now()
+
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now,
+      prompt: 'Quero desenvolver testes na Voidr',
+      transformedPrompt: 'Quero desenvolver testes na Voidr'
+    },
+    dataRoot
+  )
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 1,
+      prompt: 'Criar novo Test Plan',
+      transformedPrompt: 'Criar novo Test Plan'
+    },
+    dataRoot
+  )
+
+  const output = runHook(
+    {
+      sessionId,
+      cwd: workspace,
+      toolName: 'replace_string_in_file',
+      toolArgs: {
+        path: join(workspace, '.env.example'),
+        old_str: 'OLD',
+        new_str: 'NEW'
+      }
+    },
+    dataRoot
+  )
+  assert.equal(output.permissionDecision, 'deny')
+  assert.match(
+    output.permissionDecisionReason,
+    /before the linked test repository is explicitly selected/i
+  )
+})
+
+test('allows official Test Plan tools before a local repository is selected', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-workspace-'))
+  const sessionId = 'pre-selection-platform-write'
+  const now = Date.now()
+
+  for (const [offset, prompt] of [
+    [0, 'Quero desenvolver testes na Voidr'],
+    [1, 'Criar novo Test Plan'],
+    [2, 'Confirmar insumos do planejamento'],
+    [3, 'Aprovo este Test Plan']
+  ]) {
+    submitPrompt(
+      {
+        sessionId,
+        timestamp: now + offset,
+        prompt,
+        transformedPrompt: prompt
+      },
+      dataRoot
+    )
+  }
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId,
+        cwd: workspace,
+        toolName: 'voidr-test_plans_create_test_plan',
+        toolArgs: {
+          name: 'Login',
+          description: 'Use {{env.TEST_EMAIL}} and {{env.TEST_PASSWORD}}.'
+        }
+      },
+      dataRoot
+    ),
+    {}
+  )
+})
+
+test('blocks sensitive product reads during Test Plan research', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-workspace-'))
+  const productRepo = join(workspace, 'product')
+  const sessionId = 'sensitive-product-read'
+
+  mkdirSync(productRepo)
+  writeFileSync(
+    join(productRepo, 'routes.ts'),
+    "export const loginRoute = '/login'\n",
+    'utf8'
+  )
+  writeFileSync(
+    join(productRepo, 'auth.ts'),
+    "const account = { email: 'qa.user@example.test', password: 'not-a-real-password' }\n",
+    'utf8'
+  )
+  writeFileSync(
+    join(productRepo, '.env.example'),
+    'TEST_EMAIL=\nTEST_PASSWORD=\n',
+    'utf8'
+  )
+
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: Date.now(),
+      prompt: 'Quero desenvolver testes na Voidr',
+      transformedPrompt: 'Quero desenvolver testes na Voidr'
+    },
+    dataRoot
+  )
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: Date.now() + 1,
+      prompt: 'Criar novo Test Plan',
+      transformedPrompt: 'Criar novo Test Plan'
+    },
+    dataRoot
+  )
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId,
+        cwd: workspace,
+        toolName: 'read_file',
+        toolArgs: { path: join(productRepo, 'routes.ts') }
+      },
+      dataRoot
+    ),
+    {}
+  )
+
+  const sensitive = runHook(
+    {
+      sessionId,
+      cwd: workspace,
+      toolName: 'read_file',
+      toolArgs: { path: join(productRepo, 'auth.ts') }
+    },
+    dataRoot
+  )
+  assert.equal(sensitive.permissionDecision, 'deny')
+  assert.match(
+    sensitive.permissionDecisionReason,
+    /literal credentials or personal identifiers/i
+  )
+
+  const env = runHook(
+    {
+      sessionId,
+      cwd: workspace,
+      toolName: 'read_file',
+      toolArgs: { path: join(productRepo, '.env.example') }
+    },
+    dataRoot
+  )
+  assert.equal(env.permissionDecision, 'deny')
+  assert.match(env.permissionDecisionReason, /never read .env files/i)
+})
+
+test('blocks literal sensitive data in Test Plan writes', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-workspace-'))
+  const sessionId = 'platform-sensitive-content'
+  const now = Date.now()
+
+  for (const [offset, prompt] of [
+    [0, 'Quero desenvolver testes na Voidr'],
+    [1, 'Criar novo Test Plan'],
+    [2, 'Confirmar insumos do planejamento'],
+    [3, 'Aprovo este Test Plan']
+  ]) {
+    submitPrompt(
+      {
+        sessionId,
+        timestamp: now + offset,
+        prompt,
+        transformedPrompt: prompt
+      },
+      dataRoot
+    )
+  }
+
+  const output = runHook(
+    {
+      sessionId,
+      cwd: workspace,
+      toolName: 'voidr-test_plans_create_test_plan',
+      toolArgs: {
+        name: 'Login',
+        description:
+          'Authenticate qa.user@example.test with password not-a-real-password.'
+      }
+    },
+    dataRoot
+  )
+  assert.equal(output.permissionDecision, 'deny')
+  assert.match(
+    output.permissionDecisionReason,
+    /literal credential or personal identifier/i
+  )
+})
+
+test('stops automatic diagnosis, edits, and retries after the first smoke call', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-workspace-'))
+  const sessionId = 'post-smoke-stop'
+  const now = Date.now()
+
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now,
+      prompt: 'Quero implementar testes na Voidr',
+      transformedPrompt: 'Quero implementar testes na Voidr'
+    },
+    dataRoot
+  )
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 1,
+      prompt: 'Usar Test Plan existente',
+      transformedPrompt: 'Usar Test Plan existente'
+    },
+    dataRoot
+  )
+  runHook(
+    {
+      sessionId,
+      cwd: workspace,
+      toolName: 'voidr-applications_list_environments',
+      toolArgs: { applicationId: 'app-1' }
+    },
+    dataRoot
+  )
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 2,
+      prompt: 'produção — producao — https://prod.example.test',
+      transformedPrompt: 'produção — producao — https://prod.example.test'
+    },
+    dataRoot
+  )
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId,
+        cwd: workspace,
+        toolName: 'voidr-voidr_smoke_build',
+        toolArgs: { repositoryPath: workspace }
+      },
+      dataRoot
+    ),
+    {}
+  )
+
+  for (const request of [
+    {
+      toolName: 'view',
+      toolArgs: { path: join(workspace, 'playwright.config.js') }
+    },
+    {
+      toolName: 'edit',
+      toolArgs: {
+        path: join(workspace, 'test.spec.js'),
+        new_str: 'test("retry", () => {})'
+      }
+    },
+    {
+      toolName: 'voidr-voidr_smoke_build',
+      toolArgs: { repositoryPath: workspace }
+    }
+  ]) {
+    const output = runHook(
+      { sessionId, cwd: workspace, ...request },
+      dataRoot
+    )
+    assert.equal(output.permissionDecision, 'deny')
+    assert.match(output.permissionDecisionReason, /after voidr_smoke_build/i)
+  }
+
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 3,
+      prompt: 'Investigue e corrija a falha do smoke',
+      transformedPrompt: 'Investigue e corrija a falha do smoke'
+    },
+    dataRoot
+  )
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId,
+        cwd: workspace,
+        toolName: 'view',
+        toolArgs: { path: join(workspace, 'playwright.config.js') }
+      },
+      dataRoot
+    ),
+    {}
+  )
+})
+
+test('blocks unsafe literals and frontend-derived API origins in spec edits', () => {
+  const unsafeEdits = [
+    {
+      new_str:
+        "const email = process.env.TEST_EMAIL || 'person@example.test';"
+    },
+    {
+      new_str: "await page.fill('#email', 'person@example.test');"
+    },
+    {
+      new_str:
+        "const apiUrl = window.location.origin; await request.get(`${apiUrl}/consultas/123`);"
+    },
+    {
+      new_str:
+        "const apiBase = baseURL; await request.get(`${apiBase}/auth/login`);"
+    }
+  ]
+
+  for (const [index, toolArgs] of unsafeEdits.entries()) {
+    const output = runHook({
+      sessionId: `unsafe-spec-${index}`,
+      cwd: process.cwd(),
+      toolName: 'edit',
+      toolArgs: {
+        path: resolve(process.cwd(), 'modules/login/test.spec.js'),
+        ...toolArgs
+      }
+    })
+    assert.equal(output.permissionDecision, 'deny')
+  }
+})
 function transcriptEntry(type, data) {
   return JSON.stringify({ type, data })
 }

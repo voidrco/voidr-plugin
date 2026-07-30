@@ -48,8 +48,10 @@
     "executions_create_execution"
   ],
   "writeLocalTools": [
+    "voidr_workspace_prepare_test_repository",
     "voidr_workspace_scaffold_test_cases",
-    "voidr_workspace_build_test_repository",
+    "voidr_smoke_build",
+    "voidr_workspace_publish_tests",
     "voidr_release_deploy_merged_pr"
   ],
   "localTools": [
@@ -57,10 +59,14 @@
     "voidr_auth_select_organization",
     "voidr_auth_login",
     "voidr_workspace_inspect",
+    "voidr_workspace_git_context",
     "voidr_workspace_bootstrap_test_repository",
     "voidr_workspace_select_test_repository",
+    "voidr_workspace_prepare_test_repository",
     "voidr_workspace_scaffold_test_cases",
-    "voidr_workspace_build_test_repository",
+    "voidr_smoke_build",
+    "voidr_release_inspect",
+    "voidr_workspace_publish_tests",
     "voidr_release_deploy_merged_pr"
   ],
   "forbiddenTools": [
@@ -88,6 +94,15 @@
     "voidr deploy-latest",
     "npm run voidr:deploy",
     "npm run voidr:deploy-latest"
+  ],
+  "forbiddenDependencyShellFragments": [
+    "npm config set",
+    "yarn config set",
+    "pnpm config set",
+    "npm cache clean",
+    "yarn cache clean",
+    "pnpm store prune",
+    "--legacy-peer-deps"
   ],
   "forbiddenRequestFragments": [
     "/agent-jobs/trigger",

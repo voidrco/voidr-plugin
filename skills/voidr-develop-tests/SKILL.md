@@ -8,6 +8,28 @@ description: Inicia e orquestra o desenvolvimento de testes na Voidr. Use SEMPRE
 Treat this as a gated workflow. Never call a tool that starts a Hive process,
 including indirectly through a generic or batch tool.
 
+Selection contract: every choice in this workflow — plan mode, application,
+environment, Test Plan, repository, planning inputs — must be rendered with
+the native `ask_user` selectable options whenever that control is available.
+Present free-text lists only when `ask_user` is genuinely unavailable, and say
+so. The only exceptions are the two runtime gates that require a typed chat
+message: `Confirmar insumos do planejamento` and `Aprovo este Test Plan`.
+
+Secrets contract: never reproduce credentials, emails, tokens, CPF/CNPJ, or
+other personal identifiers found in product code, documentation, or `.env`
+files — not in chat, not in summaries, not in drafts, not in specs. Record
+only the environment variable names as `{{env.VARIABLE_NAME}}` placeholders.
+Never read or print `.env` contents through any tool or terminal command; if
+a value was already exposed, recommend rotating it.
+
+Data provenance contract: every platform fact — application, environment,
+Test Plan, module/suite/case slug, URL, execution status — exists only when a
+Voidr tool returned it in this session. Never infer platform data from folder
+names, file contents, chat history, memory, or previous conversations. When a
+value is unknown, call the corresponding read tool first. The bridge blocks
+any call that references an applicationId, environment slug, or case slug the
+platform never returned.
+
 ## 1. Establish intent before tools
 
 For a new conversation, the first response must ask exactly one decision:
@@ -177,6 +199,11 @@ For a new Test Plan, use this mandatory sequence:
      existing tests, and environment-variable names. If the user already named
      a repository, treat that as authorization for read-only inspection and do
      not ask permission again.
+     Never open `.env`, `.env.*`, credential stores, or any source/fixture
+     containing literal accounts, passwords, tokens, personal names, emails,
+     CPF/CNPJ, phone numbers, or other identifiers. Never quote or summarize
+     such values. Continue from routes, schemas, errors, public interfaces, and
+     placeholder names when a sensitive file is blocked.
    - For documentation, ask the user to attach it, paste it, or provide an
      exact accessible path or URL. Read the actual content before deriving a
      scenario.
@@ -188,28 +215,50 @@ For a new Test Plan, use this mandatory sequence:
    Never request secret values.
 6. Show a `Resumo dos insumos do planejamento` containing the selected sources,
    concrete evidence, derived scenarios, expected behavior, assumptions, open
-   questions, and preconditions. Then offer exactly
-   `Confirmar insumos do planejamento` and end the response. The confirmation
-   must arrive in a new user message. Do not show a Test Plan draft yet.
+   questions, and preconditions. Then instruct the user to type exactly
+   `Confirmar insumos do planejamento` in the normal chat input and end the
+   response. Do not use `ask_user`, selectable options, or an agent-authored
+   message for this confirmation: tool-result selections do not reach the
+   runtime approval hook. The confirmation must arrive as a new user-authored
+   chat message. Do not show a Test Plan draft yet. Show test data only as
+   `{{env.VARIABLE_NAME}}`; never add example/sample/default values or literal
+   emails, passwords, tokens, CPF/CNPJ, phone numbers, personal names, or URLs.
 7. Only after that exact confirmation, present a complete Test Plan draft
    containing at least one case with
    Arrange/Act/Assert.
-8. Ask the user to approve or revise that exact draft. Offer the exact approval
-   option `Aprovar este Test Plan` and end the response. A generic `Sim` is not
-   approval. The approval must arrive in a new user message after the complete
-   draft is visible.
+8. Ask the user to approve or revise that exact draft. Instruct the user to
+   type exactly `Aprovo este Test Plan` in the normal chat input and end the
+   response. Do not use `ask_user`, selectable options, or an agent-authored
+   message for this approval: tool-result selections do not reach the runtime
+   approval hook. A generic `Sim` is not approval. The approval must arrive as
+   a new user-authored chat message after the complete draft is visible.
 9. Only after explicit approval may the agent call
    `test_plans_create_test_plan` and `test_plans_populate_test_plan`.
    The Voidr MCP provisions and links a private GitHub repository as part of
    `test_plans_create_test_plan`. Capture the returned `repository` object,
    including `url`, `cloneUrl`, `defaultBranch`, `destination`, and `created`.
    Treat a missing repository as a failed creation flow and stop; do not create
-   a second unrelated repository locally.
+   a second unrelated repository locally. Do not call
+   `test_plans_populate_test_plan` after an incomplete create response and do
+   not retry creation with a different name or ID. The plugin bridge enforces
+   this ordering even if the model attempts to continue.
+10. When `test_plans_create_test_plan` fails, stop immediately. Show the user
+    the exact error returned by the tool, then offer only two choices: retry
+    the same creation, or cancel. Never call `test_plans_list_test_plans`,
+    never pick an existing Test Plan, and never switch from new to existing
+    mode after a creation failure. Switching modes requires the user to
+    explicitly say `Usar Test Plan existente` in a new message. The bridge and
+    the runtime hook both block the listing fallback.
 
 The runtime hook blocks every `test_plans_*` mutation until planning inputs
 were explicitly confirmed and the Test Plan draft was explicitly approved. If
 blocked, do not retry or switch to lower-level create/update tools. Return to
 the missing visible gate.
+
+Until the platform-linked test repository is selected and prepared, do not
+create, edit, delete, or rewrite any local file. This includes memory/policy
+documents, README files, `.env.example`, fixtures, product source, and test
+files. Product analysis and Test Plan drafting are read-only.
 
 Do not infer a feature from the application name, product repository, route,
 README, or existing source code. Do not create an empty DRAFT and fill it later.
@@ -220,6 +269,10 @@ For an existing Test Plan, follow `/voidr-test-plan` in select mode. Call
 `test_plans_list_test_plans` for the selected application, then use `ask_user`
 when available to present the returned plan names as selectable options. Keep
 the selected ID internally and never ask the user to type a `testPlanId`.
+When the user already supplied an explicit Test Plan ID, read only that exact
+ID. If it is not available in the current Voidr environment, stop and ask for
+a new explicit selection. Never list plans as a fallback or silently replace
+the selected plan with a similarly named one.
 
 Do not proceed until the plan ID, application ID, organization ID, and exact
 case scope are visible to the user.
@@ -239,17 +292,58 @@ created or reused and linked the correct repository.
 2. Call `voidr_workspace_inspect` and look only for a checkout whose Git
    `origin` matches the returned repository URL. A matching checkout may be
    offered for confirmation; a folder with a similar name is not a match.
+   Never use terminal `find` or `ls` to decide whether a checkout exists — a
+   failed or empty shell command is not evidence of absence; the workspace
+   tools and `voidr_workspace_bootstrap_test_repository` (which scans for a
+   matching origin and returns `reusedExistingCheckout`) are the only source
+   of truth. Always pass `workspaceRoot` with the absolute path of the open
+   VS Code workspace folder on `voidr_workspace_inspect`,
+   `voidr_workspace_select_test_repository`, and
+   `voidr_workspace_bootstrap_test_repository`; if a tool reports it cannot
+   resolve the workspace root, repeat the call with the exact path from the
+   error or hook message. Never inspect, clone, select, or create a
+   repository inside the plugin installation directory
+   (`installed-plugins`); the runtime hook blocks it.
 3. If no matching checkout exists, ask for the exact local destination inside
    the workspace. Show the exact `git clone` source and destination and obtain
    confirmation before cloning.
 4. Clone only the server-returned `cloneUrl` or `url`. Do not construct or
    guess a GitHub URL.
-5. Call `voidr_workspace_bootstrap_test_repository` with
+5. Inspect the cloned checkout. If the provisioned repository already contains
+   its Voidr Playwright package and configuration, keep those files. Only when
+   the checkout is empty of test-project files, call
+   `voidr_workspace_bootstrap_test_repository` with
    `allowExistingGitRepository: true` and the exact server-returned
    `repositoryUrl`. This tool verifies the local `origin` and refuses to
-   overwrite existing test-project files.
-6. Run `npm install` inside that checkout, then call
-   `voidr_workspace_select_test_repository`.
+   overwrite existing files.
+6. Explicitly load the `/voidr-implement-tests` skill before any setup or code
+   work. Then call `voidr_workspace_prepare_test_repository` exactly once with:
+   - the confirmed checkout path;
+   - selected organization ID;
+   - selected application ID;
+   - selected Test Plan ID;
+   - selected Voidr environment `slug`;
+   - the exact server-returned linked repository URL as `repositoryUrl`;
+   - the exact approved case slugs.
+7. Treat that single tool as the mandatory setup gate. It performs this exact
+   sequence:
+   1. install repository dependencies;
+   2. resolve Voidr Playwright CLI authentication by injecting the plugin's
+      selected Service Account into child processes;
+   3. run non-interactive `voidr link` only when `project.json` is absent;
+   4. run `voidr scaffold` for the exact platform case slugs;
+   5. run `voidr env pull` for the selected platform environment.
+8. Never run `npx voidr login`. The plugin Service Account is the CLI
+   authentication source, and its secret must remain model-invisible. Never run
+   `npm install`, `npx voidr link`, `npx voidr scaffold`, or
+   `npx voidr env pull` separately from the agent shell.
+9. Continue only when the preparation result reports all setup steps complete,
+   `interactiveLoginExecuted: false`, at least one generated spec, and the
+   environment pull complete. The preparation result is the repository
+   selection gate; do not call `voidr_workspace_select_test_repository` again.
+10. If preparation fails, stop and report the failing setup step. Do not run
+    `npm install`, `npx voidr`, Git, or any other manual fallback, and do not
+    ask for case selection again.
 
 For an existing Test Plan that already returns a linked Git repository, follow
 the same origin-matching and local materialization sequence.
@@ -272,10 +366,15 @@ For a locally bootstrapped repository when the existing plan has no link:
 3. Obtain confirmation.
 4. Call `voidr_workspace_bootstrap_test_repository` with the confirmed path,
    repository name, organization ID, application ID, and Test Plan ID.
-   Then run `npm install` inside that new directory. If package registry
-   authentication is unavailable, stop and report it without changing another
-   repository.
-5. Call `voidr_workspace_select_test_repository`.
+5. Explicitly load `/voidr-implement-tests`, then call
+   `voidr_workspace_prepare_test_repository` with the repository path,
+   selected organization/application/Test Plan IDs, selected environment slug,
+   exact server-returned linked repository URL, and exact case slugs. Do not
+   execute any setup command separately.
+6. If package registry authentication or any mandatory setup step fails, stop
+   and report the failed step without changing another repository. Otherwise,
+   continue directly with `/voidr-implement-tests`; do not call
+   `voidr_workspace_select_test_repository` again.
 
 Product repositories remain read-only. Never write to a repository merely
 because it contains product code or a `project.json`.
@@ -286,11 +385,27 @@ when none was already explicitly identified during planning. Do not ask again
 for a repository already authorized and analyzed. Do not change the selected
 application when product repositories are added.
 
-## 7. Continue through the gates
+## 7. Sandbox, network, and runtime failures
 
-Before scaffolding, reading product code, or editing a test, explicitly load
-the `/voidr-implement-tests` skill. If it cannot be loaded, stop. Use it for
-repository validation, scaffolding, implementation, and local validation.
+- If `npm install` or another network-dependent step fails with a resolution
+  or connection error (for example `EAI_AGAIN`, `ENOTFOUND`, `ETIMEDOUT`),
+  identify it explicitly as a shell without network access — the Copilot
+  sandbox — and ask the user once to rerun that step with network access.
+  Do not invent registry outages.
+- Never change the npm registry, clean caches, delete lockfiles, add
+  `--legacy-peer-deps`/`--force`, or switch package managers to work around
+  an install failure. The runtime hook blocks these mutations.
+- The preparation and smoke tools validate the Node.js runtime before running
+  anything: Playwright 1.48 hangs on Node 23+. If they report an unsupported
+  Node version, ask the user to activate the pinned Node 22 (volta/nvm) and
+  retry. Do not attempt to run Playwright on the unsupported version.
+
+## 8. Continue through the gates
+
+Before repository setup, scaffolding, reading product code, or editing a test,
+explicitly load the `/voidr-implement-tests` skill. If it cannot be loaded,
+stop. Use it for the mandatory repository preparation gate, implementation,
+and local validation.
 
 Use `/voidr-deploy-run` only after local validation passes.
 

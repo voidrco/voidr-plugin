@@ -1,8 +1,7 @@
-import { execFile } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
-import { promisify } from 'node:util'
 import { join } from 'node:path'
-import { validateRepositorySelection } from './workspace.mjs'
+import { runCommand } from './command.mjs'
+import { validateProvisionedRepositorySelection } from './workspace.mjs'
 import {
   assertCompletedImmutableDeployment,
   assertMergedPullRequestEvidence,
@@ -11,10 +10,9 @@ import {
 import { VoidrRestClient } from './voidr-rest.mjs'
 import { voidrCliEnvironment } from './credentials.mjs'
 
-const execFileAsync = promisify(execFile)
-
 export async function deployMergedPullRequest({
   repositoryPath,
+  repositoryUrl,
   pullRequestNumber,
   testPlanId,
   workspaceRoot = process.cwd(),
@@ -29,7 +27,10 @@ export async function deployMergedPullRequest({
     throw new Error('A valid Test Plan ID is required.')
   }
 
-  const selected = validateRepositorySelection(repositoryPath, workspaceRoot)
+  const selected = validateProvisionedRepositorySelection(
+    repositoryPath,
+    repositoryUrl
+  )
   if (!selected.indicators.git) {
     throw new Error('The selected test repository must be a Git repository.')
   }
@@ -45,16 +46,39 @@ export async function deployMergedPullRequest({
     throw new Error('project.json does not match the explicitly selected Test Plan.')
   }
 
-  const source = await inspectMergedSource({
+  let source = await inspectMergedSource({
     repositoryPath: selected.path,
     pullRequestNumber: Number(pullRequestNumber),
     run
   })
+  // A clean checkout that is merely behind the merged PR commit is healed
+  // here: inspectMergedSource already fetched with the user's credentials
+  // (the bridge runs outside the sandbox), so a fast-forward to the exact
+  // merge commit is safe and deterministic. Divergent or dirty checkouts
+  // still fail closed.
+  if (
+    source.state === 'MERGED' &&
+    source.worktreeClean &&
+    source.mergeCommitOnRemoteDefault &&
+    source.mergeCommitSha &&
+    source.localHeadSha !== source.mergeCommitSha &&
+    (await fastForwardToMergeCommit({
+      repositoryPath: selected.path,
+      source,
+      run
+    }))
+  ) {
+    source = await inspectMergedSource({
+      repositoryPath: selected.path,
+      pullRequestNumber: Number(pullRequestNumber),
+      run
+    })
+  }
   const merged = assertMergedPullRequestEvidence(source)
   const effectiveCliEnvironment =
     cliEnvironment || voidrCliEnvironment()
 
-  await run('npm', ['run', 'voidr:build'], {
+  await run('npx', ['--no-install', 'voidr', 'build'], {
     cwd: selected.path,
     timeout: 180_000,
     env: effectiveCliEnvironment
@@ -125,6 +149,24 @@ export async function deployMergedPullRequest({
       ...completed,
       storagePrefix: candidate.prefix || null
     }
+  }
+}
+
+async function fastForwardToMergeCommit({ repositoryPath, source, run }) {
+  try {
+    await run('git', ['checkout', source.defaultBranch], {
+      cwd: repositoryPath,
+      timeout: 60_000
+    })
+    await run('git', ['merge', '--ff-only', source.mergeCommitSha], {
+      cwd: repositoryPath,
+      timeout: 60_000
+    })
+    return true
+  } catch {
+    // Not fast-forwardable (diverged local branch); the evidence check
+    // below reports the precise failure.
+    return false
   }
 }
 
@@ -229,19 +271,5 @@ function assertSameMergedSource(expected, evidence) {
     actual.mergeCommitSha !== expected.mergeCommitSha
   ) {
     throw new Error('Merged PR evidence changed while preparing the release.')
-  }
-}
-
-async function runCommand(file, args, options = {}) {
-  try {
-    return await execFileAsync(file, args, {
-      cwd: options.cwd,
-      timeout: options.timeout || 30_000,
-      maxBuffer: 10 * 1024 * 1024,
-      env: options.env || process.env
-    })
-  } catch (error) {
-    const code = Number.isInteger(error?.code) ? ` (exit ${error.code})` : ''
-    throw new Error(`${file} ${args[0]} failed${code}.`)
   }
 }

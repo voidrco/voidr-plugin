@@ -463,6 +463,29 @@ nunca inferir dados", que antes existia só caso a caso (BUG-013/016/017/018):
   suspensa (nunca bloqueia dado legítimo por falha de parsing);
 - skills ganham o "Data provenance contract" explícito.
 
+### BUG-019 — git push no sandbox falha e o agente empurra direto na main
+
+Severidade: bloqueadora
+Status: corrigido em `0.2.19-local.31` e validado por testes; pendente
+validação na UI
+
+Na fase de publicação, o agente rodou `git push origin main` no shell do
+sandbox: falhou com `Missing or invalid credentials` (o sandbox não acessa o
+keychain/credencial do Git) e ainda apontava pra branch default — o que
+quebraria o gate de deploy, que exige PR mergeado.
+
+Correção (mecânica, no bridge):
+
+- nova tool `voidr_workspace_publish_tests`: valida a origin do checkout,
+  resolve a branch default via `gh` e **recusa push direto nela**, faz
+  `checkout -B` da feature branch, commit, push com refspec explícito e abre
+  (ou reusa) o pull request — tudo no processo do bridge, fora do sandbox,
+  com as credenciais do usuário;
+- o skill `/voidr-test` mostra branch/arquivos/mensagem/título, pede uma
+  única autorização explícita e chama a tool; `git commit/push`/`gh` no
+  terminal ficam proibidos na publicação;
+- o gate pós-smoke não bloqueia a publicação autorizada.
+
 ## Próximo checkpoint
 
 A criação, a população anonimizada, o provisionamento, a materialização e o smoke local

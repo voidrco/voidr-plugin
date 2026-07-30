@@ -20,6 +20,7 @@ import { deployMergedPullRequest } from './lib/release-deploy.mjs'
 import { connectWithBrowser } from './lib/browser-auth.mjs'
 import { buildTestRepository, scaffoldTestCases } from './lib/scaffold.mjs'
 import { prepareTestRepository } from './lib/prepare.mjs'
+import { publishTests } from './lib/publish.mjs'
 
 const policy = loadPolicy()
 const safeRemote = new Set(policy.safeRemoteTools)
@@ -233,6 +234,27 @@ const localTools = [
     }
   },
   {
+    name: 'voidr_workspace_publish_tests',
+    description:
+      'Publish the implemented tests from the linked checkout after the user explicitly authorized it in chat: create or reuse a feature branch, commit, push with an explicit refspec, and open (or reuse) a pull request to the default branch. Runs outside the Copilot shell sandbox with the user Git credentials. Pushing to the default branch is refused; the immutable deploy requires a merged pull request.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        repositoryPath: { type: 'string' },
+        repositoryUrl: {
+          type: 'string',
+          pattern: '^https://github\\.com/[^/]+/[^/]+(?:\\.git)?$'
+        },
+        branch: { type: 'string' },
+        commitMessage: { type: 'string' },
+        pullRequestTitle: { type: 'string' },
+        pullRequestBody: { type: 'string' },
+        createPullRequest: { type: 'boolean', default: true }
+      },
+      required: ['repositoryPath', 'repositoryUrl', 'branch', 'commitMessage']
+    }
+  },
+  {
     name: 'voidr_release_deploy_merged_pr',
     description:
       'Build, upload, promote, and verify an immutable Voidr release only when the selected test repository is clean and exactly at a PR commit already merged into the GitHub default branch. The tool reports completion only after latest points to that immutable codebaseVersion.',
@@ -300,7 +322,7 @@ async function dispatch(method, params) {
         capabilities: { tools: { listChanged: true } },
         serverInfo: {
           name: 'voidr-safe-bridge',
-          version: '0.2.19-local.30'
+          version: '0.2.19-local.31'
         }
       }
     case 'ping':
@@ -881,6 +903,22 @@ async function callLocal(name, args) {
           testPlanId: String(args.testPlanId || ''),
           specs: Array.isArray(args.specs) ? args.specs : [],
           baseUrl: String(args.baseUrl || '')
+        })
+      )
+    case 'voidr_workspace_publish_tests':
+      return textResult(
+        await publishTests({
+          repositoryPath: String(args.repositoryPath || ''),
+          repositoryUrl: String(args.repositoryUrl || ''),
+          branch: String(args.branch || ''),
+          commitMessage: String(args.commitMessage || ''),
+          pullRequestTitle: args.pullRequestTitle
+            ? String(args.pullRequestTitle)
+            : undefined,
+          pullRequestBody: args.pullRequestBody
+            ? String(args.pullRequestBody)
+            : undefined,
+          createPullRequest: args.createPullRequest !== false
         })
       )
     case 'voidr_release_deploy_merged_pr':

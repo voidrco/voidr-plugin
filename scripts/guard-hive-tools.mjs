@@ -432,7 +432,14 @@ function enforceExplicitEnvironmentSelection(hookPayload, name, args) {
 function enforcePostSmokeStop(hookPayload, rawName, canonicalName) {
   const state = readSessionState(hookPayload)
   if (!Number.isFinite(state.smokeAttemptedAt)) return
-  if (canonicalName === 'voidr_release_deploy_merged_pr') return
+  if (
+    [
+      'voidr_release_deploy_merged_pr',
+      'voidr_workspace_publish_tests'
+    ].includes(canonicalName)
+  ) {
+    return
+  }
   if (/(?:ask_user|askuserquestion|todo)/i.test(rawName)) return
   deny(
     'Blocked by Voidr workflow: after voidr_smoke_build, stop and report its exact result. Do not inspect files, edit specs, retry smoke, or diagnose by guessing in the same turn. Wait for a new user message explicitly asking to investigate/correct the smoke failure before continuing.'

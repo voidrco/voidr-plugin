@@ -163,8 +163,16 @@ manager, and never read or print `.env` contents.
 
 When all scenarios pass locally:
 
-1. Offer to commit and push the new tests and open a PR — each with its own
-   explicit authorization, never automatic.
+1. Show exactly what will be published — the feature branch name (for
+   example `feat/<feature-slug>-tests`), the files changed, the commit
+   message, and the PR title — and ask for one explicit authorization. Only
+   after the user authorizes, call `voidr_workspace_publish_tests` with the
+   prepared repository path, the linked `repositoryUrl`, the branch, and the
+   commit message. Never run `git commit`, `git push`, or `gh` in the
+   terminal: the sandbox has no Git credentials, and pushing to the default
+   branch is forbidden — the tool runs outside the sandbox, enforces the
+   feature branch, and opens (or reuses) the pull request. Report the
+   returned pull request link.
 2. After the user confirms the PR is merged, load `/voidr-deploy-run` and
    follow its gates to publish the merged commit as an immutable release and
    create the platform execution. Translate its questions into simple terms

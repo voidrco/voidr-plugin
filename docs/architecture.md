@@ -170,7 +170,8 @@ Included:
 - publish and promote an immutable release;
 - verify that `latest` points to that release;
 - verify automation sync;
-- create and observe a platform execution.
+- create and observe a platform execution;
+- create one standalone confirmed execution without discovery or polling;
 - analyze one failed test from ClickHouse-backed Playwright evidence;
 - always link the exact platform execution that supports the analysis;
 - optionally create a confirmed defect with that execution linked in its

@@ -36,7 +36,12 @@ When this skill is invoked explicitly, follow this contract literally:
    If this status call fails, never invent an organization ID and never call
    `voidr_auth_select_organization`; call `voidr_auth_login` directly.
 2. Treat `serviceAccounts` as the complete list available on this machine,
-   never as a platform listing.
+   never as a platform listing. Always tell the user which credential store is
+   active by showing the returned `credentialStore` path and
+   `credentialProfile`. For an isolated first-access test, the plugin supports
+   a separate profile through `VOIDR_CREDENTIAL_PROFILE` (or an explicit
+   `VOIDR_SERVICE_ACCOUNTS_PATH`); never assume the machine has no account
+   without this status call.
 3. If `serviceAccountSelectionRequired` is true, follow the selection section
    before deciding whether login is needed.
 4. If `authenticated` is false, tell the user that the official Voidr login

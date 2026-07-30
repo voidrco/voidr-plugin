@@ -41,6 +41,7 @@ test('prepares a cloned repository in the mandatory order without interactive lo
   assert.deepEqual(
     calls.map(call => [call.file, ...call.args]),
     [
+      ['node', '--version'],
       ['npm', 'install'],
       [
         'npx',
@@ -82,9 +83,9 @@ test('prepares a cloned repository in the mandatory order without interactive lo
     false,
     'interactive voidr login must never run'
   )
-  assert.equal(calls[1].options.env.VOIDR_CLIENT_SECRET, secret)
   assert.equal(calls[2].options.env.VOIDR_CLIENT_SECRET, secret)
   assert.equal(calls[3].options.env.VOIDR_CLIENT_SECRET, secret)
+  assert.equal(calls[4].options.env.VOIDR_CLIENT_SECRET, secret)
   assert.equal(JSON.stringify(result).includes(secret), false)
   assert.equal(result.steps.authenticationResolvedFromPluginServiceAccount, true)
   assert.equal(result.steps.interactiveLoginExecuted, false)
@@ -113,6 +114,7 @@ test('validates an existing project and skips link', async () => {
   assert.deepEqual(
     calls.map(call => [call.file, ...call.args.slice(0, 3)]),
     [
+      ['node', '--version'],
       ['npm', 'install'],
       ['npx', '--no-install', 'voidr', 'scaffold'],
       ['npx', '--no-install', 'voidr', 'env']
@@ -169,7 +171,10 @@ test('rejects a Service Account selected for another organization', async () => 
   )
   assert.deepEqual(
     calls.map(call => [call.file, ...call.args]),
-    [['npm', 'install']],
+    [
+      ['node', '--version'],
+      ['npm', 'install']
+    ],
     'dependency installation happens before framework authentication resolution'
   )
 })
@@ -268,6 +273,9 @@ function writeProject(repositoryPath, values) {
 function fakeVoidrRun({ repositoryPath, calls, context: selected }) {
   return async (file, args, options) => {
     calls.push({ file, args, options })
+    if (file === 'node' && args[0] === '--version') {
+      return { stdout: 'v22.22.0\n' }
+    }
     if (args.includes('link')) writeProject(repositoryPath, selected)
     if (args.includes('scaffold')) {
       const suite = join(repositoryPath, 'modules', 'login', 'login')

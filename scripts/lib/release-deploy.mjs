@@ -1,7 +1,6 @@
-import { execFile } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
-import { promisify } from 'node:util'
 import { join } from 'node:path'
+import { runCommand } from './command.mjs'
 import { validateProvisionedRepositorySelection } from './workspace.mjs'
 import {
   assertCompletedImmutableDeployment,
@@ -10,8 +9,6 @@ import {
 } from './release-contract.mjs'
 import { VoidrRestClient } from './voidr-rest.mjs'
 import { voidrCliEnvironment } from './credentials.mjs'
-
-const execFileAsync = promisify(execFile)
 
 export async function deployMergedPullRequest({
   repositoryPath,
@@ -58,7 +55,7 @@ export async function deployMergedPullRequest({
   const effectiveCliEnvironment =
     cliEnvironment || voidrCliEnvironment()
 
-  await run('npm', ['run', 'voidr:build'], {
+  await run('npx', ['--no-install', 'voidr', 'build'], {
     cwd: selected.path,
     timeout: 180_000,
     env: effectiveCliEnvironment
@@ -233,19 +230,5 @@ function assertSameMergedSource(expected, evidence) {
     actual.mergeCommitSha !== expected.mergeCommitSha
   ) {
     throw new Error('Merged PR evidence changed while preparing the release.')
-  }
-}
-
-async function runCommand(file, args, options = {}) {
-  try {
-    return await execFileAsync(file, args, {
-      cwd: options.cwd,
-      timeout: options.timeout || 30_000,
-      maxBuffer: 10 * 1024 * 1024,
-      env: options.env || process.env
-    })
-  } catch (error) {
-    const code = Number.isInteger(error?.code) ? ` (exit ${error.code})` : ''
-    throw new Error(`${file} ${args[0]} failed${code}.`)
   }
 }

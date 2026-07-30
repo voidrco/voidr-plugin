@@ -7,6 +7,52 @@ import {
 } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { basename, dirname, join, relative, resolve, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const moduleDir = dirname(fileURLToPath(import.meta.url))
+
+export function pluginInstallationRoot() {
+  return canonicalizePotentialPath(resolve(moduleDir, '..', '..'))
+}
+
+export function assertOutsidePluginInstallation(path, label = 'path') {
+  const installationRoot = pluginInstallationRoot()
+  const candidate = canonicalizePotentialPath(path)
+  if (isInside(candidate, installationRoot)) {
+    throw new Error(
+      `Refusing to use a ${label} inside the plugin installation directory ` +
+        `(${installationRoot}). Test repositories live in the real VS Code ` +
+        'workspace, never inside the installed plugin.'
+    )
+  }
+  return candidate
+}
+
+export function resolveWorkspaceRoot({
+  explicit,
+  env = process.env,
+  cwd = process.cwd()
+} = {}) {
+  const installationRoot = pluginInstallationRoot()
+  for (const candidate of [explicit, env.VOIDR_WORKSPACE_ROOT, cwd]) {
+    if (!candidate || typeof candidate !== 'string') continue
+    let resolved
+    try {
+      resolved = realpathSync(resolve(candidate))
+    } catch {
+      continue
+    }
+    if (!lstatSync(resolved).isDirectory()) continue
+    if (isInside(resolved, installationRoot)) continue
+    return resolved
+  }
+  throw new Error(
+    'Could not resolve the real workspace root: this MCP process is running ' +
+      'inside the plugin installation directory. Call the tool again passing ' +
+      'workspaceRoot with the absolute path of the open VS Code workspace ' +
+      'folder. Never use the plugin installation as a workspace.'
+  )
+}
 
 export function inspectWorkspace(root = process.cwd(), maxDepth = 2) {
   const resolvedRoot = realpathSync(resolve(root))
@@ -136,6 +182,7 @@ function validateRepositoryDirectory(path) {
   }
 
   const selected = realpathSync(requested)
+  assertOutsidePluginInstallation(selected, 'test repository')
   const indicators = {
     git: existsSync(join(selected, '.git')),
     packageJson: existsSync(join(selected, 'package.json')),

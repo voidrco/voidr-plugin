@@ -31,6 +31,10 @@ function sanitizeCredentialProfile(value) {
     .slice(0, 80)
 }
 
+export function credentialProfile() {
+  return sanitizeCredentialProfile(process.env.VOIDR_CREDENTIAL_PROFILE) || 'default'
+}
+
 function emptyStore() {
   return { activeOrgId: null, accounts: {} }
 }
@@ -202,6 +206,7 @@ export function authStatus() {
     serviceAccounts,
     serviceAccountSelectionRequired: serviceAccounts.length > 1,
     credentialStore: resolved.path || null,
+    credentialProfile: credentialProfile(),
     credentialStoreInvalid: resolved.invalid === true
   }
 }

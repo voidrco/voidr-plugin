@@ -10,6 +10,7 @@ import { spawnSync } from 'node:child_process'
 import { basename, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
+  assertOutsidePluginInstallation,
   canonicalizePotentialPath,
   isInside,
   normalizeGitHubRepositoryUrl
@@ -44,6 +45,7 @@ export function bootstrapTestRepository({
   if (!isInside(resolvedTarget, resolvedWorkspace)) {
     throw new Error('The new test repository must be inside the current workspace.')
   }
+  assertOutsidePluginInstallation(resolvedTarget, 'test repository destination')
   if (existsSync(resolvedTarget) && readdirSync(resolvedTarget).length > 0) {
     validateExistingProvisionedRepository({
       target: resolvedTarget,

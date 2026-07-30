@@ -20,6 +20,10 @@ export function routeVoidrPrompt(input) {
 
 Use the /voidr-develop-tests skill for this request. Load that skill before
 inspecting files or calling any tool. Its first-turn Test Plan mode question,
-MCP application discovery, and repository-ordering rules are mandatory.`
+MCP application discovery, and repository-ordering rules are mandatory.
+Render every workflow choice (plan mode, application, environment, Test Plan,
+repository, planning inputs) with the native ask_user selectable options when
+available; free text is only a fallback. Only the two runtime confirmations
+must be typed in chat.`
   }
 }

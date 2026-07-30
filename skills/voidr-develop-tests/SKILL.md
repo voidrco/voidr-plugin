@@ -8,6 +8,20 @@ description: Inicia e orquestra o desenvolvimento de testes na Voidr. Use SEMPRE
 Treat this as a gated workflow. Never call a tool that starts a Hive process,
 including indirectly through a generic or batch tool.
 
+Selection contract: every choice in this workflow — plan mode, application,
+environment, Test Plan, repository, planning inputs — must be rendered with
+the native `ask_user` selectable options whenever that control is available.
+Present free-text lists only when `ask_user` is genuinely unavailable, and say
+so. The only exceptions are the two runtime gates that require a typed chat
+message: `Confirmar insumos do planejamento` and `Aprovo este Test Plan`.
+
+Secrets contract: never reproduce credentials, emails, tokens, CPF/CNPJ, or
+other personal identifiers found in product code, documentation, or `.env`
+files — not in chat, not in summaries, not in drafts, not in specs. Record
+only the environment variable names as `{{env.VARIABLE_NAME}}` placeholders.
+Never read or print `.env` contents through any tool or terminal command; if
+a value was already exposed, recommend rotating it.
+
 ## 1. Establish intent before tools
 
 For a new conversation, the first response must ask exactly one decision:
@@ -220,6 +234,13 @@ For a new Test Plan, use this mandatory sequence:
    `test_plans_populate_test_plan` after an incomplete create response and do
    not retry creation with a different name or ID. The plugin bridge enforces
    this ordering even if the model attempts to continue.
+10. When `test_plans_create_test_plan` fails, stop immediately. Show the user
+    the exact error returned by the tool, then offer only two choices: retry
+    the same creation, or cancel. Never call `test_plans_list_test_plans`,
+    never pick an existing Test Plan, and never switch from new to existing
+    mode after a creation failure. Switching modes requires the user to
+    explicitly say `Usar Test Plan existente` in a new message. The bridge and
+    the runtime hook both block the listing fallback.
 
 The runtime hook blocks every `test_plans_*` mutation until planning inputs
 were explicitly confirmed and the Test Plan draft was explicitly approved. If
@@ -263,6 +284,11 @@ created or reused and linked the correct repository.
 2. Call `voidr_workspace_inspect` and look only for a checkout whose Git
    `origin` matches the returned repository URL. A matching checkout may be
    offered for confirmation; a folder with a similar name is not a match.
+   If any workspace tool reports that it cannot resolve the real workspace
+   root, call it again passing `workspaceRoot` with the absolute path of the
+   open VS Code workspace folder. Never inspect, clone, select, or create a
+   repository inside the plugin installation directory
+   (`installed-plugins`); the runtime hook blocks it.
 3. If no matching checkout exists, ask for the exact local destination inside
    the workspace. Show the exact `git clone` source and destination and obtain
    confirmation before cloning.
@@ -344,7 +370,22 @@ when none was already explicitly identified during planning. Do not ask again
 for a repository already authorized and analyzed. Do not change the selected
 application when product repositories are added.
 
-## 7. Continue through the gates
+## 7. Sandbox, network, and runtime failures
+
+- If `npm install` or another network-dependent step fails with a resolution
+  or connection error (for example `EAI_AGAIN`, `ENOTFOUND`, `ETIMEDOUT`),
+  identify it explicitly as a shell without network access — the Copilot
+  sandbox — and ask the user once to rerun that step with network access.
+  Do not invent registry outages.
+- Never change the npm registry, clean caches, delete lockfiles, add
+  `--legacy-peer-deps`/`--force`, or switch package managers to work around
+  an install failure. The runtime hook blocks these mutations.
+- The preparation and smoke tools validate the Node.js runtime before running
+  anything: Playwright 1.48 hangs on Node 23+. If they report an unsupported
+  Node version, ask the user to activate the pinned Node 22 (volta/nvm) and
+  retry. Do not attempt to run Playwright on the unsupported version.
+
+## 8. Continue through the gates
 
 Before repository setup, scaffolding, reading product code, or editing a test,
 explicitly load the `/voidr-implement-tests` skill. If it cannot be loaded,

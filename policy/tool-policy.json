@@ -77,6 +77,15 @@
     "npm run voidr:deploy",
     "npm run voidr:deploy-latest"
   ],
+  "forbiddenDependencyShellFragments": [
+    "npm config set",
+    "yarn config set",
+    "pnpm config set",
+    "npm cache clean",
+    "yarn cache clean",
+    "pnpm store prune",
+    "--legacy-peer-deps"
+  ],
   "forbiddenRequestFragments": [
     "/agent-jobs/trigger",
     "/self-healing/trigger",

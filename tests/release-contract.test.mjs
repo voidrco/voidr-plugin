@@ -158,8 +158,13 @@ test('release tool binds build, immutable candidate, promotion, and latest to me
   assert.equal(result.pullRequest.mergeCommitSha, mergeCommitSha)
   assert.equal(result.release.latestCodebaseVersion, codebaseVersion)
   assert.equal(
-    calls.some(call => call.join(' ') === 'npm run voidr:build'),
+    calls.some(call => call.join(' ') === 'npx --no-install voidr build'),
     true
+  )
+  assert.equal(
+    calls.some(call => call.join(' ').startsWith('npm run')),
+    false,
+    'release must not depend on repository voidr:* scripts'
   )
   assert.equal(
     calls.some(call =>

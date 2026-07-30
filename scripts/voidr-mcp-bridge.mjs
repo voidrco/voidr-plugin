@@ -11,6 +11,7 @@ import { RemoteMcpClient } from './lib/remote-mcp.mjs'
 import { bootstrapTestRepository } from './lib/bootstrap.mjs'
 import {
   inspectWorkspace,
+  resolveWorkspaceRoot,
   validateProvisionedRepositorySelection,
   validateRepositorySelection
 } from './lib/workspace.mjs'
@@ -26,6 +27,7 @@ const remote = new RemoteMcpClient()
 const provisionedTestPlans = new Set()
 let negotiatedProtocol = '2024-11-05'
 let selectedTestPlanId = null
+let planCreationFailed = false
 
 const localTools = [
   {
@@ -55,7 +57,7 @@ const localTools = [
   {
     name: 'voidr_workspace_inspect',
     description:
-      'List likely repositories in the current workspace without selecting or modifying any of them.',
+      'List likely repositories in the current workspace without selecting or modifying any of them. When the MCP process cannot see the real workspace, pass workspaceRoot with the absolute path of the open VS Code workspace folder.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -64,7 +66,8 @@ const localTools = [
           minimum: 1,
           maximum: 4,
           default: 2
-        }
+        },
+        workspaceRoot: { type: 'string' }
       }
     }
   },
@@ -86,7 +89,8 @@ const localTools = [
         },
         repositoryUrl: {
           type: 'string'
-        }
+        },
+        workspaceRoot: { type: 'string' }
       },
       required: [
         'path',
@@ -99,7 +103,7 @@ const localTools = [
   {
     name: 'voidr_workspace_select_test_repository',
     description:
-      'Validate and record the test repository explicitly selected by the user. This never infers a plan from project.json.',
+      'Validate and record the test repository explicitly selected by the user. This never infers a plan from project.json. When the MCP process cannot see the real workspace, pass workspaceRoot with the absolute path of the open VS Code workspace folder.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -107,7 +111,8 @@ const localTools = [
         repositoryUrl: {
           type: 'string',
           pattern: '^https://github\\.com/[^/]+/[^/]+(?:\\.git)?$'
-        }
+        },
+        workspaceRoot: { type: 'string' }
       },
       required: ['path']
     }
@@ -279,7 +284,7 @@ async function dispatch(method, params) {
         capabilities: { tools: { listChanged: true } },
         serverInfo: {
           name: 'voidr-safe-bridge',
-          version: '0.2.19'
+          version: '0.2.19-local.24'
         }
       }
     case 'ping':
@@ -317,7 +322,10 @@ async function callTool(params) {
   const name = canonicalToolName(rawName)
   const args = params.arguments || {}
 
-  if (name === 'voidr_auth_status') selectedTestPlanId = null
+  if (name === 'voidr_auth_status') {
+    selectedTestPlanId = null
+    planCreationFailed = false
+  }
   enforceBridgeTestPlanIdentity(name, args)
 
   if (isWriteTool(name) && !authStatus().canWrite) {
@@ -340,16 +348,31 @@ async function callTool(params) {
     }
   }
 
-  const result = await remote.callTool(name, args)
   if (name === 'test_plans_create_test_plan') {
-    const provisioned = validateProvisionedTestPlan(result)
-    provisionedTestPlans.add(provisioned.planId)
-    selectedTestPlanId = provisioned.planId.toLowerCase()
+    let result
+    try {
+      result = await remote.callTool(name, args)
+      const provisioned = validateProvisionedTestPlan(result)
+      provisionedTestPlans.add(provisioned.planId)
+      selectedTestPlanId = provisioned.planId.toLowerCase()
+      planCreationFailed = false
+    } catch (error) {
+      planCreationFailed = true
+      throw error
+    }
+    return result
   }
-  return result
+
+  return remote.callTool(name, args)
 }
 
 function enforceBridgeTestPlanIdentity(name, args) {
+  if (name === 'test_plans_list_test_plans' && planCreationFailed) {
+    throw new Error(
+      'Blocked by Voidr workflow: test_plans_create_test_plan failed in this session. Stop, show the user the exact creation error, and offer to retry or cancel. Never list existing Test Plans to silently replace the new plan the user asked for.'
+    )
+  }
+
   if (name === 'test_plans_list_test_plans' && selectedTestPlanId) {
     throw new Error(
       `Blocked by Voidr workflow: Test Plan ${selectedTestPlanId} is already selected. If it was not found, stop and ask the user to explicitly choose another Test Plan. Never list and silently substitute a different plan.`
@@ -437,6 +460,7 @@ async function callLocal(name, args) {
     case 'voidr_auth_select_organization': {
       const selected = selectOrganization(String(args.organizationId || ''))
       selectedTestPlanId = null
+      planCreationFailed = false
       remote.reset()
       announceToolsChanged()
       return textResult({
@@ -449,6 +473,7 @@ async function callLocal(name, args) {
     case 'voidr_auth_login': {
       const imported = await connectWithBrowser()
       selectedTestPlanId = null
+      planCreationFailed = false
       remote.reset()
       announceToolsChanged()
       return textResult(imported)
@@ -456,7 +481,7 @@ async function callLocal(name, args) {
     case 'voidr_workspace_inspect':
       return textResult(
         inspectWorkspace(
-          process.env.VOIDR_WORKSPACE_ROOT || process.cwd(),
+          resolveWorkspaceRoot({ explicit: args.workspaceRoot }),
           Math.max(1, Math.min(4, Number(args.maxDepth) || 2))
         )
       )
@@ -473,7 +498,7 @@ async function callLocal(name, args) {
           repositoryUrl: args.repositoryUrl
             ? String(args.repositoryUrl)
             : undefined,
-          workspaceRoot: process.env.VOIDR_WORKSPACE_ROOT || process.cwd()
+          workspaceRoot: resolveWorkspaceRoot({ explicit: args.workspaceRoot })
         })
       )
     case 'voidr_workspace_select_test_repository':
@@ -485,7 +510,7 @@ async function callLocal(name, args) {
             )
           : validateRepositorySelection(
               String(args.path || ''),
-              process.env.VOIDR_WORKSPACE_ROOT || process.cwd()
+              resolveWorkspaceRoot({ explicit: args.workspaceRoot })
             )
       )
     case 'voidr_workspace_prepare_test_repository':
@@ -497,8 +522,7 @@ async function callLocal(name, args) {
           testPlanId: String(args.testPlanId || ''),
           environmentSlug: String(args.environmentSlug || ''),
           repositoryUrl: String(args.repositoryUrl || ''),
-          cases: Array.isArray(args.cases) ? args.cases : [],
-          workspaceRoot: process.env.VOIDR_WORKSPACE_ROOT || process.cwd()
+          cases: Array.isArray(args.cases) ? args.cases : []
         })
       )
     case 'voidr_workspace_scaffold_test_cases':
@@ -507,8 +531,7 @@ async function callLocal(name, args) {
           repositoryPath: String(args.repositoryPath || ''),
           repositoryUrl: String(args.repositoryUrl || ''),
           testPlanId: String(args.testPlanId || ''),
-          cases: Array.isArray(args.cases) ? args.cases : [],
-          workspaceRoot: process.env.VOIDR_WORKSPACE_ROOT || process.cwd()
+          cases: Array.isArray(args.cases) ? args.cases : []
         })
       )
     case 'voidr_smoke_build':
@@ -518,8 +541,7 @@ async function callLocal(name, args) {
           repositoryUrl: String(args.repositoryUrl || ''),
           testPlanId: String(args.testPlanId || ''),
           specs: Array.isArray(args.specs) ? args.specs : [],
-          baseUrl: String(args.baseUrl || ''),
-          workspaceRoot: process.env.VOIDR_WORKSPACE_ROOT || process.cwd()
+          baseUrl: String(args.baseUrl || '')
         })
       )
     case 'voidr_release_deploy_merged_pr':
@@ -528,8 +550,7 @@ async function callLocal(name, args) {
           repositoryPath: String(args.repositoryPath || ''),
           repositoryUrl: String(args.repositoryUrl || ''),
           pullRequestNumber: Number(args.pullRequestNumber),
-          testPlanId: String(args.testPlanId || ''),
-          workspaceRoot: process.env.VOIDR_WORKSPACE_ROOT || process.cwd()
+          testPlanId: String(args.testPlanId || '')
         })
       )
     default:

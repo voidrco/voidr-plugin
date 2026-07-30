@@ -1,18 +1,16 @@
-import { execFile } from 'node:child_process'
 import {
   existsSync,
   readdirSync,
   readFileSync
 } from 'node:fs'
 import { join } from 'node:path'
-import { promisify } from 'node:util'
+import { runCommand } from './command.mjs'
 import { voidrCliEnvironment } from './credentials.mjs'
+import { assertSupportedNodeRuntime } from './node-runtime.mjs'
 import {
   validateProvisionedRepositorySelection,
   validateRepositorySelection
 } from './workspace.mjs'
-
-const execFileAsync = promisify(execFile)
 
 export async function prepareTestRepository({
   repositoryPath,
@@ -42,6 +40,8 @@ export async function prepareTestRepository({
   if (hadProject) {
     validateProject(projectPath, identifiers)
   }
+
+  await assertSupportedNodeRuntime({ repositoryPath: selected.path, run })
 
   await run('npm', ['install'], {
     cwd: selected.path,
@@ -230,18 +230,4 @@ function countSpecs(directory) {
     else if (/\.spec\.[cm]?[jt]s$/i.test(entry.name)) count += 1
   }
   return count
-}
-
-async function runCommand(file, args, options = {}) {
-  try {
-    return await execFileAsync(file, args, {
-      cwd: options.cwd,
-      timeout: options.timeout || 30_000,
-      maxBuffer: 10 * 1024 * 1024,
-      env: options.env
-    })
-  } catch (error) {
-    const code = Number.isInteger(error?.code) ? ` (exit ${error.code})` : ''
-    throw new Error(`${file} ${args[0]} failed${code}.`)
-  }
 }

@@ -7,11 +7,16 @@ import {
   statSync
 } from 'node:fs'
 import { basename, dirname, relative, resolve, sep } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { canonicalToolName, loadPolicy } from './lib/policy.mjs'
 import {
   readSessionState,
   updateSessionState
 } from './lib/session-state.mjs'
+
+const pluginInstallationRoot = realpathOrResolve(
+  resolve(dirname(fileURLToPath(import.meta.url)), '..')
+)
 
 const input = await readStdin()
 let payload
@@ -30,6 +35,7 @@ const searchable = `${rawToolName}\n${toolName}\n${serializedArgs}`.toLowerCase(
 
 enforceConnectFirstTool(payload, rawToolName, toolName, serializedArgs)
 enforcePlanModeGate(payload, rawToolName, toolName)
+enforceNewPlanModeListing(payload, toolName)
 enforcePostSmokeStop(payload, rawToolName, toolName)
 enforceSensitiveProductRead(payload, rawToolName, toolArgs)
 enforcePreSelectionWriteGate(payload, rawToolName)
@@ -78,6 +84,8 @@ if (isShell) {
       'Blocked by Voidr policy: do not invoke the MCP bridge through the terminal. Call the official Voidr MCP authentication tools directly.'
     )
   }
+  enforceShellEnvFileRead(payload, normalizedShell)
+  enforceDependencyStrategyProtection(payload, normalizedShell)
   const forbiddenDeploy = (policy.forbiddenDeployShellFragments || []).find(value =>
     normalizedShell.includes(value.toLowerCase())
   )
@@ -115,6 +123,7 @@ if (
   recordSelection(payload, toolArgs)
 }
 
+enforcePluginInstallationBoundary(payload, rawToolName, toolArgs)
 enforceSelectedRepositoryBoundary(payload, rawToolName, toolArgs)
 process.stdout.write('{}\n')
 
@@ -128,6 +137,11 @@ function recordSelection(hookPayload, args) {
   if (!existsSync(selected) || !statSync(selected).isDirectory()) {
     deny('The selected test repository must be an existing directory.')
   }
+  if (isInside(selected, pluginInstallationRoot)) {
+    deny(
+      'Blocked by Voidr policy: the test repository cannot live inside the plugin installation directory. Select or clone it inside the real VS Code workspace and pass workspaceRoot when the bridge asks for it.'
+    )
+  }
   if (!isInside(selected, cwd)) {
     deny('The test repository must be inside the current Copilot workspace.')
   }
@@ -136,6 +150,70 @@ function recordSelection(hookPayload, args) {
     selectedRepository: selected,
     workspaceRoot: cwd
   })
+}
+
+function enforcePluginInstallationBoundary(hookPayload, name, args) {
+  if (!isGenericWriteTool(name)) return
+  const cwd = hookPayload.cwd || process.cwd()
+  const paths = [
+    ...collectPathArguments(args),
+    ...collectPatchPathsFromValue(args)
+  ]
+  for (const value of paths) {
+    const candidate = realpathOrResolve(resolve(cwd, value))
+    if (isInside(candidate, pluginInstallationRoot)) {
+      deny(
+        'Blocked by Voidr policy: never create, edit, or delete files inside the plugin installation directory. Test repositories and generated files live in the real VS Code workspace.'
+      )
+    }
+  }
+}
+
+function enforceNewPlanModeListing(hookPayload, canonicalName) {
+  if (canonicalName !== 'test_plans_list_test_plans') return
+  const state = readSessionState(hookPayload)
+  if (state.planMode !== 'new') return
+  deny(
+    'Blocked by Voidr workflow: the user chose to create a new Test Plan. If creation failed, stop, show the exact tool error, and offer to retry or cancel. Never list existing Test Plans to silently replace the new plan. Switching to an existing plan requires the user to explicitly say “Usar Test Plan existente” in a new message.'
+  )
+}
+
+function enforceShellEnvFileRead(hookPayload, normalizedShell) {
+  const state = readSessionState(hookPayload)
+  if (state.workflowActive !== true) return
+  const referencesEnvFile =
+    /(?:^|[\s"'`=(:])(?:\.\/|[~$\w./{}-]*\/)?\.env(?:\.[\w.-]+)?(?=$|[\s"'`);|&<])/.test(
+      normalizedShell
+    )
+  if (!referencesEnvFile) return
+  const readsOrPrints =
+    /(?:^|[;|&(]\s*|\b)(?:cat|bat|less|more|head|tail|tac|nl|strings|xxd|od|hexdump|grep|egrep|fgrep|rg|ag|sed|awk|cut|paste|column|sort|uniq|vi|vim|nano|emacs|code|open|type)\b/.test(
+      normalizedShell
+    ) || /(?:^|[;|&]\s*)(?:source|\.)\s+\S*\.env\b/.test(normalizedShell)
+  if (!readsOrPrints) return
+  deny(
+    'Blocked by Voidr policy: never read or print .env contents in the terminal or chat history. Validate only file existence, permissions, and key names through the Voidr tools. If a value was already exposed, recommend rotating it.'
+  )
+}
+
+function enforceDependencyStrategyProtection(hookPayload, normalizedShell) {
+  const state = readSessionState(hookPayload)
+  if (state.workflowActive !== true) return
+  const fragment = (policy.forbiddenDependencyShellFragments || []).find(
+    value => normalizedShell.includes(value.toLowerCase())
+  )
+  const mutatesDependencyStrategy =
+    /\brm\b[^;&|\n]*\b(?:package-lock\.json|yarn\.lock|pnpm-lock\.yaml)\b/.test(
+      normalizedShell
+    ) ||
+    /\bnpm\b[^;&|\n]*\binstall\b[^;&|\n]*(?:--force\b|\s-f\b)/.test(
+      normalizedShell
+    ) ||
+    /\b(?:npm|yarn|pnpm|npx)\b[^;&|\n]*--registry\b/.test(normalizedShell)
+  if (!fragment && !mutatesDependencyStrategy) return
+  deny(
+    'Blocked by Voidr policy: do not change npm registry, cache, lockfiles, dependency flags, or package manager while diagnosing an install failure. If the install failed without network access (Copilot sandbox), report that restriction and ask the user once to rerun the step with network access.'
+  )
 }
 
 function enforceSelectedRepositoryBoundary(hookPayload, name, args) {

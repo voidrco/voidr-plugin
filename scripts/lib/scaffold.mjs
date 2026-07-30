@@ -2,6 +2,8 @@ import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { isAbsolute, relative, resolve } from 'node:path'
 import { promisify } from 'node:util'
+import { runCommand } from './command.mjs'
+import { assertSupportedNodeRuntime } from './node-runtime.mjs'
 import {
   validateProvisionedRepositorySelection,
   validateRepositorySelection
@@ -43,12 +45,15 @@ export async function scaffoldTestCases({
     throw new Error('At least one valid Test Plan case slug is required.')
   }
 
+  // The Voidr CLI is invoked directly through npx because provisioned
+  // skeletons may ship voidr:* scripts pointing at a .voidr/cli path that is
+  // not committed to the repository.
   await run(
-    'npm',
+    'npx',
     [
-      'run',
-      'voidr:scaffold',
-      '--',
+      '--no-install',
+      'voidr',
+      'scaffold',
       '--split-per-case',
       '--cases',
       selectedCases.join(',')
@@ -115,7 +120,7 @@ export async function buildTestRepository({
     }
   }
 
-  await run('npm', ['run', 'voidr:build'], {
+  await run('npx', ['--no-install', 'voidr', 'build'], {
     cwd: selected.path,
     timeout: 180_000,
     env: cliEnvironment
@@ -182,6 +187,8 @@ export async function validateSelectedPlaywrightTests({
     throw new Error('At least one selected Playwright spec is required.')
   }
 
+  await assertSupportedNodeRuntime({ repositoryPath: selected.path, run })
+
   const listResult = await run(
     'npx',
     ['--no-install', 'playwright', 'test', ...selectedSpecs, '--list'],
@@ -230,20 +237,6 @@ export async function validateSelectedPlaywrightTests({
     skipped: Number(stats.skipped || 0),
     flaky: Number(stats.flaky || 0),
     failures
-  }
-}
-
-async function runCommand(file, args, options = {}) {
-  try {
-    return await execFileAsync(file, args, {
-      cwd: options.cwd,
-      timeout: options.timeout || 30_000,
-      maxBuffer: 10 * 1024 * 1024,
-      env: options.env
-    })
-  } catch (error) {
-    const code = Number.isInteger(error?.code) ? ` (exit ${error.code})` : ''
-    throw new Error(`${file} ${args[0]} failed${code}.`)
   }
 }
 

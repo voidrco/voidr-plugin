@@ -77,6 +77,14 @@ Never paste a Service Account secret into the chat. Provision or rotate it in
 the Voidr platform, or run `/copilot voidr-connect` and complete the official
 browser login.
 
+`voidr_auth_status` reports the active `credentialStore` path and
+`credentialProfile`. For an isolated first-access test, set
+`VOIDR_CREDENTIAL_PROFILE=<name>` (which resolves to
+`~/.voidr/service-accounts.<name>.json`) or point
+`VOIDR_SERVICE_ACCOUNTS_PATH` at a dedicated file. Production installs must
+keep the default store; `npm run validate` rejects a profile configured in
+`.mcp.json`.
+
 ## Security
 
 The local MCP bridge exposes a small allowlist of application, Test Plan, and

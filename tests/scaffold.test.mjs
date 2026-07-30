@@ -44,10 +44,11 @@ test('scaffolds selected cases with credentials confined to the child process', 
 
   assert.deepEqual(result.cases, ['LOGIN-001', 'LOGIN-002'])
   assert.equal(JSON.stringify(result).includes(secret), false)
+  assert.equal(calls[0].file, 'npx')
   assert.deepEqual(calls[0].args, [
-    'run',
-    'voidr:scaffold',
-    '--',
+    '--no-install',
+    'voidr',
+    'scaffold',
     '--split-per-case',
     '--cases',
     'LOGIN-001,LOGIN-002'
@@ -97,7 +98,8 @@ test('builds through the same isolated preview CLI environment', async () => {
   })
 
   assert.equal(result.completed, true)
-  assert.deepEqual(calls[0].args, ['run', 'voidr:build'])
+  assert.equal(calls[0].file, 'npx')
+  assert.deepEqual(calls[0].args, ['--no-install', 'voidr', 'build'])
   assert.equal(
     calls[0].options.env.VOIDR_API_URL,
     'https://preview.example.test/v1'
@@ -155,6 +157,9 @@ test('does not build when a selected Playwright test fails', async () => {
       return { stdout: '' }
     },
     testRun: async (file, args) => {
+      if (file === 'node' && args[0] === '--version') {
+        return { stdout: 'v22.22.0\n', stderr: '', exitCode: 0 }
+      }
       if (args.includes('--list')) {
         return { stdout: 'selected.spec.js', stderr: '', exitCode: 0 }
       }
@@ -252,6 +257,9 @@ test('lists and runs only selected Playwright specs outside the agent shell', as
     baseUrl: 'https://app.example.test/',
     run: async (file, args, options) => {
       calls.push({ file, args, options })
+      if (file === 'node' && args[0] === '--version') {
+        return { stdout: 'v22.22.0\n', stderr: '', exitCode: 0 }
+      }
       if (args.includes('--list')) {
         return { stdout: 'selected.spec.js', stderr: '', exitCode: 0 }
       }
@@ -270,20 +278,21 @@ test('lists and runs only selected Playwright specs outside the agent shell', as
   assert.equal(result.completed, true)
   assert.equal(result.passed, 1)
   assert.deepEqual(result.specs, ['modules/selected.spec.js'])
-  assert.equal(calls.length, 2)
-  assert.equal(calls[0].options.env.BASE_URL, 'https://app.example.test/')
+  assert.equal(calls.length, 3)
+  assert.deepEqual(calls[0].args, ['--version'])
+  assert.equal(calls[1].options.env.BASE_URL, 'https://app.example.test/')
   assert.equal(
-    calls[1].options.env.APPLICATION_URL,
+    calls[2].options.env.APPLICATION_URL,
     'https://app.example.test/'
   )
-  assert.deepEqual(calls[0].args, [
+  assert.deepEqual(calls[1].args, [
     '--no-install',
     'playwright',
     'test',
     'modules/selected.spec.js',
     '--list'
   ])
-  assert.equal(calls[1].args.includes('--reporter=json'), true)
+  assert.equal(calls[2].args.includes('--reporter=json'), true)
 })
 
 test('rejects selected specs outside the linked repository', async () => {
@@ -320,6 +329,9 @@ function initializeOrigin(repositoryPath, repositoryUrl) {
 }
 
 async function passingPlaywrightRun(file, args) {
+  if (file === 'node' && args[0] === '--version') {
+    return { stdout: 'v22.22.0\n', stderr: '', exitCode: 0 }
+  }
   if (args.includes('--list')) {
     return { stdout: 'selected.spec.js', stderr: '', exitCode: 0 }
   }

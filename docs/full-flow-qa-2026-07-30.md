@@ -49,7 +49,13 @@ Validar o fluxo iniciado por `/copilot voidr-develop-tests`:
 ### BUG-001 — Credenciais copiadas da codebase para o chat e para o draft
 
 Severidade: crítica
-Status: reproduzido
+Status: corrigido em `0.2.19-local.24`; pendente validação na UI
+
+Correção: mesmo mecanismo do BUG-014 (bloqueio de leitura de fontes com
+credenciais e de escrita de Test Plan com valores literais) mais o contrato de
+segredos no skill `voidr-develop-tests`: nunca reproduzir credenciais/PII em
+chat, resumo, draft ou spec; registrar apenas nomes de variáveis como
+`{{env.*}}`.
 
 Ao analisar o repositório de produto, o agente exibiu credenciais de demonstração literalmente e as reutilizou nos passos Arrange/Act do draft.
 
@@ -63,7 +69,12 @@ Comportamento esperado:
 ### BUG-002 — Opções do fluxo aparecem como texto livre
 
 Severidade: média
-Status: reproduzido
+Status: mitigado em `0.2.19-local.24`; pendente validação na UI
+
+Correção: contrato de seleção explícito no início do skill
+`voidr-develop-tests` (toda escolha via `ask_user` quando disponível, texto
+livre apenas como fallback declarado) e reforço no roteador de prompt. Não há
+como o hook forçar o controle da UI; validação continua manual.
 
 Novo/existente, aplicação, ambiente, repositório e demais gates foram apresentados como listas de texto, exigindo que o usuário digitasse a resposta.
 
@@ -75,7 +86,15 @@ Comportamento esperado:
 ### BUG-003 — Falha de criação causou troca automática para Test Plan existente
 
 Severidade: alta
-Status: reproduzido em execução anterior
+Status: corrigido em `0.2.19-local.24` e validado por testes
+
+Correção: a ponte MCP marca a sessão após uma falha de
+`test_plans_create_test_plan` e bloqueia `test_plans_list_test_plans` antes de
+qualquer chamada remota (retry explícito da mesma criação continua possível);
+o hook de runtime bloqueia a listagem sempre que o modo escolhido é
+“Criar novo Test Plan”; o skill exige mostrar o erro exato e oferecer somente
+retry ou cancelamento. Trocar para plano existente exige nova mensagem
+explícita do usuário.
 
 Depois de falhar repetidamente em `test_plans_create_test_plan`, o agente listou Test Plans existentes e escolheu um deles, apesar de o usuário ter selecionado explicitamente “Criar novo Test Plan”.
 
@@ -89,7 +108,13 @@ Comportamento esperado:
 ### BUG-004 — Estado “primeiro acesso” não estava realmente isolado
 
 Severidade: média
-Status: reproduzido
+Status: corrigido em `0.2.19-local.24`
+
+Correção: `voidr_auth_status` agora expõe `credentialStore` (caminho do
+arquivo ativo) e `credentialProfile`; o skill `voidr-connect` mostra o store
+ativo e nunca infere ausência de conta sem o status. Teste isolado usa
+`VOIDR_CREDENTIAL_PROFILE` (arquivo `service-accounts.<profile>.json`) ou
+`VOIDR_SERVICE_ACCOUNTS_PATH`.
 
 O perfil local já continha uma Service Account válida, embora o ambiente tivesse sido tratado inicialmente como zerado.
 
@@ -126,7 +151,16 @@ Comportamento esperado:
 ### BUG-006 — MCP resolve o workspace como a pasta instalada do plugin
 
 Severidade: bloqueadora
-Status: reproduzido
+Status: corrigido em `0.2.19-local.24` e validado por testes; pendente
+validação na UI
+
+Correção: o bridge nunca aceita a instalação do plugin como raiz
+(`resolveWorkspaceRoot` descarta candidatos dentro da instalação e, sem
+candidato válido, falha pedindo `workspaceRoot` explícito — novo parâmetro em
+`voidr_workspace_inspect`, `voidr_workspace_select_test_repository` e
+`voidr_workspace_bootstrap_test_repository`). Toda validação de repositório
+rejeita caminhos dentro da instalação, e o hook de runtime nega seleção e
+escrita de arquivos lá, mesmo em ferramentas genéricas.
 
 Mesmo com o VS Code aberto em `/Users/erikcordeiro/Teste - Plugin Copilot`, a tool de
 seleção de repositório resolveu o workspace como a pasta interna
@@ -143,7 +177,13 @@ Comportamento esperado:
 ### BUG-007 — Falha de rede do sandbox gera diagnóstico e fallbacks incorretos
 
 Severidade: alta
-Status: reproduzido
+Status: corrigido em `0.2.19-local.24` e validado por testes
+
+Correção: os comandos do bridge classificam falhas de rede
+(`EAI_AGAIN`/`ENOTFOUND`/`ETIMEDOUT` etc.) com mensagem explícita de sandbox
+sem rede e instrução de pedir uma única reexecução com rede; o hook de runtime
+bloqueia mudanças de registry, cache, lockfile, `--legacy-peer-deps` e
+`--force` durante o workflow; o skill documenta o procedimento.
 
 `npm install` falhou dentro do sandbox sem acesso à rede. O agente afirmou que havia
 bloqueio do registry, tentou `--legacy-peer-deps`, `--force`, outros gerenciadores e
@@ -158,7 +198,13 @@ Comportamento esperado:
 ### BUG-008 — Scripts `voidr:*` apontam para CLI ausente no template
 
 Severidade: alta
-Status: reproduzido
+Status: corrigido no plugin em `0.2.19-local.24` e validado por testes
+
+Correção: o bridge não depende mais dos scripts `voidr:*` do repositório —
+scaffold, build do smoke e build da release invocam `npx --no-install voidr`
+diretamente, funcionando mesmo quando o skeleton provisionado referencia
+`.voidr/cli/voidr.js` ausente. Corrigir o skeleton em si continua sendo
+mudança do serviço.
 
 O `package.json` gerado contém scripts que executam `.voidr/cli/voidr.js`, mas a pasta
 `.voidr` não foi incluída no repositório. O binário instalado em
@@ -172,7 +218,12 @@ Comportamento esperado:
 ### BUG-009 — Agente imprime o conteúdo do `.env` no histórico
 
 Severidade: crítica
-Status: reproduzido
+Status: corrigido em `0.2.19-local.24` e validado por testes
+
+Correção: além do bloqueio de read-tools (BUG-014), o hook agora nega comandos
+de shell que leem ou imprimem `.env*` (`cat`, `head`, `grep`, `sed`, `source`
+etc.) durante o workflow, orientando validar apenas existência, permissões e
+nomes de chaves, e recomendar rotação quando houver exposição.
 
 Depois de `voidr env pull`, o agente executou `cat .env` para diagnosticar o arquivo.
 Isso pode revelar os segredos retornados pela plataforma no histórico do Copilot.
@@ -186,7 +237,13 @@ Comportamento esperado:
 ### BUG-010 — Playwright 1.48 fica bloqueado com Node 24
 
 Severidade: média
-Status: reproduzido
+Status: corrigido em `0.2.19-local.24` e validado por testes
+
+Correção: `voidr_workspace_prepare_test_repository` e `voidr_smoke_build`
+validam o runtime Node efetivo (via `node --version` no diretório do
+repositório) antes de instalar dependências ou executar Playwright. O pin do
+`volta` no `package.json` é autoritativo; sem pin, exige-se Node 22. Versão
+incompatível falha imediatamente com erro claro, sem travar.
 
 O processo ficou indefinidamente parado antes de listar ou iniciar workers usando Node
 24.13.1. Com a versão declarada no `volta` (`22.22.0`), a listagem foi imediata e o
@@ -312,3 +369,101 @@ foram validados. Ainda falta registrar:
 - versão imutável candidata;
 - confirmação de que `latest` aponta para a candidata;
 - execução e resultado final na plataforma.
+
+## Checklist pendente do plugin
+
+### Ajustes
+
+- [ ] Reinstalar `0.2.19-local.24`, reiniciar o VS Code e validar os novos hooks
+  pela UI do Copilot.
+- [ ] Validar na UI os fixes de `0.2.19-local.24`: workspace root real
+  (BUG-006), bloqueio de `cat .env` (BUG-009), sem fallback novo→existente
+  após falha de criação (BUG-003), diagnóstico de sandbox sem rede (BUG-007),
+  `npx voidr` direto sem scripts do skeleton (BUG-008) e erro claro de Node
+  incompatível (BUG-010).
+- [ ] Validar que arquivos com credenciais, PII e `.env*` não são lidos durante
+  o planejamento.
+- [ ] Validar que nenhuma edição local ocorre antes da seleção e preparação do
+  repositório de testes.
+- [ ] Usar perguntas selecionáveis para aplicação, ambiente, Test Plan e
+  repositório quando esse controle estiver disponível no Copilot.
+- [ ] Melhorar mensagens de erro para impedir tentativas aleatórias, diagnósticos
+  inventados e fallbacks silenciosos.
+- [ ] Validar primeiro acesso, Service Account ausente, Service Account revogada
+  e conta somente leitura.
+- [ ] Resolver ou documentar o callback Auth0 para ambientes não produtivos.
+- [ ] Confirmar o comportamento quando o Copilot está em sandbox sem rede,
+  sem trocar registry, lockfile, cache ou gerenciador de pacotes.
+- [ ] Garantir o uso de Node 22 antes de instalar dependências ou executar
+  Playwright.
+- [ ] Confirmar que o workspace real do VS Code é preservado pelo bridge MCP e
+  que nenhum repositório é criado dentro da instalação do plugin.
+
+### Desenvolvimento
+
+- [ ] Garantir que a criação do Test Plan sempre retorne o link e o clone URL do
+  repositório provisionado.
+- [ ] Consolidar a preparação obrigatória do repositório na ordem:
+  dependências, autenticação interna do framework, `voidr link` quando não
+  existir `project.json`, `voidr scaffold` e `voidr env pull`.
+- [ ] Nunca executar `npx voidr login` de forma interativa durante a preparação;
+  reutilizar internamente a credencial validada pelo `voidr-connect`.
+- [ ] Validar o `project.json` existente contra o Test Plan selecionado e
+  interromper em caso de divergência.
+- [ ] Implementar somente módulos, suites e casos presentes no draft aprovado.
+- [ ] Garantir que specs nunca contenham credenciais, e-mails, CPF, CNPJ,
+  telefones ou outros identificadores literais.
+- [ ] Remover fallbacks literais de variáveis de ambiente nas specs.
+- [ ] Obter endpoints de API da configuração real do produto, sem derivá-los da
+  URL do frontend.
+- [ ] Finalizar o fluxo assistido de commit, push, PR e merge.
+- [ ] Exigir PR mergeado na branch principal antes do deploy.
+- [ ] Produzir uma versão imutável vinculada ao commit mergeado.
+- [ ] Promover a candidata para `latest` e confirmar por leitura independente
+  que `latest` aponta para a versão esperada.
+- [ ] Integrar a execução na plataforma e retornar link, status e resultado.
+- [ ] Publicar uma versão instalável do plugin sem o sufixo `local`.
+
+### Fluxos que ainda precisam de validação completa
+
+- [ ] Reinstalar o plugin publicado na branch e confirmar a versão carregada
+  pelo Copilot.
+- [ ] Executar o fluxo de criação de um novo Test Plan desde uma conversa nova.
+- [ ] Confirmar autenticação antes de acessar aplicação, Test Plan ou codebase.
+- [ ] Selecionar a aplicação usando os dados retornados pela plataforma.
+- [ ] Selecionar um ambiente retornado pela plataforma e tratar separadamente a
+  URL escolhida para o smoke local.
+- [ ] Perguntar qual feature ou jornada será testada.
+- [ ] Perguntar quais insumos devem fundamentar o planejamento.
+- [ ] Analisar somente o repositório de produto explicitamente escolhido e
+  mantê-lo somente leitura.
+- [ ] Apresentar um resumo anonimizado dos insumos e aguardar uma nova mensagem
+  com `Confirmar insumos do planejamento`.
+- [ ] Apresentar o draft completo e aguardar uma nova mensagem com
+  `Aprovo este Test Plan`.
+- [ ] Criar e popular o Test Plan somente depois dos dois gates humanos.
+- [ ] Confirmar que a plataforma criou e vinculou o repositório automaticamente.
+- [ ] Clonar ou selecionar exatamente o repositório vinculado.
+- [ ] Executar a preparação obrigatória na ordem definida.
+- [ ] Implementar somente os casos aprovados.
+- [ ] Executar uma única tentativa de smoke e parar para apresentar o resultado.
+- [ ] Validar smoke com sucesso.
+- [ ] Validar smoke com falha sem edição, diagnóstico ou retry automático no
+  mesmo turno.
+- [ ] Obter autorização separada antes de commit, push e criação do PR.
+- [ ] Fazer merge na branch principal com autorização explícita.
+- [ ] Fazer deploy imutável do commit mergeado.
+- [ ] Confirmar a promoção para `latest`.
+- [ ] Criar a execução na plataforma e acompanhar o resultado final no Voidr
+  Monitor.
+- [ ] Executar o caminho de Test Plan existente sem substituir silenciosamente
+  o ID selecionado.
+- [ ] Executar o caminho sem Service Account e confirmar o redirecionamento para
+  `voidr-connect`.
+- [ ] Executar com Service Account sem permissão de escrita.
+- [ ] Simular falha no provisionamento e validar rollback do Test Plan e do
+  repositório.
+- [ ] Executar contra uma codebase com dados sensíveis e confirmar que nenhum
+  valor aparece no chat, draft, spec ou plataforma.
+- [ ] Validar o fluxo em um workspace com vários produtos e vários repositórios
+  de testes.

@@ -294,6 +294,107 @@ test('bridge filters discovery, keeps secrets local, and blocks forbidden calls'
   assert.equal(client.stderrText().includes(secondSecret), false)
 })
 
+test('bridge blocks Test Plan listing after a failed creation instead of a silent fallback', async t => {
+  const receivedTools = []
+  const server = createServer(async (request, response) => {
+    const message = JSON.parse(await readBody(request))
+    if (message.params?.name) receivedTools.push(message.params.name)
+    response.setHeader('content-type', 'application/json')
+    response.setHeader('mcp-session-id', 'synthetic-session')
+    if (message.method === 'notifications/initialized') {
+      response.writeHead(202)
+      response.end()
+    } else if (message.method === 'initialize') {
+      sendResult(response, message.id, {
+        protocolVersion: '2024-11-05',
+        capabilities: { tools: {} },
+        serverInfo: { name: 'mock', version: '1' }
+      })
+    } else if (message.method === 'tools/call') {
+      // Creation "succeeds" at the HTTP layer but omits the provisioned
+      // repository, which the bridge treats as a failed creation.
+      sendResult(response, message.id, {
+        structuredContent: { data: { _id: '0123456789abcdef01234567' } },
+        content: [
+          { type: 'text', text: JSON.stringify({ _id: '0123456789abcdef01234567' }) }
+        ]
+      })
+    } else {
+      sendResult(response, message.id, { tools: [] })
+    }
+  })
+  server.listen(0, '127.0.0.1')
+  await once(server, 'listening')
+  t.after(() => server.close())
+
+  const temp = mkdtempSync(join(tmpdir(), 'voidr-bridge-create-failure-'))
+  const storePath = join(temp, 'service-accounts.json')
+  writeFileSync(
+    storePath,
+    JSON.stringify({
+      activeOrgId: 'org-create',
+      accounts: {
+        'org-create': {
+          clientId: 'sa_create_e2e',
+          clientSecret: 'synthetic-create-secret',
+          scopes: ['read', 'write']
+        }
+      }
+    })
+  )
+  const child = spawn(process.execPath, [bridgePath], {
+    cwd: temp,
+    env: {
+      ...process.env,
+      VOIDR_SERVICE_ACCOUNTS_PATH: storePath,
+      VOIDR_MCP_URL: `http://127.0.0.1:${server.address().port}/mcp`
+    },
+    stdio: ['pipe', 'pipe', 'pipe']
+  })
+  t.after(() => child.kill())
+  const client = jsonRpcClient(child)
+
+  await client.request('initialize', {
+    protocolVersion: '2024-11-05',
+    capabilities: {},
+    clientInfo: { name: 'e2e', version: '1' }
+  })
+
+  const failedCreate = await client.requestRaw('tools/call', {
+    name: 'test_plans_create_test_plan',
+    arguments: { applicationId: 'app-create', name: 'New Plan' }
+  })
+  assert.match(
+    failedCreate.error.message,
+    /Incomplete Voidr creation response/i
+  )
+
+  const blockedList = await client.requestRaw('tools/call', {
+    name: 'test_plans_list_test_plans',
+    arguments: { applicationId: 'app-create' }
+  })
+  assert.match(blockedList.error.message, /retry or cancel/i)
+  assert.equal(
+    receivedTools.includes('test_plans_list_test_plans'),
+    false,
+    'the failed-creation fallback must be blocked before any network call'
+  )
+
+  const retriedCreate = await client.requestRaw('tools/call', {
+    name: 'test_plans_create_test_plan',
+    arguments: { applicationId: 'app-create', name: 'New Plan' }
+  })
+  assert.match(
+    retriedCreate.error.message,
+    /Incomplete Voidr creation response/i
+  )
+  assert.equal(
+    receivedTools.filter(name => name === 'test_plans_create_test_plan').length,
+    2,
+    'an explicit retry of the same creation remains possible'
+  )
+})
+
 test('bridge blocks writes for an account without write scope before network', async t => {
   const receivedTools = []
   const server = createServer(async (request, response) => {

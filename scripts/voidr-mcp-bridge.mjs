@@ -32,6 +32,7 @@ const provisionedTestPlans = new Set()
 let negotiatedProtocol = '2024-11-05'
 let selectedTestPlanId = null
 let planCreationFailed = false
+let lastFailedCreateArgs = null
 // Structure slugs actually returned by the platform this session. They are
 // the only identifiers the model may reference when adding cases to modules
 // it just created — invented slugs are blocked before any network call.
@@ -355,7 +356,7 @@ async function dispatch(method, params) {
         capabilities: { tools: { listChanged: true } },
         serverInfo: {
           name: 'voidr-safe-bridge',
-          version: '0.2.19-local.36'
+          version: '0.2.19-local.37'
         }
       }
     case 'ping':
@@ -464,6 +465,16 @@ async function callTool(params) {
   }
 
   if (name === 'test_plans_create_test_plan') {
+    // A provisioning failure is never fixed by mutating parameters. After a
+    // failure, only an identical retry (same args) may reach the platform.
+    if (planCreationFailed && lastFailedCreateArgs) {
+      const same = stableStringify(args) === lastFailedCreateArgs
+      if (!same) {
+        throw new Error(
+          'Blocked by Voidr workflow: test_plans_create_test_plan already failed in this session. Changing the name, status, or other parameters never fixes a provisioning failure and can create duplicate plans. Show the user the exact previous error and offer only two options: retry the same creation unchanged, or cancel.'
+        )
+      }
+    }
     let result
     try {
       result = await remote.callTool(name, args)
@@ -471,8 +482,10 @@ async function callTool(params) {
       provisionedTestPlans.add(provisioned.planId)
       selectedTestPlanId = provisioned.planId.toLowerCase()
       planCreationFailed = false
+      lastFailedCreateArgs = null
     } catch (error) {
       planCreationFailed = true
+      lastFailedCreateArgs = stableStringify(args)
       throw error
     }
     return result
@@ -642,6 +655,16 @@ function structureResultText(result) {
     .join('\n')
 }
 
+function stableStringify(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return JSON.stringify(value)
+  }
+  return `{${Object.keys(value)
+    .sort()
+    .map(key => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
+    .join(',')}}`
+}
+
 function resetStructureTracking() {
   sessionModules.clear()
   sessionSuites.clear()
@@ -654,6 +677,7 @@ function resetStructureTracking() {
   planReadAt = null
   countsReadAt = null
   executionNeedsDeploy = false
+  lastFailedCreateArgs = null
 }
 
 // Every platform identifier used in a mutating or preparing call must have
@@ -834,8 +858,9 @@ function bridgeTestPlanId(args) {
 
 function validateProvisionedTestPlan(result) {
   if (result?.isError) {
+    const platformError = structureResultText(result).slice(-400).trim()
     throw new Error(
-      'Voidr did not create the Test Plan and linked repository. Population remains blocked.'
+      `Voidr did not create the Test Plan and linked repository. Platform error: ${platformError || 'no detail returned'}. Population remains blocked. Show the user this exact error and offer only retry (unchanged) or cancel; never change the plan name or parameters.`
     )
   }
   const data = remoteResultData(result)

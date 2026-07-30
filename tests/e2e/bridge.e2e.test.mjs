@@ -408,6 +408,24 @@ test('bridge blocks Test Plan listing after a failed creation instead of a silen
     'the failed-creation fallback must be blocked before any network call'
   )
 
+  const mutatedRetry = await client.requestRaw('tools/call', {
+    name: 'test_plans_create_test_plan',
+    arguments: {
+      applicationId: 'app-create',
+      name: 'New Plan — Retry',
+      status: 'DRAFT'
+    }
+  })
+  assert.match(
+    mutatedRetry.error.message,
+    /never fixes a provisioning failure/i
+  )
+  assert.equal(
+    receivedTools.filter(name => name === 'test_plans_create_test_plan').length,
+    1,
+    'a parameter-mutating retry must be blocked before the network'
+  )
+
   const retriedCreate = await client.requestRaw('tools/call', {
     name: 'test_plans_create_test_plan',
     arguments: { applicationId: 'app-create', name: 'New Plan' }

@@ -351,6 +351,37 @@ assert(
   'Entry skill must explicitly load the implementation skill before code work.'
 )
 assert(
+  /voidr_workspace_prepare_test_repository[\s\S]*?install repository dependencies[\s\S]*?Service Account[\s\S]*?link[\s\S]*?project\.json[\s\S]*?scaffold[\s\S]*?env pull/i.test(
+    entrySkill
+  ),
+  'Entry skill must require the deterministic repository setup gate.'
+)
+assert(
+  /Never run `npx voidr login`[\s\S]*?Never run[\s\S]*?npm install[\s\S]*?npx voidr link[\s\S]*?npx voidr scaffold[\s\S]*?npx voidr env pull/i.test(
+    entrySkill
+  ),
+  'Entry skill must keep framework setup and Service Account injection inside the bridge.'
+)
+const implementationSkill = readFileSync(
+  join(root, 'skills/voidr-implement-tests/SKILL.md'),
+  'utf8'
+)
+assert(
+  /Before reading or editing a generated spec, call[\s\S]*?voidr_workspace_prepare_test_repository/i.test(
+    implementationSkill
+  ) &&
+    /dependency installation[\s\S]*?Service Account[\s\S]*?link[\s\S]*?scaffold[\s\S]*?environment pull/i.test(
+      implementationSkill
+    ),
+  'Implementation skill must block code work until repository preparation completes.'
+)
+assert(
+  /Never run `npx voidr login`[\s\S]*?Never ask for a Client ID or Client Secret[\s\S]*?never read or print `\.env` values/i.test(
+    implementationSkill
+  ),
+  'Implementation skill must protect CLI and environment credentials.'
+)
+assert(
   /If it returns `authenticated: false`, stop the current workflow and reply[\s\S]*?\/copilot voidr-connect/i.test(
     entrySkill
   ),

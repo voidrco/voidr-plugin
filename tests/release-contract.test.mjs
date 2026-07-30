@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -89,10 +90,18 @@ test('release tool binds build, immutable candidate, promotion, and latest to me
     join(repositoryPath, '.voidr', '.output', 'manifest.json'),
     JSON.stringify({ testPlanId, codebaseVersion })
   )
+  const repositoryUrl = 'https://github.com/acme/tests.git'
+  execFileSync('git', ['init', repositoryPath], { stdio: 'ignore' })
+  execFileSync(
+    'git',
+    ['-C', repositoryPath, 'remote', 'add', 'origin', repositoryUrl],
+    { stdio: 'ignore' }
+  )
 
   const calls = []
   const result = await deployMergedPullRequest({
     repositoryPath,
+    repositoryUrl,
     pullRequestNumber: 42,
     testPlanId,
     workspaceRoot: workspace,

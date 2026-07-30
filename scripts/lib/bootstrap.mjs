@@ -9,7 +9,11 @@ import {
 import { spawnSync } from 'node:child_process'
 import { basename, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { canonicalizePotentialPath, isInside } from './workspace.mjs'
+import {
+  canonicalizePotentialPath,
+  isInside,
+  normalizeGitHubRepositoryUrl
+} from './workspace.mjs'
 
 const moduleDir = dirname(fileURLToPath(import.meta.url))
 const templateRoot = resolve(moduleDir, '../../templates/test-repository')
@@ -148,15 +152,6 @@ function validateExistingProvisionedRepository({
       'The local origin does not match the repository provisioned by Voidr.'
     )
   }
-}
-
-function normalizeGitHubRepositoryUrl(value) {
-  return String(value)
-    .trim()
-    .replace(/^git@github\.com:/i, 'https://github.com/')
-    .replace(/\.git$/i, '')
-    .replace(/\/+$/g, '')
-    .toLowerCase()
 }
 
 function sanitizePackageName(value) {

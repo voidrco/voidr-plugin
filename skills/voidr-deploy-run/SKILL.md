@@ -1,7 +1,6 @@
 ---
 name: voidr-deploy-run
 description: Deploys a locally validated Voidr Playwright suite from an already-merged pull request as an immutable release, verifies latest, and creates a platform execution through separate confirmation gates. Use only after selected tests and the Voidr build pass.
-argument-hint: "[pull-request] [environment] [case-slugs]"
 ---
 
 # Deploy and run Voidr tests
@@ -16,8 +15,8 @@ Require:
 - an explicitly selected Test Plan and test repository;
 - a matching `project.json`;
 - no unimplemented selected cases;
-- passing targeted local validation;
-- a successful `voidr_workspace_build_test_repository` result;
+- a successful `voidr_smoke_build` result
+  with `buildCompleted: true` and zero failed or skipped selected tests;
 - a GitHub repository with a pull request for the selected test changes;
 - Service Account scope `write`.
 
@@ -33,6 +32,12 @@ Show:
   commit;
 - whether that commit is present on `origin/<default-branch>`.
 
+Determine cleanliness from
+`git status --porcelain=v1 --untracked-files=all`. The repository is clean
+only when this command returns no output. Untracked files are local changes:
+never describe a repository with untracked files as clean, synchronized, or
+ready to deploy.
+
 Require all of the following:
 
 - the PR state is `MERGED`;
@@ -45,6 +50,10 @@ If the PR is open, closed without merge, targets another branch, or the local
 checkout differs, stop before any platform upload or promotion. Ask the user
 to merge/update the PR or explicitly select the correct merged PR. Never
 create, merge, or change a PR without separate explicit authorization.
+
+If there is no pull request yet, show the exact tracked and untracked paths,
+mark the source merge gate as blocked, and stop. Do not reuse an older merged
+PR whose merge commit does not contain the selected test changes.
 
 ## Immutable deploy gate
 
@@ -62,7 +71,8 @@ Ask:
 > Posso publicar a release imutável deste commit e promovê-la para latest na Voidr?
 
 Only after an affirmative answer, call `voidr_release_deploy_merged_pr` with
-the selected repository, PR number, and Test Plan ID.
+the selected repository path, exact server-returned linked repository URL, PR
+number, and Test Plan ID.
 
 The tool rechecks the merged PR, clean worktree, exact `HEAD`, and
 `origin/<default-branch>` before building. It then:

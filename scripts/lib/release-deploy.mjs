@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { readFile } from 'node:fs/promises'
 import { promisify } from 'node:util'
 import { join } from 'node:path'
-import { validateRepositorySelection } from './workspace.mjs'
+import { validateProvisionedRepositorySelection } from './workspace.mjs'
 import {
   assertCompletedImmutableDeployment,
   assertMergedPullRequestEvidence,
@@ -15,6 +15,7 @@ const execFileAsync = promisify(execFile)
 
 export async function deployMergedPullRequest({
   repositoryPath,
+  repositoryUrl,
   pullRequestNumber,
   testPlanId,
   workspaceRoot = process.cwd(),
@@ -29,7 +30,10 @@ export async function deployMergedPullRequest({
     throw new Error('A valid Test Plan ID is required.')
   }
 
-  const selected = validateRepositorySelection(repositoryPath, workspaceRoot)
+  const selected = validateProvisionedRepositorySelection(
+    repositoryPath,
+    repositoryUrl
+  )
   if (!selected.indicators.git) {
     throw new Error('The selected test repository must be a Git repository.')
   }

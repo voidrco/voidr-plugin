@@ -20,14 +20,24 @@ Require all of:
 - exact user-selected feature or journey;
 - local smoke mode and `localSmokeBaseUrl`;
 - exact selected case slugs;
-- test repository selected through
-  `voidr_workspace_select_test_repository`.
+- exact writable test repository path.
 
 If any value is missing, return to the relevant selection step.
+
+Every precondition must come from an explicit selection in the current
+workflow. Never infer an organization, application, environment, Test Plan,
+case, repository, or smoke target from `project.json`, `.env`, a workspace
+folder, a URL, a repository default, memory from another session, or a value
+found in source code. In particular, a `baseUrl` does not select a Voidr
+environment. If the selected environment slug is absent, list environments
+through Voidr MCP and ask the user to choose; do not call any setup tool.
 
 Read the persisted plan with `test_plans_get_test_plan` before scaffolding.
 Every selected case must already exist in that approved plan. If the plan is
 empty or a case is missing, stop and return to `/voidr-test-plan`.
+If the explicitly selected Test Plan cannot be read, stop immediately. Never
+call `test_plans_list_test_plans`, choose a similarly named plan, or continue
+with a different Test Plan ID in the same turn.
 
 Never call `test_plans_create_test_plan`, `test_plans_create_module`,
 `test_plans_create_suite`, `test_plans_create_case`, or
@@ -38,33 +48,67 @@ Use `localSmokeBaseUrl` only for local Playwright validation. Preserve the
 selected Voidr environment and `applicationUrl` for platform execution. Never
 replace platform configuration with localhost.
 
-## Validate the repository link
+## Mandatory repository setup
 
-Only now read `<test-repository>/project.json`.
+Before reading or editing a generated spec, call
+`voidr_workspace_prepare_test_repository` once with the exact repository path,
+organization ID, application ID, Test Plan ID, selected environment slug, and
+selected case slugs, plus the exact server-returned linked repository URL as
+`repositoryUrl`.
 
-- If absent, show the proposed `orgId`, `appId`, and `testPlanId`, then ask
-  before creating it.
-- If all values match, continue.
-- If any value differs, show a field-by-field comparison and ask whether to
-  relink.
-- Never overwrite a mismatch without an explicit answer.
+This tool is the only allowed initial setup path. It must complete, in order:
 
-Do not use `project.json` to change the selected plan.
+1. dependency installation;
+2. Playwright framework authentication from the plugin's selected Service Account,
+   injected only into child processes;
+3. non-interactive Voidr link only when `project.json` is absent;
+4. Voidr scaffold from the platform for the exact selected cases;
+5. Voidr environment pull for the selected environment slug.
 
-## Scaffold
+Never run `npx voidr login`: browser authentication belongs to
+`/voidr-connect`, while framework commands reuse the already selected plugin
+Service Account. Never ask for a Client ID or Client Secret, never place one in
+a command, and never read or print `.env` values.
 
-Read the selected cases with `test_plans_get_test_plan`. Preserve their
-module, suite, slug, and Arrange/Act/Assert content literally.
+Never run `npm install`, `npx voidr link`, `npx voidr scaffold`, or
+`npx voidr env pull` separately from the agent shell. Do not implement any
+test when the preparation tool is absent, fails, reports interactive login, or
+does not confirm scaffold and secret pull completion.
 
-If a selected spec does not exist, call
+If preparation fails, stop and report the failing setup step. Do not run Git or
+setup commands manually, and do not ask for case selection again.
+
+After successful preparation, do not call
+`voidr_workspace_select_test_repository` again: the preparation result already
+confirms the exact local checkout against the server-returned Git URL. Read
+`<test-repository>/project.json` and verify that `orgId`, `appId`, and
+`testPlanId` still match the explicit selection. A mismatch is a hard stop; do
+not relink automatically and do not use `project.json` to change the selected
+plan.
+
+## Inspect the scaffold
+
+Read the selected cases with `test_plans_get_test_plan`. Preserve their module,
+suite, slug, and Arrange/Act/Assert content literally.
+
+The preparation gate already runs the initial scaffold. Locate each generated
+spec under the platform-derived module and suite hierarchy before editing it.
+Do not create a random test file or replace the generated case title. If a
+newly added selected case is missing after initial preparation, call
 `voidr_workspace_scaffold_test_cases` with the selected repository path, Test
-Plan ID, and exact case slugs. This local bridge tool injects the selected
-Service Account and the plugin's production endpoints into the Voidr CLI process
-without exposing credentials to the model or writing them into the repository.
+Plan ID, exact server-returned linked repository URL, and exact case slugs. This
+local bridge tool injects the selected Service Account and the plugin's
+production endpoints into the Voidr CLI process without exposing credentials
+to the model or writing them into the repository.
 Never run `npm run voidr:scaffold` directly from the agent shell.
 
 Do not use `--force` unless the user explicitly asks to replace an existing
 spec after seeing the affected paths.
+
+Treat `.env` as an opaque secret file. Its existence confirms setup; its values
+must never be opened, summarized, copied into chat, or embedded in test code.
+Use only documented environment variable names and `{{env.VARIABLE_NAME}}`
+placeholders where platform content requires them.
 
 ## Implement
 
@@ -74,26 +118,70 @@ For each selected case:
 2. Implement the smallest independent Playwright test matching the approved
    Arrange/Act/Assert steps.
 3. Use environment placeholders for credentials and sensitive test data.
+   Never add a literal fallback to `process.env.*`, even when product source or
+   a Test Plan includes a demo value. If a required variable is absent after
+   `voidr env pull`, stop and name only the missing variable.
 4. Prefer stable semantic locators and deterministic waits.
 5. Do not expand into unselected cases.
 6. Remove `test.skip` only when the case has a real assertion and can run.
 
 Write only inside the selected test repository.
 
+Treat deployed runtime configuration as authoritative. If the product reads an
+API origin or another endpoint from `window.*`, a config object, a meta tag, or
+a generated runtime file:
+
+- load the selected frontend URL first;
+- read the value that the deployed page actually exposes;
+- use that value without rewriting it;
+- stop when the value is absent and no explicitly selected API environment
+  supplies it.
+
+Never use `page.addInitScript` or another override to replace product runtime
+configuration merely to make a test pass. Never infer that an API is
+same-origin from the frontend URL, and never substitute `window.location.origin`
+for a configured API origin unless the product contract explicitly declares
+same-origin and the deployed runtime confirms it. A repository default such as
+`localhost` is not evidence of the deployed endpoint.
+
 ## Validate
 
-Run targeted checks first:
+Call `voidr_smoke_build` once with the
+selected repository path, exact server-returned linked repository URL, Test
+Plan ID, and only the selected generated spec paths. The tool first lists and
+executes those specs outside the Copilot shell sandbox. It requires zero
+failures and zero skipped selected tests before it runs the authenticated
+Voidr build. It returns a sanitized validation summary while keeping `.env`
+and the Service Account opaque.
 
-```sh
-npx playwright test <selected-specs> --list
-npx playwright test <selected-specs>
-```
+Pass the previously confirmed `localSmokeBaseUrl` as `baseUrl`. The tool
+injects that URL only into the Playwright child process as `BASE_URL`,
+`MAIN_URL`, and `APPLICATION_URL`; it never reads `.env` values to infer the
+target.
 
-After the Playwright checks, call
-`voidr_workspace_build_test_repository` with the selected repository path and
-Test Plan ID. Never run `npm run voidr:build` directly from the agent shell;
-the bridge tool keeps the Service Account secret model-invisible and binds the
-build to the plugin's configured Voidr environment.
+For a single-page application, do not invent browser URL transitions. Assert
+the real visible screen/state change found in product code. Do not concatenate
+an application/frontend URL with an API route. When a case calls an API
+directly, derive the API base from the value exposed by the loaded deployed
+page, documented product runtime configuration, or an explicitly confirmed API
+environment. Do not overwrite that value before reading it.
+
+Never run `npx playwright test` or
+`npm run voidr:build` directly from the agent shell; the bridge tool keeps the
+Service Account secret model-invisible and binds the build to the plugin's
+configured Voidr environment.
+
+After the first `voidr_smoke_build` call, stop immediately and report its exact
+result, whether it passed or failed. Do not inspect more files, modify specs, or
+retry in the same turn. A failure may only be investigated after a new user
+message explicitly asks to investigate or correct it. Do not retry with a
+relative path, run
+`npm`/`npx`/the Voidr CLI in a terminal, inspect `.env`, or look for
+credentials. Only the bridge tool may run the authenticated build.
+
+Require `completed: true`, `buildCompleted: true`, zero failed tests, and no
+skipped selected tests. Never claim that the tests passed from build output
+alone.
 
 Classify failures as test logic, product behavior, test data, authentication,
 or infrastructure. Fix only failures in the selected scope. Do not dispatch

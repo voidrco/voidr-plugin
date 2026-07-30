@@ -11,14 +11,13 @@ import { RemoteMcpClient } from './lib/remote-mcp.mjs'
 import { bootstrapTestRepository } from './lib/bootstrap.mjs'
 import {
   inspectWorkspace,
+  validateProvisionedRepositorySelection,
   validateRepositorySelection
 } from './lib/workspace.mjs'
 import { deployMergedPullRequest } from './lib/release-deploy.mjs'
 import { connectWithBrowser } from './lib/browser-auth.mjs'
-import {
-  buildTestRepository,
-  scaffoldTestCases
-} from './lib/scaffold.mjs'
+import { buildTestRepository, scaffoldTestCases } from './lib/scaffold.mjs'
+import { prepareTestRepository } from './lib/prepare.mjs'
 
 const policy = loadPolicy()
 const safeRemote = new Set(policy.safeRemoteTools)
@@ -26,6 +25,7 @@ const localNames = new Set(policy.localTools)
 const remote = new RemoteMcpClient()
 const provisionedTestPlans = new Set()
 let negotiatedProtocol = '2024-11-05'
+let selectedTestPlanId = null
 
 const localTools = [
   {
@@ -103,9 +103,49 @@ const localTools = [
     inputSchema: {
       type: 'object',
       properties: {
-        path: { type: 'string' }
+        path: { type: 'string' },
+        repositoryUrl: {
+          type: 'string',
+          pattern: '^https://github\\.com/[^/]+/[^/]+(?:\\.git)?$'
+        }
       },
       required: ['path']
+    }
+  },
+  {
+    name: 'voidr_workspace_prepare_test_repository',
+    description:
+      'Prepare an explicitly selected cloned Voidr test repository in one mandatory sequence: install dependencies, authenticate Voidr CLI child processes through the selected plugin Service Account without interactive login, link only when project.json is absent, scaffold exact platform cases, and pull the selected environment secrets without exposing values.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        repositoryPath: { type: 'string' },
+        organizationId: { type: 'string' },
+        applicationId: { type: 'string' },
+        testPlanId: {
+          type: 'string',
+          pattern: '^[a-fA-F0-9]{24}$'
+        },
+        environmentSlug: { type: 'string' },
+        repositoryUrl: {
+          type: 'string',
+          pattern: '^https://github\\.com/[^/]+/[^/]+(?:\\.git)?$'
+        },
+        cases: {
+          type: 'array',
+          minItems: 1,
+          items: { type: 'string' }
+        }
+      },
+      required: [
+        'repositoryPath',
+        'organizationId',
+        'applicationId',
+        'testPlanId',
+        'environmentSlug',
+        'repositoryUrl',
+        'cases'
+      ]
     }
   },
   {
@@ -116,6 +156,10 @@ const localTools = [
       type: 'object',
       properties: {
         repositoryPath: { type: 'string' },
+        repositoryUrl: {
+          type: 'string',
+          pattern: '^https://github\\.com/[^/]+/[^/]+(?:\\.git)?$'
+        },
         testPlanId: {
           type: 'string',
           pattern: '^[a-fA-F0-9]{24}$'
@@ -126,23 +170,45 @@ const localTools = [
           items: { type: 'string' }
         }
       },
-      required: ['repositoryPath', 'testPlanId', 'cases']
+      required: ['repositoryPath', 'repositoryUrl', 'testPlanId', 'cases']
     }
   },
   {
-    name: 'voidr_workspace_build_test_repository',
+    name: 'voidr_smoke_build',
     description:
-      'Build the explicitly selected Voidr test repository while injecting the selected Service Account and the plugin environment without exposing credentials.',
+      'Run only the explicitly selected Playwright specs outside the Copilot shell sandbox, require zero failures and skips, then validate and build the linked Voidr repository. This atomic authenticated gate keeps .env and Service Account credentials opaque and never builds when selected tests did not pass.',
     inputSchema: {
       type: 'object',
       properties: {
         repositoryPath: { type: 'string' },
+        repositoryUrl: {
+          type: 'string',
+          pattern: '^https://github\\.com/[^/]+/[^/]+(?:\\.git)?$'
+        },
         testPlanId: {
           type: 'string',
           pattern: '^[a-fA-F0-9]{24}$'
+        },
+        specs: {
+          type: 'array',
+          minItems: 1,
+          items: {
+            type: 'string',
+            pattern: '^(?!/)(?!.*(?:^|/|\\\\)\\.\\.(?:/|\\\\|$)).+\\.spec\\.[cm]?[jt]sx?$'
+          }
+        },
+        baseUrl: {
+          type: 'string',
+          pattern: '^https?://'
         }
       },
-      required: ['repositoryPath', 'testPlanId']
+      required: [
+        'repositoryPath',
+        'repositoryUrl',
+        'testPlanId',
+        'specs',
+        'baseUrl'
+      ]
     }
   },
   {
@@ -153,10 +219,19 @@ const localTools = [
       type: 'object',
       properties: {
         repositoryPath: { type: 'string' },
+        repositoryUrl: {
+          type: 'string',
+          pattern: '^https://github\\.com/[^/]+/[^/]+(?:\\.git)?$'
+        },
         pullRequestNumber: { type: 'integer', minimum: 1 },
         testPlanId: { type: 'string', pattern: '^[a-fA-F0-9]{24}$' }
       },
-      required: ['repositoryPath', 'pullRequestNumber', 'testPlanId']
+      required: [
+        'repositoryPath',
+        'repositoryUrl',
+        'pullRequestNumber',
+        'testPlanId'
+      ]
     }
   }
 ]
@@ -242,6 +317,9 @@ async function callTool(params) {
   const name = canonicalToolName(rawName)
   const args = params.arguments || {}
 
+  if (name === 'voidr_auth_status') selectedTestPlanId = null
+  enforceBridgeTestPlanIdentity(name, args)
+
   if (isWriteTool(name) && !authStatus().canWrite) {
     throw new Error(
       'The selected Voidr Service Account does not declare the write scope. Platform mutation was blocked.'
@@ -266,8 +344,46 @@ async function callTool(params) {
   if (name === 'test_plans_create_test_plan') {
     const provisioned = validateProvisionedTestPlan(result)
     provisionedTestPlans.add(provisioned.planId)
+    selectedTestPlanId = provisioned.planId.toLowerCase()
   }
   return result
+}
+
+function enforceBridgeTestPlanIdentity(name, args) {
+  if (name === 'test_plans_list_test_plans' && selectedTestPlanId) {
+    throw new Error(
+      `Blocked by Voidr workflow: Test Plan ${selectedTestPlanId} is already selected. If it was not found, stop and ask the user to explicitly choose another Test Plan. Never list and silently substitute a different plan.`
+    )
+  }
+
+  const requestedId = bridgeTestPlanId(args)
+  if (
+    name === 'test_plans_get_test_plan' &&
+    !selectedTestPlanId &&
+    /^[a-f0-9]{24}$/i.test(requestedId)
+  ) {
+    selectedTestPlanId = requestedId.toLowerCase()
+    return
+  }
+
+  if (
+    selectedTestPlanId &&
+    requestedId &&
+    requestedId.toLowerCase() !== selectedTestPlanId
+  ) {
+    throw new Error(
+      `Blocked by Voidr workflow: the selected Test Plan is ${selectedTestPlanId}. Do not substitute ${requestedId}. Ask the user for a new explicit selection first.`
+    )
+  }
+}
+
+function bridgeTestPlanId(args) {
+  if (!args || typeof args !== 'object') return ''
+  for (const key of ['testPlanId', 'test_plan_id', 'planId', 'plan_id']) {
+    const value = args[key]
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return ''
 }
 
 function validateProvisionedTestPlan(result) {
@@ -320,6 +436,7 @@ async function callLocal(name, args) {
       return textResult(await validatedAuthStatus())
     case 'voidr_auth_select_organization': {
       const selected = selectOrganization(String(args.organizationId || ''))
+      selectedTestPlanId = null
       remote.reset()
       announceToolsChanged()
       return textResult({
@@ -331,6 +448,7 @@ async function callLocal(name, args) {
     }
     case 'voidr_auth_login': {
       const imported = await connectWithBrowser()
+      selectedTestPlanId = null
       remote.reset()
       announceToolsChanged()
       return textResult(imported)
@@ -360,25 +478,47 @@ async function callLocal(name, args) {
       )
     case 'voidr_workspace_select_test_repository':
       return textResult(
-        validateRepositorySelection(
-          String(args.path || ''),
-          process.env.VOIDR_WORKSPACE_ROOT || process.cwd()
-        )
+        args.repositoryUrl
+          ? validateProvisionedRepositorySelection(
+              String(args.path || ''),
+              String(args.repositoryUrl)
+            )
+          : validateRepositorySelection(
+              String(args.path || ''),
+              process.env.VOIDR_WORKSPACE_ROOT || process.cwd()
+            )
+      )
+    case 'voidr_workspace_prepare_test_repository':
+      return textResult(
+        await prepareTestRepository({
+          repositoryPath: String(args.repositoryPath || ''),
+          organizationId: String(args.organizationId || ''),
+          applicationId: String(args.applicationId || ''),
+          testPlanId: String(args.testPlanId || ''),
+          environmentSlug: String(args.environmentSlug || ''),
+          repositoryUrl: String(args.repositoryUrl || ''),
+          cases: Array.isArray(args.cases) ? args.cases : [],
+          workspaceRoot: process.env.VOIDR_WORKSPACE_ROOT || process.cwd()
+        })
       )
     case 'voidr_workspace_scaffold_test_cases':
       return textResult(
         await scaffoldTestCases({
           repositoryPath: String(args.repositoryPath || ''),
+          repositoryUrl: String(args.repositoryUrl || ''),
           testPlanId: String(args.testPlanId || ''),
           cases: Array.isArray(args.cases) ? args.cases : [],
           workspaceRoot: process.env.VOIDR_WORKSPACE_ROOT || process.cwd()
         })
       )
-    case 'voidr_workspace_build_test_repository':
+    case 'voidr_smoke_build':
       return textResult(
         await buildTestRepository({
           repositoryPath: String(args.repositoryPath || ''),
+          repositoryUrl: String(args.repositoryUrl || ''),
           testPlanId: String(args.testPlanId || ''),
+          specs: Array.isArray(args.specs) ? args.specs : [],
+          baseUrl: String(args.baseUrl || ''),
           workspaceRoot: process.env.VOIDR_WORKSPACE_ROOT || process.cwd()
         })
       )
@@ -386,6 +526,7 @@ async function callLocal(name, args) {
       return textResult(
         await deployMergedPullRequest({
           repositoryPath: String(args.repositoryPath || ''),
+          repositoryUrl: String(args.repositoryUrl || ''),
           pullRequestNumber: Number(args.pullRequestNumber),
           testPlanId: String(args.testPlanId || ''),
           workspaceRoot: process.env.VOIDR_WORKSPACE_ROOT || process.cwd()

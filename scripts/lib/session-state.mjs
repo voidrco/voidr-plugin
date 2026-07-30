@@ -41,7 +41,7 @@ export function updateSessionState(payload, update) {
 }
 
 export function recordUserPromptState(payload) {
-  const prompt = String(payload?.prompt || '')
+  const prompt = extractUserAuthoredPrompt(payload?.prompt)
   const timestamp = normalizeTimestamp(payload?.timestamp)
   return updateSessionState(payload, current => {
     if (
@@ -54,11 +54,23 @@ export function recordUserPromptState(payload) {
 
     const workflowStarted = isVoidrTestingPrompt(prompt)
     const connectStarted = isVoidrConnectPrompt(prompt)
+    const smokeRemediationAuthorized = isSmokeRemediationPrompt(prompt)
     const planningInputsConfirmed =
       isPlanningInputsConfirmation(prompt)
+    const selectedEnvironmentSlug =
+      current.selectedEnvironmentSlug ||
+      (current.environmentSelectionRequestedAt
+        ? extractEnvironmentSelection(prompt)
+        : null)
     let planMode = workflowStarted ? null : current.planMode || null
     if (isNewPlanChoice(prompt)) planMode = 'new'
     if (isExistingPlanChoice(prompt)) planMode = 'existing'
+    const promptTestPlanId = extractExplicitTestPlanId(prompt)
+    const selectedTestPlanId =
+      planMode === 'new'
+        ? null
+        : promptTestPlanId ||
+          (workflowStarted ? null : current.selectedTestPlanId || null)
     const resetPlanningContext = workflowStarted || isNewPlanChoice(prompt)
 
     return {
@@ -72,7 +84,31 @@ export function recordUserPromptState(payload) {
       connectFirstToolRequired: connectStarted
         ? true
         : current.connectFirstToolRequired === true,
+      selectedEnvironmentSlug: workflowStarted
+        ? null
+        : selectedEnvironmentSlug,
+      selectedEnvironmentAt: workflowStarted
+        ? null
+        : selectedEnvironmentSlug && !current.selectedEnvironmentSlug
+          ? timestamp || Date.now()
+          : current.selectedEnvironmentAt || null,
+      environmentSelectionRequestedAt: workflowStarted
+        ? null
+        : current.environmentSelectionRequestedAt || null,
+      environmentApplicationId: workflowStarted
+        ? null
+        : current.environmentApplicationId || null,
+      smokeAttemptedAt:
+        workflowStarted || smokeRemediationAuthorized
+          ? null
+          : current.smokeAttemptedAt || null,
       planMode,
+      selectedTestPlanId,
+      selectedTestPlanAt: promptTestPlanId
+        ? timestamp || Date.now()
+        : selectedTestPlanId
+          ? current.selectedTestPlanAt || null
+          : null,
       planContextConfirmed: resetPlanningContext
         ? false
         : planningInputsConfirmed
@@ -92,6 +128,14 @@ export function recordUserPromptState(payload) {
   })
 }
 
+export function extractUserAuthoredPrompt(value) {
+  return String(value || '')
+    .replace(/<skill-context\b[^>]*>[\s\S]*?<\/skill-context>/gi, '')
+    .replace(/<system_reminder\b[^>]*>[\s\S]*?<\/system_reminder>/gi, '')
+    .replace(/<current_datetime\b[^>]*>[\s\S]*?<\/current_datetime>/gi, '')
+    .trim()
+}
+
 export function isExplicitTestPlanApproval(prompt) {
   const text = normalizeText(prompt)
   if (/\bnao\s+(?:aprovo|aprovado|aprovar)\b/.test(text)) return false
@@ -106,6 +150,30 @@ export function isExplicitTestPlanApproval(prompt) {
 
 export function isPlanningInputsConfirmation(prompt) {
   return /\bconfirmar\s+insumos\s+do\s+planejamento\b/i.test(prompt)
+}
+
+export function extractEnvironmentSelection(prompt) {
+  const value = normalizeText(prompt).trim()
+  const structured = value.match(
+    /[—–-]\s*([a-z0-9][a-z0-9._-]*)\s*[—–-]\s*https?:/
+  )
+  if (structured) return structured[1]
+
+  const named = value.match(
+    /\bambiente(?:\s+voidr)?(?:\s+selecionado)?\s*[:=-]?\s*([a-z0-9][a-z0-9._-]*)\b/
+  )
+  if (named && named[1] !== 'voidr') return named[1]
+
+  if (/^[a-z0-9][a-z0-9._-]{0,79}$/.test(value)) return value
+  return null
+}
+
+export function extractExplicitTestPlanId(prompt) {
+  const value = String(prompt || '')
+  const match = value.match(
+    /\b(?:test\s*plan|plano\s+de\s+testes?)\s+(?:existente\s+)?(?:id\s*[:#=-]?\s*)?([a-f0-9]{24})\b/i
+  )
+  return match ? match[1].toLowerCase() : null
 }
 
 function isVoidrTestingPrompt(prompt) {
@@ -131,6 +199,16 @@ function isNewPlanChoice(prompt) {
 function isExistingPlanChoice(prompt) {
   return /\b(?:usar|trabalhar\s+em)\s+(?:um\s+)?test plan\s+existente\b/i.test(
     prompt
+  )
+}
+
+function isSmokeRemediationPrompt(prompt) {
+  const text = normalizeText(prompt)
+  return (
+    /\b(?:corrij\w*|ajust\w*|investig\w*|diagnostic\w*|retent\w*|reexecut\w*|rod\w*\s+novamente)\b/.test(
+      text
+    ) &&
+    /\b(?:smoke|teste|testes|falha|falhas|erro|erros)\b/.test(text)
   )
 }
 

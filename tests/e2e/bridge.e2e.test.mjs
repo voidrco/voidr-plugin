@@ -65,6 +65,8 @@ test('bridge filters discovery, keeps secrets local, and blocks forbidden calls'
       sendResult(response, message.id, {
         tools: [
           toolDefinition('applications_list_applications'),
+          toolDefinition('test_plans_list_test_plans'),
+          toolDefinition('test_plans_get_test_plan'),
           toolDefinition('test_plans_create_test_plan'),
           toolDefinition('test_plans_populate_test_plan'),
           toolDefinition('executions_create_execution'),
@@ -157,6 +159,10 @@ test('bridge filters discovery, keeps secrets local, and blocks forbidden calls'
   assert.equal(names.includes('test_plans_create_test_plan'), true)
   assert.equal(names.includes('voidr_auth_status'), true)
   assert.equal(names.includes('voidr_auth_login'), true)
+  assert.equal(
+    names.includes('voidr_workspace_prepare_test_repository'),
+    true
+  )
   assert.equal(names.includes('voidr_auth_prepare_service_account'), false)
   assert.equal(names.includes('voidr_auth_import_service_account'), false)
   assert.equal(names.includes('agent_jobs_trigger_hive_automation'), false)
@@ -169,6 +175,29 @@ test('bridge filters discovery, keeps secrets local, and blocks forbidden calls'
   const statusText = status.content[0].text
   assert.equal(statusText.includes(syntheticSecret), false)
   assert.equal(JSON.parse(statusText).canWrite, true)
+
+  const selectedPlanId = '0123456789abcdef01234567'
+  const selectedPlan = await client.request('tools/call', {
+    name: 'test_plans_get_test_plan',
+    arguments: { testPlanId: selectedPlanId }
+  })
+  assert.match(selectedPlan.content[0].text, /test_plans_get_test_plan/)
+
+  const blockedPlanList = await client.requestRaw('tools/call', {
+    name: 'test_plans_list_test_plans',
+    arguments: { applicationId: 'app-e2e' }
+  })
+  assert.match(blockedPlanList.error.message, /silently substitute/i)
+  assert.equal(
+    received.some(item => item.tool === 'test_plans_list_test_plans'),
+    false
+  )
+
+  const blockedPlanSwap = await client.requestRaw('tools/call', {
+    name: 'test_plans_get_test_plan',
+    arguments: { testPlanId: 'fedcba987654321001234567' }
+  })
+  assert.match(blockedPlanSwap.error.message, /Do not substitute/i)
 
   const newRepository = join(temp, 'new-test-repository')
   const bootstrapped = await client.request('tools/call', {

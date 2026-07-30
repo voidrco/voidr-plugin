@@ -49,6 +49,11 @@ When this skill is invoked explicitly, follow this contract literally:
    Service Account name, scopes, and write access.
 7. If login fails, report only the returned safe error and offer to retry.
 
+The successful connection also supplies downstream Voidr Playwright framework
+commands. Repository setup tools inject this selected Service Account into
+their CLI child processes, so downstream skills must never run
+`npx voidr login` or ask the user to authenticate a second time.
+
 ## Select an existing local account
 
 - If `serviceAccountSelectionRequired` is true, ask which local Service Account

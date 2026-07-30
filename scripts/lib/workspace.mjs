@@ -89,17 +89,53 @@ function readSafeOriginUrl(repositoryPath) {
 }
 
 export function validateRepositorySelection(path, workspaceRoot = process.cwd()) {
+  const selected = validateRepositoryDirectory(path)
+  const root = realpathSync(resolve(workspaceRoot))
+  if (!isInside(selected.path, root)) {
+    throw new Error('The selected test repository must be inside the current workspace.')
+  }
+  return selected
+}
+
+export function validateProvisionedRepositorySelection(path, repositoryUrl) {
+  if (!repositoryUrl) {
+    throw new Error('repositoryUrl is required for a Voidr-provisioned repository.')
+  }
+
+  const selected = validateRepositoryDirectory(path)
+  if (!selected.indicators.git) {
+    throw new Error(
+      'The Voidr-provisioned repository must be an existing Git checkout.'
+    )
+  }
+
+  const remote = spawnSync(
+    'git',
+    ['-C', selected.path, 'remote', 'get-url', 'origin'],
+    { encoding: 'utf8' }
+  )
+  if (remote.status !== 0 || !String(remote.stdout || '').trim()) {
+    throw new Error('The provisioned repository has no readable origin remote.')
+  }
+  if (
+    normalizeGitHubRepositoryUrl(remote.stdout) !==
+    normalizeGitHubRepositoryUrl(repositoryUrl)
+  ) {
+    throw new Error(
+      'The local origin does not match the repository provisioned by Voidr.'
+    )
+  }
+
+  return selected
+}
+
+function validateRepositoryDirectory(path) {
   const requested = resolve(path)
   if (!existsSync(requested) || !lstatSync(requested).isDirectory()) {
     throw new Error(`Test repository does not exist: ${requested}`)
   }
 
   const selected = realpathSync(requested)
-  const root = realpathSync(resolve(workspaceRoot))
-  if (!isInside(selected, root)) {
-    throw new Error('The selected test repository must be inside the current workspace.')
-  }
-
   const indicators = {
     git: existsSync(join(selected, '.git')),
     packageJson: existsSync(join(selected, 'package.json')),
@@ -127,6 +163,35 @@ export function validateRepositorySelection(path, workspaceRoot = process.cwd())
   }
 
   return { path: selected, indicators, project }
+}
+
+export function normalizeGitHubRepositoryUrl(value) {
+  const raw = String(value || '')
+    .trim()
+    .replace(/^git@github\.com:/i, 'https://github.com/')
+    .replace(/\.git$/i, '')
+    .replace(/\/+$/g, '')
+
+  let parsed
+  try {
+    parsed = new URL(raw)
+  } catch {
+    throw new Error('A valid GitHub repository URL is required.')
+  }
+  if (
+    parsed.protocol !== 'https:' ||
+    parsed.hostname.toLowerCase() !== 'github.com' ||
+    parsed.username ||
+    parsed.password
+  ) {
+    throw new Error('A valid GitHub repository URL is required.')
+  }
+  const segments = parsed.pathname.split('/').filter(Boolean)
+  if (segments.length !== 2) {
+    throw new Error('A valid GitHub repository URL is required.')
+  }
+
+  return `https://github.com/${segments[0]}/${segments[1]}`.toLowerCase()
 }
 
 export function isInside(candidate, root) {

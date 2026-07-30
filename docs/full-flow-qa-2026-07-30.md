@@ -442,6 +442,27 @@ Correção (mecânica, no bridge):
 Pendência ambiental: remover manualmente a pasta stale
 `voidr-tp-serasa-consulta-cnpj` (template sem `.git`) do workspace de teste.
 
+### Hardening — Contrato de proveniência de dados (`0.2.19-local.29`)
+
+Generalização mecânica da regra "sempre conferir na plataforma via tool,
+nunca inferir dados", que antes existia só caso a caso (BUG-013/016/017/018):
+
+- o bridge registra o que a plataforma retornou na sessão (applicationIds,
+  environment slugs por aplicação, slugs de módulo/suite/caso por plano —
+  vindos de list/get/create/populate);
+- `test_plans_create_test_plan` e `voidr_workspace_prepare_test_repository`
+  exigem `applications_list_applications` prévio e bloqueiam `applicationId`
+  não retornado;
+- o `environmentSlug` do prepare precisa ter vindo de
+  `applications_list_environments` da aplicação (mensagem lista os válidos);
+- case slugs do prepare/scaffold são validados contra os slugs conhecidos do
+  plano quando houver (get/create/populate); slug inventado é bloqueado antes
+  da rede;
+- degradação segura: quando a resposta da plataforma não é parseável, a
+  exigência de "listar antes" permanece e a checagem de pertencimento é
+  suspensa (nunca bloqueia dado legítimo por falha de parsing);
+- skills ganham o "Data provenance contract" explícito.
+
 ## Próximo checkpoint
 
 A criação, a população anonimizada, o provisionamento, a materialização e o smoke local

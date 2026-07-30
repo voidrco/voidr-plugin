@@ -24,6 +24,14 @@ other personal identifiers found in the diff, product code, or `.env` files —
 not in chat, summaries, scenarios, or specs. Use `{{env.VARIABLE_NAME}}`
 placeholders and never read or print `.env` contents.
 
+Data provenance contract: every platform fact — application, environment,
+Test Plan, module/suite/case slug, URL, execution status — exists only when a
+Voidr tool returned it in this session. Never infer platform data from folder
+names, file contents, chat history, memory, or previous conversations. When a
+value is unknown, call the corresponding read tool first. The bridge blocks
+any call that references an applicationId, environment slug, or case slug the
+platform never returned.
+
 ## 1. Silent context discovery (no questions yet)
 
 When the flow starts:

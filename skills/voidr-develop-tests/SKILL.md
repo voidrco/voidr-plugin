@@ -22,6 +22,14 @@ only the environment variable names as `{{env.VARIABLE_NAME}}` placeholders.
 Never read or print `.env` contents through any tool or terminal command; if
 a value was already exposed, recommend rotating it.
 
+Data provenance contract: every platform fact — application, environment,
+Test Plan, module/suite/case slug, URL, execution status — exists only when a
+Voidr tool returned it in this session. Never infer platform data from folder
+names, file contents, chat history, memory, or previous conversations. When a
+value is unknown, call the corresponding read tool first. The bridge blocks
+any call that references an applicationId, environment slug, or case slug the
+platform never returned.
+
 ## 1. Establish intent before tools
 
 For a new conversation, the first response must ask exactly one decision:

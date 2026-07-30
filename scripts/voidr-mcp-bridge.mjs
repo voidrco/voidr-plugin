@@ -36,6 +36,13 @@ const sessionModules = new Map() // planId -> Set<moduleSlug>
 const sessionSuites = new Map() // planId -> Map<moduleSlug, Set<suiteSlug>>
 const failedStructureRefs = new Set() // `${planId}|${slug}` that returned not-found
 let preparedRepositoryPath = null
+// Data provenance: platform facts only exist when a tool response returned
+// them this session. Writes referencing values the platform never returned
+// are blocked before any side effect.
+let applicationsListed = false
+const seenApplicationIds = new Set()
+const seenEnvironments = new Map() // applicationId -> Set<slug>
+const seenPlanSlugs = new Map() // planId -> Set<slug> (modules/suites/cases)
 
 const localTools = [
   {
@@ -293,7 +300,7 @@ async function dispatch(method, params) {
         capabilities: { tools: { listChanged: true } },
         serverInfo: {
           name: 'voidr-safe-bridge',
-          version: '0.2.19-local.28'
+          version: '0.2.19-local.29'
         }
       }
     case 'ping':
@@ -344,9 +351,24 @@ async function callTool(params) {
     )
   }
 
+  enforcePlatformProvenance(name, args)
+
   if (localNames.has(name)) return callLocal(name, args)
   if (!safeRemote.has(name)) {
     throw new Error(`Tool ${rawName} is not allowed by the Voidr plugin policy.`)
+  }
+
+  if (
+    [
+      'applications_list_applications',
+      'applications_get_application',
+      'applications_list_environments',
+      'test_plans_get_test_plan'
+    ].includes(name)
+  ) {
+    const result = await remote.callTool(name, args)
+    if (!result?.isError) recordProvenance(name, args, result)
+    return result
   }
 
   if (name === 'test_plans_populate_test_plan') {
@@ -375,7 +397,21 @@ async function callTool(params) {
 
   if (STRUCTURE_TOOLS.has(name)) return callStructureTool(name, args)
 
-  return remote.callTool(name, args)
+  const result = await remote.callTool(name, args)
+  if (name === 'test_plans_populate_test_plan' && !result?.isError) {
+    recordPlanSlugs(bridgeTestPlanId(args), remoteResultData(result))
+  }
+  return result
+}
+
+function recordPlanSlugs(planId, data) {
+  const key = String(planId || '').toLowerCase()
+  if (!key) return
+  if (!seenPlanSlugs.has(key)) seenPlanSlugs.set(key, new Set())
+  const slugs = seenPlanSlugs.get(key)
+  for (const value of collectStringsByKey(data, ['slug', 'identifier'])) {
+    slugs.add(value.toLowerCase())
+  }
 }
 
 const STRUCTURE_TOOLS = new Set([
@@ -402,6 +438,7 @@ async function callStructureTool(name, args) {
   }
 
   recordCreatedStructure(name, planId, args, result)
+  recordPlanSlugs(planId, remoteResultData(result))
   return result
 }
 
@@ -522,6 +559,131 @@ function resetStructureTracking() {
   sessionSuites.clear()
   failedStructureRefs.clear()
   preparedRepositoryPath = null
+  applicationsListed = false
+  seenApplicationIds.clear()
+  seenEnvironments.clear()
+  seenPlanSlugs.clear()
+}
+
+// Every platform identifier used in a mutating or preparing call must have
+// been returned by a platform read in this session. Guessing is blocked with
+// the exact read tool to call.
+function enforcePlatformProvenance(name, args) {
+  if (name === 'test_plans_create_test_plan') {
+    assertKnownApplication(String(args.applicationId || '').trim())
+  }
+
+  if (name === 'voidr_workspace_prepare_test_repository') {
+    const applicationId = String(args.applicationId || '').trim()
+    assertKnownApplication(applicationId)
+    assertKnownEnvironment(applicationId, String(args.environmentSlug || ''))
+    assertKnownCases(String(args.testPlanId || ''), args.cases)
+  }
+
+  if (name === 'voidr_workspace_scaffold_test_cases') {
+    assertKnownCases(String(args.testPlanId || ''), args.cases)
+  }
+}
+
+function assertKnownApplication(applicationId) {
+  if (!applicationsListed) {
+    throw new Error(
+      'Blocked by Voidr workflow: consult the platform first. Call applications_list_applications and use an application the platform actually returned; never infer an applicationId.'
+    )
+  }
+  if (
+    applicationId &&
+    seenApplicationIds.size &&
+    !seenApplicationIds.has(applicationId.toLowerCase())
+  ) {
+    throw new Error(
+      `Blocked by Voidr workflow: applicationId ${applicationId} was not returned by the platform in this session. Use exactly one of the applications from applications_list_applications; never infer or reuse an ID from memory.`
+    )
+  }
+}
+
+function assertKnownEnvironment(applicationId, environmentSlug) {
+  const slugs = seenEnvironments.get(applicationId.toLowerCase())
+  if (!slugs) {
+    throw new Error(
+      'Blocked by Voidr workflow: consult the platform first. Call applications_list_environments for the selected application and use a returned environment slug; never infer an environment.'
+    )
+  }
+  const slug = String(environmentSlug || '').trim().toLowerCase()
+  if (slug && slugs.size && !slugs.has(slug)) {
+    throw new Error(
+      `Blocked by Voidr workflow: environment '${environmentSlug}' was not returned for this application. Use exactly one of: ${[...slugs].join(', ')}.`
+    )
+  }
+}
+
+function assertKnownCases(planId, cases) {
+  const known = seenPlanSlugs.get(planId.toLowerCase())
+  if (!known?.size || !Array.isArray(cases)) return
+  const unknown = cases
+    .map(value => String(value).trim())
+    .filter(value => value && !known.has(value.toLowerCase()))
+  if (unknown.length) {
+    throw new Error(
+      `Blocked by Voidr workflow: case slug(s) ${unknown.join(', ')} were not returned by the platform for this Test Plan. Read the plan with test_plans_get_test_plan and use the exact case slugs it returns; never invent slugs.`
+    )
+  }
+}
+
+function recordProvenance(name, args, result) {
+  const data = remoteResultData(result)
+  if (
+    name === 'applications_list_applications' ||
+    name === 'applications_get_application'
+  ) {
+    applicationsListed = true
+    for (const value of collectStringsByKey(data, [
+      '_id',
+      'id',
+      'applicationId'
+    ])) {
+      if (/^[a-f0-9]{24}$/i.test(value)) {
+        seenApplicationIds.add(value.toLowerCase())
+      }
+    }
+    return
+  }
+  if (name === 'applications_list_environments') {
+    const applicationId = String(args.applicationId || '')
+      .trim()
+      .toLowerCase()
+    if (!applicationId) return
+    if (!seenEnvironments.has(applicationId)) {
+      seenEnvironments.set(applicationId, new Set())
+    }
+    const slugs = seenEnvironments.get(applicationId)
+    for (const value of collectStringsByKey(data, ['slug'])) {
+      slugs.add(value.toLowerCase())
+    }
+    return
+  }
+  if (name === 'test_plans_get_test_plan') {
+    const planId = bridgeTestPlanId(args).toLowerCase()
+    if (!planId) return
+    if (!seenPlanSlugs.has(planId)) seenPlanSlugs.set(planId, new Set())
+    const slugs = seenPlanSlugs.get(planId)
+    for (const value of collectStringsByKey(data, ['slug', 'identifier'])) {
+      slugs.add(value.toLowerCase())
+    }
+  }
+}
+
+function collectStringsByKey(value, keys, depth = 0) {
+  if (!value || typeof value !== 'object' || depth > 8) return []
+  const results = []
+  for (const [key, child] of Object.entries(value)) {
+    if (typeof child === 'string' && keys.includes(key) && child.trim()) {
+      results.push(child.trim())
+    } else if (child && typeof child === 'object') {
+      results.push(...collectStringsByKey(child, keys, depth + 1))
+    }
+  }
+  return results
 }
 
 // The smoke must run against the checkout the session actually prepared. A

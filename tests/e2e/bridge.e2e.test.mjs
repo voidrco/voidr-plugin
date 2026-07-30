@@ -234,6 +234,20 @@ test('bridge filters discovery, keeps secrets local, and blocks forbidden calls'
     false
   )
 
+  const blockedUnlistedCreate = await client.requestRaw('tools/call', {
+    name: 'test_plans_create_test_plan',
+    arguments: { applicationId: 'app-e2e', name: 'E2E Plan' }
+  })
+  assert.match(
+    blockedUnlistedCreate.error.message,
+    /applications_list_applications/i
+  )
+
+  await client.request('tools/call', {
+    name: 'applications_list_applications',
+    arguments: {}
+  })
+
   const safeCall = await client.request('tools/call', {
     name: 'test_plans_create_test_plan',
     arguments: { applicationId: 'app-e2e', name: 'E2E Plan' }
@@ -311,6 +325,15 @@ test('bridge blocks Test Plan listing after a failed creation instead of a silen
         serverInfo: { name: 'mock', version: '1' }
       })
     } else if (message.method === 'tools/call') {
+      if (message.params.name === 'applications_list_applications') {
+        sendResult(response, message.id, {
+          structuredContent: { data: { called: message.params.name } },
+          content: [
+            { type: 'text', text: JSON.stringify({ called: message.params.name }) }
+          ]
+        })
+        return
+      }
       // Creation "succeeds" at the HTTP layer but omits the provisioned
       // repository, which the bridge treats as a failed creation.
       sendResult(response, message.id, {
@@ -358,6 +381,11 @@ test('bridge blocks Test Plan listing after a failed creation instead of a silen
     protocolVersion: '2024-11-05',
     capabilities: {},
     clientInfo: { name: 'e2e', version: '1' }
+  })
+
+  await client.request('tools/call', {
+    name: 'applications_list_applications',
+    arguments: {}
   })
 
   const failedCreate = await client.requestRaw('tools/call', {
@@ -557,6 +585,168 @@ function structureText(result) {
     .map(item => item.text)
     .join('\n')
 }
+
+test('bridge blocks platform data that was never returned by a tool this session', async t => {
+  const server = createServer(async (request, response) => {
+    const message = JSON.parse(await readBody(request))
+    response.setHeader('content-type', 'application/json')
+    response.setHeader('mcp-session-id', 'synthetic-session')
+    if (message.method === 'notifications/initialized') {
+      response.writeHead(202)
+      response.end()
+      return
+    }
+    if (message.method === 'initialize') {
+      sendResult(response, message.id, {
+        protocolVersion: '2024-11-05',
+        capabilities: { tools: {} },
+        serverInfo: { name: 'mock', version: '1' }
+      })
+      return
+    }
+    if (message.method === 'tools/call') {
+      const { name } = message.params
+      const data =
+        name === 'applications_list_applications'
+          ? { applications: [{ _id: '6a5113d133cfac0a5ec0fd7b', name: 'Portal' }] }
+          : name === 'applications_list_environments'
+            ? { environments: [{ slug: 'producao', applicationUrl: 'https://portal.example.test' }] }
+            : name === 'test_plans_get_test_plan'
+              ? {
+                  _id: '6a5303e59a93b9f0daef3a53',
+                  modules: [
+                    {
+                      slug: 'recarga',
+                      suites: [
+                        { slug: 'compra', cases: [{ slug: 'recarga-01' }] }
+                      ]
+                    }
+                  ]
+                }
+              : { called: name }
+      sendResult(response, message.id, {
+        structuredContent: { data },
+        content: [{ type: 'text', text: JSON.stringify(data) }]
+      })
+      return
+    }
+    sendResult(response, message.id, { tools: [] })
+  })
+  server.listen(0, '127.0.0.1')
+  await once(server, 'listening')
+  t.after(() => server.close())
+
+  const temp = mkdtempSync(join(tmpdir(), 'voidr-bridge-provenance-'))
+  const storePath = join(temp, 'service-accounts.json')
+  writeFileSync(
+    storePath,
+    JSON.stringify({
+      activeOrgId: 'org-prov',
+      accounts: {
+        'org-prov': {
+          clientId: 'sa_provenance_e2e',
+          clientSecret: 'synthetic-provenance-secret',
+          scopes: ['read', 'write']
+        }
+      }
+    })
+  )
+  const child = spawn(process.execPath, [bridgePath], {
+    cwd: temp,
+    env: {
+      ...process.env,
+      VOIDR_SERVICE_ACCOUNTS_PATH: storePath,
+      VOIDR_MCP_URL: `http://127.0.0.1:${server.address().port}/mcp`
+    },
+    stdio: ['pipe', 'pipe', 'pipe']
+  })
+  t.after(() => child.kill())
+  const client = jsonRpcClient(child)
+  await client.request('initialize', {
+    protocolVersion: '2024-11-05',
+    capabilities: {},
+    clientInfo: { name: 'e2e', version: '1' }
+  })
+
+  const applicationId = '6a5113d133cfac0a5ec0fd7b'
+  const planId = '6a5303e59a93b9f0daef3a53'
+  const prepareBase = {
+    repositoryPath: join(temp, 'tests'),
+    organizationId: 'org-prov',
+    testPlanId: planId,
+    repositoryUrl: 'https://github.com/voidrco/voidr-tp-prov.git',
+    workspaceRoot: temp
+  }
+
+  const beforeListing = await client.requestRaw('tools/call', {
+    name: 'test_plans_create_test_plan',
+    arguments: { applicationId, name: 'Plano' }
+  })
+  assert.match(
+    beforeListing.error.message,
+    /applications_list_applications/i
+  )
+
+  await client.request('tools/call', {
+    name: 'applications_list_applications',
+    arguments: {}
+  })
+
+  const inventedApplication = await client.requestRaw('tools/call', {
+    name: 'test_plans_create_test_plan',
+    arguments: { applicationId: 'ffffffffffffffffffffffff', name: 'Plano' }
+  })
+  assert.match(
+    inventedApplication.error.message,
+    /was not returned by the platform/i
+  )
+
+  const environmentsNotListed = await client.requestRaw('tools/call', {
+    name: 'voidr_workspace_prepare_test_repository',
+    arguments: {
+      ...prepareBase,
+      applicationId,
+      environmentSlug: 'producao',
+      cases: ['recarga-01']
+    }
+  })
+  assert.match(
+    environmentsNotListed.error.message,
+    /applications_list_environments/i
+  )
+
+  await client.request('tools/call', {
+    name: 'applications_list_environments',
+    arguments: { applicationId }
+  })
+
+  const inventedEnvironment = await client.requestRaw('tools/call', {
+    name: 'voidr_workspace_prepare_test_repository',
+    arguments: {
+      ...prepareBase,
+      applicationId,
+      environmentSlug: 'staging',
+      cases: ['recarga-01']
+    }
+  })
+  assert.match(inventedEnvironment.error.message, /Use exactly one of: producao/i)
+
+  await client.request('tools/call', {
+    name: 'test_plans_get_test_plan',
+    arguments: { testPlanId: planId }
+  })
+  const inventedCase = await client.requestRaw('tools/call', {
+    name: 'voidr_workspace_prepare_test_repository',
+    arguments: {
+      ...prepareBase,
+      applicationId,
+      environmentSlug: 'producao',
+      cases: ['recarga-01', 'ghost-99']
+    }
+  })
+  assert.match(inventedCase.error.message, /ghost-99/)
+  assert.match(inventedCase.error.message, /never invent slugs/i)
+})
 
 test('bridge blocks writes for an account without write scope before network', async t => {
   const receivedTools = []

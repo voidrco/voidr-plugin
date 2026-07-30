@@ -254,3 +254,49 @@ test('injects the real workspace root when a workspace tool omits it', () => {
   )
   assert.deepEqual(inspectWithRoot, {})
 })
+
+test('blocks Voidr CLI and Playwright invocations in the agent shell (BUG-021)', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
+
+  for (const command of [
+    'node ./node_modules/@voidrco/playwright/cli/voidr.js build',
+    'node ./node_modules/@voidrco/playwright/cli/voidr.js login',
+    'npx voidr login',
+    'npx --no-install voidr env pull --env producao',
+    'voidr login',
+    'voidr build',
+    'npx playwright test modules/recarga/recar-01.spec.js'
+  ]) {
+    const output = runHook(
+      {
+        sessionId: 'voidr-cli-shell',
+        cwd: process.cwd(),
+        toolName: 'bash',
+        toolArgs: { command }
+      },
+      dataRoot
+    )
+    assert.equal(output.permissionDecision, 'deny', command)
+    assert.match(
+      output.permissionDecisionReason,
+      /never run the Voidr CLI or Playwright from the terminal/i,
+      command
+    )
+  }
+
+  for (const command of ['npm install', 'git status', 'npx tsc --noEmit']) {
+    assert.deepEqual(
+      runHook(
+        {
+          sessionId: 'voidr-cli-shell',
+          cwd: process.cwd(),
+          toolName: 'bash',
+          toolArgs: { command }
+        },
+        dataRoot
+      ),
+      {},
+      command
+    )
+  }
+})

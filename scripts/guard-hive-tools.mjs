@@ -100,6 +100,7 @@ if (isShell) {
       `Blocked by Voidr policy: legacy mutable deployment bypasses the merged-PR and immutable latest release gate.`
     )
   }
+  enforceVoidrCliShellUsage(normalizedShell)
   const fragment = policy.forbiddenShellFragments.find(value =>
     searchable.includes(value.toLowerCase())
   )
@@ -197,6 +198,26 @@ function enforceNewPlanModeListing(hookPayload, canonicalName) {
   if (state.planMode !== 'new') return
   deny(
     'Blocked by Voidr workflow: the user chose to create a new Test Plan. If creation failed, stop, show the exact tool error, and offer to retry or cancel. Never list existing Test Plans to silently replace the new plan. Switching to an existing plan requires the user to explicitly say “Usar Test Plan existente” in a new message.'
+  )
+}
+
+// The Voidr CLI and Playwright runs are bridge-only: the terminal has no
+// Service Account, and interactive `voidr login` would create a user
+// credential session outside the plugin's model. Blocked in every form —
+// npx, direct node invocation, or a PATH binary.
+function enforceVoidrCliShellUsage(normalizedShell) {
+  const invokesVoidrCli =
+    /(?:^|[\s;|&(])npx\b[^;&|\n]*\bvoidr\b/.test(normalizedShell) ||
+    /(?:^|[\s;|&(])voidr\s+(?:login|link|scaffold|env|build|deploy|deploy-candidate)\b/.test(
+      normalizedShell
+    ) ||
+    /voidr\.js\b/.test(normalizedShell) ||
+    normalizedShell.includes('@voidrco/playwright/cli')
+  const invokesPlaywrightRun =
+    /(?:^|[\s;|&(])npx\b[^;&|\n]*\bplaywright\s+test\b/.test(normalizedShell)
+  if (!invokesVoidrCli && !invokesPlaywrightRun) return
+  deny(
+    'Blocked by Voidr policy: never run the Voidr CLI or Playwright from the terminal — it has no Service Account credentials there, and interactive voidr login is forbidden. Use the bridge tools, which inject the credentials automatically: voidr_workspace_prepare_test_repository (setup/link/scaffold/env pull), voidr_smoke_build (run selected tests + build), voidr_workspace_publish_tests (commit/push/PR), and voidr_release_deploy_merged_pr (immutable deploy).'
   )
 }
 

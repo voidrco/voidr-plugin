@@ -615,6 +615,9 @@ test('denies legacy mutable deploy commands but permits immutable candidates', (
     assert.match(output.permissionDecisionReason, /immutable latest release gate/i)
   }
 
+  // Since BUG-021 no Voidr CLI invocation leaves the agent shell at all —
+  // deploy-candidate runs inside the bridge, which does not pass through
+  // this hook.
   const candidate = runHook({
     sessionId: 'immutable-candidate',
     cwd: process.cwd(),
@@ -623,7 +626,11 @@ test('denies legacy mutable deploy commands but permits immutable candidates', (
       command: 'npx --no-install voidr deploy-candidate --json'
     }
   })
-  assert.deepEqual(candidate, {})
+  assert.equal(candidate.permissionDecision, 'deny')
+  assert.match(
+    candidate.permissionDecisionReason,
+    /never run the Voidr CLI or Playwright from the terminal/i
+  )
 })
 
 test('denies direct HTTP calls to process-dispatch endpoints', () => {

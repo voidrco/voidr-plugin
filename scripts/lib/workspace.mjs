@@ -134,6 +134,44 @@ function readSafeOriginUrl(repositoryPath) {
   }
 }
 
+// Locates an existing checkout of the given GitHub repository anywhere in
+// the workspace by comparing normalized Git origins. This is the anti-
+// hallucination primitive: tools call it before creating or cloning anything,
+// so a model that wrongly believes "no checkout exists" cannot cause a
+// duplicate clone or a bootstrap into the wrong place.
+export function findCheckoutByOrigin(
+  workspaceRoot,
+  repositoryUrl,
+  maxDepth = 3
+) {
+  const expected = normalizeGitHubRepositoryUrl(repositoryUrl)
+  const resolvedRoot = realpathSync(resolve(workspaceRoot))
+  const rootOrigin = existsSync(join(resolvedRoot, '.git'))
+    ? readSafeOriginUrl(resolvedRoot)
+    : null
+  if (rootOrigin) {
+    try {
+      if (normalizeGitHubRepositoryUrl(rootOrigin) === expected) {
+        return resolvedRoot
+      }
+    } catch {
+      // The workspace root itself has a non-matching origin; keep scanning.
+    }
+  }
+  const { candidates } = inspectWorkspace(resolvedRoot, maxDepth)
+  for (const candidate of candidates) {
+    if (!candidate.indicators.git || !candidate.originUrl) continue
+    try {
+      if (normalizeGitHubRepositoryUrl(candidate.originUrl) === expected) {
+        return candidate.path
+      }
+    } catch {
+      // Non-GitHub or malformed origins are never a match.
+    }
+  }
+  return null
+}
+
 export function validateRepositorySelection(path, workspaceRoot = process.cwd()) {
   const selected = validateRepositoryDirectory(path)
   const root = realpathSync(resolve(workspaceRoot))

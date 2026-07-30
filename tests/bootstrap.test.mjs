@@ -175,3 +175,58 @@ test('rejects a checkout whose origin differs from the provisioned repository', 
     /origin does not match/
   )
 })
+
+test('reuses an existing checkout of the linked repository anywhere in the workspace', async () => {
+  const { bootstrapTestRepository } = await import(
+    '../scripts/lib/bootstrap.mjs'
+  )
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-bootstrap-reuse-'))
+  const existing = join(workspace, 'already-cloned-tests')
+  const repositoryUrl = 'https://github.com/voidrco/voidr-tp-serasa-consul.git'
+  spawnSync('git', ['init', existing], { stdio: 'ignore' })
+  spawnSync('git', ['-C', existing, 'remote', 'add', 'origin', repositoryUrl], {
+    stdio: 'ignore'
+  })
+  writeFileSync(join(existing, 'package.json'), '{}')
+
+  const result = bootstrapTestRepository({
+    target: join(workspace, 'somewhere-else'),
+    organizationId: 'org-reuse',
+    applicationId: 'app-reuse',
+    testPlanId: '0123456789abcdef01234567',
+    allowExistingGitRepository: true,
+    repositoryUrl,
+    workspaceRoot: workspace
+  })
+
+  assert.equal(result.created, false)
+  assert.equal(result.reusedExistingCheckout, true)
+  assert.equal(result.target, realpathSync(existing))
+  assert.equal(existsSync(join(workspace, 'somewhere-else')), false)
+})
+
+test('bootstraps normally when no checkout of the linked repository exists', async () => {
+  const { bootstrapTestRepository } = await import(
+    '../scripts/lib/bootstrap.mjs'
+  )
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-bootstrap-fresh-'))
+  const unrelated = join(workspace, 'other-repo')
+  spawnSync('git', ['init', unrelated], { stdio: 'ignore' })
+  spawnSync(
+    'git',
+    ['-C', unrelated, 'remote', 'add', 'origin', 'https://github.com/acme/other.git'],
+    { stdio: 'ignore' }
+  )
+
+  const result = bootstrapTestRepository({
+    target: join(workspace, 'fresh-tests'),
+    organizationId: 'org-fresh',
+    applicationId: 'app-fresh',
+    testPlanId: '0123456789abcdef01234567',
+    repositoryUrl: 'https://github.com/voidrco/voidr-tp-fresh.git',
+    workspaceRoot: workspace
+  })
+
+  assert.equal(result.created, true)
+  assert.equal(existsSync(join(workspace, 'fresh-tests', 'package.json')), true)
+})

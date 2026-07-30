@@ -681,7 +681,7 @@ test('restricts edit paths after a test repository is selected', () => {
       sessionId: 'repo-boundary',
       cwd: workspace,
       toolName: 'voidr-voidr_workspace_select_test_repository',
-      toolArgs: { path: testRepo }
+      toolArgs: { path: testRepo, workspaceRoot: workspace }
     },
     dataRoot
   )

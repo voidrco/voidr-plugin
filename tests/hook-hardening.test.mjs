@@ -200,7 +200,7 @@ test('denies writes and repository selection inside the plugin installation (BUG
       sessionId: 'plugin-boundary-selection',
       cwd: root,
       toolName: 'voidr-voidr_workspace_select_test_repository',
-      toolArgs: { path: join(root, 'scripts') }
+      toolArgs: { path: join(root, 'scripts'), workspaceRoot: root }
     },
     dataRoot
   )
@@ -209,4 +209,48 @@ test('denies writes and repository selection inside the plugin installation (BUG
     selection.permissionDecisionReason,
     /cannot live inside the plugin installation/i
   )
+})
+
+test('injects the real workspace root when a workspace tool omits it', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-real-workspace-'))
+
+  for (const request of [
+    { toolName: 'voidr-voidr_workspace_inspect', toolArgs: {} },
+    {
+      toolName: 'voidr-voidr_workspace_bootstrap_test_repository',
+      toolArgs: {
+        path: join(workspace, 'tests'),
+        organizationId: 'org-1',
+        applicationId: 'app-1',
+        testPlanId: '0123456789abcdef01234567'
+      }
+    },
+    {
+      toolName: 'voidr-voidr_workspace_select_test_repository',
+      toolArgs: { path: join(workspace, 'tests') }
+    }
+  ]) {
+    const output = runHook(
+      { sessionId: 'workspace-root-injection', cwd: workspace, ...request },
+      dataRoot
+    )
+    assert.equal(output.permissionDecision, 'deny', request.toolName)
+    assert.match(
+      output.permissionDecisionReason,
+      new RegExp(`workspaceRoot: "${workspace.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`),
+      request.toolName
+    )
+  }
+
+  const inspectWithRoot = runHook(
+    {
+      sessionId: 'workspace-root-injection',
+      cwd: workspace,
+      toolName: 'voidr-voidr_workspace_inspect',
+      toolArgs: { workspaceRoot: workspace }
+    },
+    dataRoot
+  )
+  assert.deepEqual(inspectWithRoot, {})
 })

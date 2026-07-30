@@ -360,6 +360,34 @@ Validação:
 - as tools oficiais de Test Plan não são confundidas com editores locais;
 - depois da seleção, o limite de escrita permanece restrito ao repositório de testes.
 
+### BUG-016 — Agente decide que o checkout linkado não existe após shell falhar
+
+Severidade: bloqueadora
+Status: corrigido em `0.2.19-local.26` e validado por testes; pendente
+validação na UI
+
+No teste do fluxo dev (`local.25`, modelo Claude Haiku 4.5), o agente procurou
+o repositório de testes com `find`/`ls` no shell; o comando falhou no sandbox
+("No output was produced") e ele concluiu que não havia checkout — sendo que
+`voidr-tests-serasa` existia no workspace com `project.json`. Em seguida tentou
+bootstrap, bloqueado pelo guard do BUG-006 (sem `workspaceRoot`), e parou sem
+seguir a instrução de retry do skill.
+
+Correção (mecânica, não instrucional):
+
+- `voidr_workspace_bootstrap_test_repository` escaneia o workspace por um
+  checkout cuja `origin` bata com o `repositoryUrl` linkado e retorna
+  `reusedExistingCheckout: true` com o caminho existente antes de criar
+  qualquer coisa — a crença do modelo deixa de importar;
+- o hook nega `voidr_workspace_inspect`/`select`/`bootstrap` sem
+  `workspaceRoot` injetando o cwd real do VS Code na mensagem de bloqueio
+  (o valor exato aparece no contexto do modelo para copiar);
+- os skills proíbem localizar repositório via `find`/`ls` e declaram que
+  saída vazia/falha de shell não é evidência de ausência.
+
+Observação: o cliente usa Claude Haiku 4.5 no Copilot — aderência fraca a
+instruções de skill; todo gate relevante precisa ser mecânico (tool/hook).
+
 ## Próximo checkpoint
 
 A criação, a população anonimizada, o provisionamento, a materialização e o smoke local

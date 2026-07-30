@@ -45,6 +45,7 @@ enforceTestPlanWriteApproval(payload, toolName)
 enforcePlatformSensitiveContent(toolName, toolArgs)
 recordEnvironmentSelectionRequest(payload, toolName, toolArgs)
 enforceExplicitEnvironmentSelection(payload, toolName, toolArgs)
+enforceExplicitWorkspaceRoot(payload, toolName, toolArgs)
 enforceTestSpecContentPolicy(rawToolName, toolArgs)
 recordSmokeAttempt(payload, toolName)
 
@@ -167,6 +168,25 @@ function enforcePluginInstallationBoundary(hookPayload, name, args) {
       )
     }
   }
+}
+
+// The MCP bridge process cannot see the VS Code workspace (its cwd is the
+// plugin installation), but this hook receives the real cwd. Denying the call
+// with the exact value to pass makes the correct workspaceRoot appear in the
+// model's context deterministically, instead of relying on skill adherence.
+function enforceExplicitWorkspaceRoot(hookPayload, canonicalName, args) {
+  const needsRoot =
+    canonicalName === 'voidr_workspace_inspect' ||
+    canonicalName === 'voidr_workspace_bootstrap_test_repository' ||
+    (canonicalName === 'voidr_workspace_select_test_repository' &&
+      !String(args?.repositoryUrl || '').trim())
+  if (!needsRoot) return
+  if (String(args?.workspaceRoot || '').trim()) return
+  const cwd = String(hookPayload.cwd || '').trim()
+  if (!cwd) return
+  deny(
+    `Blocked by Voidr workflow: the MCP process cannot see the open workspace by itself. Call ${canonicalName} again adding workspaceRoot: "${cwd}" (the absolute path of the open workspace folder). Never use terminal find/ls to locate the test repository.`
+  )
 }
 
 function enforceNewPlanModeListing(hookPayload, canonicalName) {

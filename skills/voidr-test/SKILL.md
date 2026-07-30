@@ -94,12 +94,21 @@ Only after `Criar testes`:
      scenarios. Capture the returned `repository` object.
    - If a creation call fails, stop, show the exact error, and offer retry or
      cancel. Never silently switch to another plan.
-2. Materialize the linked test repository: find a checkout whose Git `origin`
-   matches the linked repository URL via `voidr_workspace_inspect`; otherwise
-   clone the server-returned URL into the workspace (one confirmation for the
-   destination, only on first use). If a tool reports it cannot resolve the
-   workspace root, call it again passing `workspaceRoot` with the absolute
-   path of the open VS Code workspace folder.
+2. Materialize the linked test repository. Never use terminal `find`, `ls`,
+   or directory names to decide whether a checkout exists — a failed or empty
+   shell command is not evidence of absence. Call
+   `voidr_workspace_bootstrap_test_repository` with the server-returned
+   `repositoryUrl`, `allowExistingGitRepository: true`, and `workspaceRoot`
+   set to the absolute path of the open VS Code workspace folder: the tool
+   itself scans the workspace for a checkout whose Git `origin` matches and
+   returns `reusedExistingCheckout: true` with the existing path instead of
+   creating anything. Only when it reports no existing checkout, clone the
+   server-returned URL (one confirmation for the destination, only on first
+   use) and call it again. Always pass `workspaceRoot` on
+   `voidr_workspace_inspect`, `voidr_workspace_select_test_repository`, and
+   `voidr_workspace_bootstrap_test_repository`; if a tool reports it cannot
+   resolve the workspace root, repeat the call with the exact path the error
+   or the hook message provides.
 3. Call `voidr_workspace_prepare_test_repository` once with the confirmed
    checkout, selected IDs, environment slug, linked repository URL, and the
    approved case slugs. Never run `npx voidr login` or manual setup commands.

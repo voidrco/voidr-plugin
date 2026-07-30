@@ -284,9 +284,16 @@ created or reused and linked the correct repository.
 2. Call `voidr_workspace_inspect` and look only for a checkout whose Git
    `origin` matches the returned repository URL. A matching checkout may be
    offered for confirmation; a folder with a similar name is not a match.
-   If any workspace tool reports that it cannot resolve the real workspace
-   root, call it again passing `workspaceRoot` with the absolute path of the
-   open VS Code workspace folder. Never inspect, clone, select, or create a
+   Never use terminal `find` or `ls` to decide whether a checkout exists — a
+   failed or empty shell command is not evidence of absence; the workspace
+   tools and `voidr_workspace_bootstrap_test_repository` (which scans for a
+   matching origin and returns `reusedExistingCheckout`) are the only source
+   of truth. Always pass `workspaceRoot` with the absolute path of the open
+   VS Code workspace folder on `voidr_workspace_inspect`,
+   `voidr_workspace_select_test_repository`, and
+   `voidr_workspace_bootstrap_test_repository`; if a tool reports it cannot
+   resolve the workspace root, repeat the call with the exact path from the
+   error or hook message. Never inspect, clone, select, or create a
    repository inside the plugin installation directory
    (`installed-plugins`); the runtime hook blocks it.
 3. If no matching checkout exists, ask for the exact local destination inside

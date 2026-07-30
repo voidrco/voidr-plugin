@@ -21,7 +21,9 @@ const analysisTools = [
   'playwright_get_trace_events',
   'test_plans_get_tag_history',
   'defects_list_defects',
-  'defects_get_defect'
+  'defects_get_defect',
+  'issue_tracker_list',
+  'issue_tracker_list_projects'
 ]
 
 test('failure analysis uses only exposed evidence tools', () => {
@@ -46,6 +48,10 @@ test('failure analysis mutations are explicit and write-scoped', () => {
 
   for (const tool of [
     'defects_create_defect',
+    'defects_create_defect_with_issue',
+    'defects_update_defect',
+    'defects_update_defect_status',
+    'defects_assign_defect',
     'test_plans_update_test_case_tag'
   ]) {
     assert.match(skill, new RegExp(`\\b${tool}\\b`))
@@ -54,6 +60,11 @@ test('failure analysis mutations are explicit and write-scoped', () => {
   }
 
   assert.match(skill, /ask for explicit confirmation/i)
+  assert.match(skill, /Never mutate\s+a defect from a list summary/)
+  assert.match(skill, /Use `defects_update_defect` only for/)
+  assert.match(skill, /Use `reopened` to reopen a closed defect/)
+  assert.match(skill, /Never invent a user ID/)
+  assert.match(skill, /verify every confirmed field/)
   assert.match(skill, /Never create a bug-report video/)
   assert.match(skill, /Never change a tag automatically/)
 })
@@ -69,8 +80,8 @@ test('failure analysis always links the evidence execution', () => {
   assert.match(skill, /`relations\.executions: \[executionId\]`/)
   assert.match(skill, /`relations\.testCases: \[testCaseSlug\]`/)
   assert.match(skill, /description under `Evidence execution`/)
-  assert.match(skill, /call `defects_get_defect`/)
-  assert.match(skill, /Show the complete returned defect/)
-  assert.match(skill, /do not create a duplicate/)
-  assert.match(skill, /Return the created defect and end with the same required/)
+  assert.match(skill, /Call `defects_get_defect`/)
+  assert.match(skill, /show the complete returned defect/i)
+  assert.match(skill, /never create a possible duplicate/i)
+  assert.match(skill, /Return it and end with the required `Execution` link/)
 })

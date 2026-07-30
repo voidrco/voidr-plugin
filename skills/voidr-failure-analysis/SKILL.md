@@ -1,6 +1,6 @@
 ---
 name: voidr-failure-analysis
-description: Analyzes a failed Voidr Playwright execution or test using ClickHouse-backed evidence. Use when the user asks why a test failed, whether a failure is recurring, what evidence supports the cause, or whether to create a defect or change the test governance tag.
+description: Analyzes a failed Voidr Playwright execution or test using ClickHouse-backed evidence. Use when the user asks why a test failed, whether a failure is recurring, what evidence supports the cause, or whether to create, update, assign, or transition a defect or change the test governance tag.
 ---
 
 # Analyze Voidr failures
@@ -17,8 +17,8 @@ If it returns `authenticated: false`, stop and reply only:
 > A Voidr não está conectada. Execute `/copilot voidr-connect` para conectar
 > uma Service Account. Depois volte e continue este fluxo.
 
-Read-only analysis does not require write access. Defect creation and tag
-changes require `canWrite: true`.
+Read-only analysis does not require write access. Every defect mutation and
+tag change requires `canWrite: true`.
 
 ## Resolve the execution
 
@@ -128,24 +128,74 @@ Return:
 
 ## Optional defect
 
-Creating a defect is a separate mutation:
+Resolve the existing defect before any defect mutation:
 
 1. Call `defects_list_defects` with `testCaseId: testCaseSlug`, sorted by
    `updatedAt` descending.
-2. If a non-closed defect already exists, call `defects_get_defect` with that
-   defect's `slug` or ID. Show the complete returned defect and the required
-   `Execution` link instead of creating another. If the list result has no
-   usable slug or ID, or the detail lookup fails, report that the existing
-   defect could not be loaded and do not create a duplicate.
-3. Otherwise draft title, severity, priority, application, environment,
-   description, reproducibility, and relations to the execution and test.
-   The draft must show the clickable `Execution` URL. Include that URL in the
-   description under `Evidence execution`, set
+2. Prefer the most recently updated non-closed defect. If none exists, select
+   the most recently updated closed defect. Call `defects_get_defect` with its
+   `slug` or ID, then show the complete returned defect and the required
+   `Execution` link.
+3. If the list result has no usable slug or ID, or the detail lookup fails,
+   report that the existing defect could not be loaded and stop. Never mutate
+   a defect from a list summary and never create a possible duplicate.
+
+### Create
+
+Create only when no non-closed matching defect exists. If only closed defects
+exist, show the latest one and ask whether to reopen it or create a new defect.
+
+1. Call `issue_tracker_list`.
+2. If no active issue tracker exists, prepare a plain Voidr defect.
+3. If one active tracker exists, call `issue_tracker_list_projects` with its
+   `connectorContextId`. If several trackers or projects exist, ask the user
+   to select one. If no project is accessible, explain that linked creation is
+   unavailable and offer a plain Voidr defect.
+4. Draft title, severity, priority, application, environment, description,
+   reproducibility, and relations to the execution and test. Show the selected
+   tracker and project when creating a linked issue. Include the clickable
+   `Execution` URL in the description under `Evidence execution`, set
    `relations.executions: [executionId]`, and set
    `relations.testCases: [testCaseSlug]`.
-4. Show the complete draft and ask for explicit confirmation.
-5. Confirm `canWrite: true`, then call `defects_create_defect` once.
-6. Return the created defect and end with the same required `Execution` link.
+5. Show the complete draft and ask for explicit confirmation.
+6. Confirm `canWrite: true`. Call `defects_create_defect_with_issue` once when
+   a tracker and project were selected; otherwise call
+   `defects_create_defect` once.
+7. Call `defects_get_defect` with the created slug or ID and verify the stored
+   defect. Return it and end with the required `Execution` link.
+
+### Update content
+
+Use `defects_update_defect` only for title, severity, priority, description,
+fix version, or target date. Use the dedicated flows below for status and
+assignee changes.
+
+1. Show the current value and proposed value for every changed field.
+2. Ask for explicit confirmation.
+3. Confirm `canWrite: true`, then call `defects_update_defect` once.
+4. Call `defects_get_defect` and verify every confirmed field. Report any
+   mismatch and end with the required `Execution` link.
+
+### Update status
+
+1. Show the current status, proposed status, and evidence-based reason.
+2. Ask for explicit confirmation.
+3. Confirm `canWrite: true`, then call `defects_update_defect_status` once.
+   Pass `assignee` for `in_progress` and `fixVersion` for `resolved` when they
+   are known. Use `reopened` to reopen a closed defect.
+4. Call `defects_get_defect`, verify the persisted status, and end with the
+   required `Execution` link.
+
+### Assign
+
+1. Show the current assignee and proposed assignee.
+2. Use `@me` only when the user asks to assign the defect to themselves. If
+   the user names another person without supplying an exact user ID, stop and
+   explain that user lookup is unavailable. Never invent a user ID.
+3. Ask for explicit confirmation.
+4. Confirm `canWrite: true`, then call `defects_assign_defect` once.
+5. Call `defects_get_defect`, verify the persisted assignee, and end with the
+   required `Execution` link.
 
 Never create a bug-report video from this skill.
 

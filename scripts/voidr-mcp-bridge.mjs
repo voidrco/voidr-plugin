@@ -18,6 +18,7 @@ import {
 } from './lib/workspace.mjs'
 import { deployMergedPullRequest } from './lib/release-deploy.mjs'
 import { connectWithBrowser } from './lib/browser-auth.mjs'
+import { applySystemCaTrust } from './lib/network-trust.mjs'
 import { buildTestRepository, scaffoldTestCases } from './lib/scaffold.mjs'
 import { prepareTestRepository } from './lib/prepare.mjs'
 import { publishTests } from './lib/publish.mjs'
@@ -26,6 +27,15 @@ import { collectGitContext } from './lib/git-context.mjs'
 import {
   enrichToolResultWithExecutionLinks
 } from './lib/execution-links.mjs'
+
+const systemTrust = applySystemCaTrust()
+process.stderr.write(
+  `voidr-mcp-bridge: system CA trust ${systemTrust.status}` +
+    (systemTrust.systemCertificates
+      ? ` (${systemTrust.systemCertificates} certificates)`
+      : '') +
+    '\n'
+)
 
 const policy = loadPolicy()
 const safeRemote = new Set(policy.safeRemoteTools)

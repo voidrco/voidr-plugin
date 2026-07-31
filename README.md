@@ -108,6 +108,26 @@ browser login.
 keep the default store; `npm run validate` rejects a profile configured in
 `.mcp.json`.
 
+## Corporate networks (TLS inspection and proxies)
+
+Corporate machines often route traffic through a proxy that re-signs TLS
+certificates. Browsers trust the corporate CA through the operating system,
+but Node.js ships its own CA bundle, so plugin requests to the Voidr API can
+fail with errors such as `SELF_SIGNED_CERT_IN_CHAIN` while the browser login
+itself works.
+
+The MCP bridge mitigates this automatically: on startup it merges the
+operating system's certificate store into the Node.js TLS defaults
+(`tls.getCACertificates('system')`, available on Node 22.15+/24+). The bridge
+logs the outcome to stderr as `voidr-mcp-bridge: system CA trust <status>`,
+visible in the editor's MCP output channel.
+
+If the runtime is too old for that API, export the corporate root CA to a
+`.pem` file, set the `NODE_EXTRA_CA_CERTS` environment variable to its path,
+and restart the editor. Node.js `fetch` also ignores the system proxy by
+default; the bridge sets `NODE_USE_ENV_PROXY=1` so Node 24+ honors
+`HTTPS_PROXY`/`NO_PROXY` when those are configured.
+
 ## Security
 
 The local MCP bridge exposes a small allowlist of application, Test Plan,

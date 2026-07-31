@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto'
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
 import { upsertOrganizationAccount } from './credentials.mjs'
+import { describeNetworkFailure } from './network-trust.mjs'
 
 const DEFAULT_PLATFORM_URL = 'https://platform.voidr.co'
 const DEFAULT_API_URL = 'https://api.voidr.co/v1'
@@ -97,10 +98,30 @@ export async function startLocalBrowserAuthServer({
       return
     }
 
+    // Chrome's Local Network Access permission gates fetch()/XHR from public
+    // pages to loopback, but exempts top-level navigations. The platform falls
+    // back to a form-POST navigation when the fetch path is blocked, so this
+    // server must answer that navigation with a human-readable HTML page.
+    const isNavigation =
+      String(request.headers['sec-fetch-mode'] || '') === 'navigate' ||
+      String(request.headers['content-type'] || '').includes(
+        'application/x-www-form-urlencoded'
+      )
+    const reply = (status, payload) => {
+      if (isNavigation) {
+        response.writeHead(status, {
+          'content-type': 'text/html; charset=utf-8'
+        })
+        response.end(renderCallbackPage(status, payload))
+        return
+      }
+      response.writeHead(status, { 'content-type': 'application/json' })
+      response.end(JSON.stringify(payload))
+    }
+
     try {
       if (!origin || !origins.has(origin)) {
-        response.writeHead(403, { 'content-type': 'application/json' })
-        response.end(JSON.stringify({ error: 'invalid_origin' }))
+        reply(403, { error: 'invalid_origin' })
         return
       }
       applyCors()
@@ -110,36 +131,35 @@ export async function startLocalBrowserAuthServer({
         !/^127\.0\.0\.1:\d+$/.test(host) &&
         !/^localhost:\d+$/.test(host)
       ) {
-        response.writeHead(403, { 'content-type': 'application/json' })
-        response.end(JSON.stringify({ error: 'invalid_host' }))
+        reply(403, { error: 'invalid_host' })
         return
       }
       if (completed) {
-        response.writeHead(409, { 'content-type': 'application/json' })
-        response.end(JSON.stringify({ error: 'already_handled' }))
+        reply(409, { error: 'already_handled' })
         return
       }
 
-      const body = JSON.parse(await readLimitedBody(request))
+      const rawBody = await readLimitedBody(request)
+      const body = String(
+        request.headers['content-type'] || ''
+      ).includes('application/x-www-form-urlencoded')
+        ? Object.fromEntries(new URLSearchParams(rawBody))
+        : JSON.parse(rawBody)
       if (!body?.nonce || body.nonce !== expectedNonce) {
-        response.writeHead(400, { 'content-type': 'application/json' })
-        response.end(JSON.stringify({ error: 'invalid_nonce' }))
+        reply(400, { error: 'invalid_nonce' })
         return
       }
       if (!body.accessToken || typeof body.accessToken !== 'string') {
-        response.writeHead(400, { 'content-type': 'application/json' })
-        response.end(JSON.stringify({ error: 'missing_payload' }))
+        reply(400, { error: 'missing_payload' })
         return
       }
 
       completed = true
-      response.writeHead(200, { 'content-type': 'application/json' })
-      response.end(JSON.stringify({ status: 'ok' }))
+      reply(200, { status: 'ok' })
       resolveResult({ accessToken: body.accessToken })
     } catch {
       applyCors()
-      response.writeHead(400, { 'content-type': 'application/json' })
-      response.end(JSON.stringify({ error: 'invalid_request' }))
+      reply(400, { error: 'invalid_request' })
     }
   })
 
@@ -365,6 +385,25 @@ export function openBrowser(url) {
   })
 }
 
+function renderCallbackPage(status, payload) {
+  const ok = status === 200
+  const title = ok ? 'Login concluído' : 'Falha no login do CLI'
+  const detail = ok
+    ? 'Você já pode fechar esta aba e voltar ao editor.'
+    : `Feche esta aba e execute o comando de conexão novamente (${String(
+        payload?.error || 'erro desconhecido'
+      )}).`
+  return (
+    '<!doctype html><html lang="pt-BR"><head><meta charset="utf-8">' +
+    `<title>${title}</title>` +
+    '<style>body{font-family:system-ui,sans-serif;background:#111;color:#eee;' +
+    'display:flex;align-items:center;justify-content:center;height:100vh;margin:0}' +
+    'main{text-align:center;max-width:28rem;padding:2rem}' +
+    `h1{font-size:1.4rem;color:${ok ? '#7ee787' : '#ff7b72'}}</style></head>` +
+    `<body><main><h1>${title}</h1><p>${detail}</p></main></body></html>`
+  )
+}
+
 async function readLimitedBody(request, limit = 256 * 1024) {
   let body = ''
   for await (const chunk of request) {
@@ -380,8 +419,8 @@ async function requestJson(fetchImpl, url, options) {
   let response
   try {
     response = await fetchImpl(url, options)
-  } catch {
-    throw new Error('Could not reach the Voidr API.')
+  } catch (error) {
+    throw new Error(describeNetworkFailure(error))
   }
   if (!response.ok) {
     throw new Error(

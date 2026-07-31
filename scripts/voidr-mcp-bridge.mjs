@@ -435,6 +435,15 @@ async function callTool(params) {
     return result
   }
 
+  if (
+    name === 'test_plans_list_test_plans' &&
+    !String(args?.applicationId || '').trim()
+  ) {
+    throw new Error(
+      'Blocked by Voidr workflow: test_plans_list_test_plans requires the selected applicationId. Select the application with applications_list_applications first, then list only that application’s Test Plans.'
+    )
+  }
+
   if (name === 'executions_create_execution') {
     if (!planReadAt || !countsReadAt) {
       throw new Error(

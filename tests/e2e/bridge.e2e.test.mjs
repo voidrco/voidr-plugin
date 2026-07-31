@@ -453,6 +453,89 @@ test('bridge blocks Test Plan listing after a failed creation instead of a silen
   )
 })
 
+test('bridge blocks unscoped Test Plan listing before any network call', async t => {
+  const receivedTools = []
+  const server = createServer(async (request, response) => {
+    const message = JSON.parse(await readBody(request))
+    if (message.params?.name) receivedTools.push(message.params.name)
+    response.setHeader('content-type', 'application/json')
+    response.setHeader('mcp-session-id', 'synthetic-session')
+    if (message.method === 'notifications/initialized') {
+      response.writeHead(202)
+      response.end()
+    } else if (message.method === 'initialize') {
+      sendResult(response, message.id, {
+        protocolVersion: '2024-11-05',
+        capabilities: { tools: {} },
+        serverInfo: { name: 'mock', version: '1' }
+      })
+    } else if (message.method === 'tools/call') {
+      sendResult(response, message.id, {
+        structuredContent: { data: { called: message.params.name } },
+        content: [
+          { type: 'text', text: JSON.stringify({ called: message.params.name }) }
+        ]
+      })
+    } else {
+      sendResult(response, message.id, { tools: [] })
+    }
+  })
+  server.listen(0, '127.0.0.1')
+  await once(server, 'listening')
+  t.after(() => server.close())
+
+  const temp = mkdtempSync(join(tmpdir(), 'voidr-bridge-list-scope-'))
+  const storePath = join(temp, 'service-accounts.json')
+  writeFileSync(
+    storePath,
+    JSON.stringify({
+      activeOrgId: 'org-scope',
+      accounts: {
+        'org-scope': {
+          clientId: 'sa_scope_e2e',
+          clientSecret: 'synthetic-scope-secret',
+          scopes: ['read', 'write']
+        }
+      }
+    })
+  )
+  const child = spawn(process.execPath, [bridgePath], {
+    cwd: temp,
+    env: {
+      ...process.env,
+      VOIDR_SERVICE_ACCOUNTS_PATH: storePath,
+      VOIDR_MCP_URL: `http://127.0.0.1:${server.address().port}/mcp`
+    },
+    stdio: ['pipe', 'pipe', 'pipe']
+  })
+  t.after(() => child.kill())
+  const client = jsonRpcClient(child)
+
+  await client.request('initialize', {
+    protocolVersion: '2024-11-05',
+    capabilities: {},
+    clientInfo: { name: 'e2e', version: '1' }
+  })
+
+  const blocked = await client.requestRaw('tools/call', {
+    name: 'test_plans_list_test_plans',
+    arguments: {}
+  })
+  assert.match(blocked.error.message, /requires the selected applicationId/i)
+  assert.equal(
+    receivedTools.includes('test_plans_list_test_plans'),
+    false,
+    'the unscoped listing must be blocked before any network call'
+  )
+
+  const scoped = await client.requestRaw('tools/call', {
+    name: 'test_plans_list_test_plans',
+    arguments: { applicationId: 'app-scope' }
+  })
+  assert.equal(scoped.error, undefined)
+  assert.equal(receivedTools.includes('test_plans_list_test_plans'), true)
+})
+
 test('bridge blocks invented module/suite slugs and not-found retries', async t => {
   const receivedCalls = []
   const server = createServer(async (request, response) => {

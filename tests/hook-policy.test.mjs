@@ -874,7 +874,7 @@ test('restricts edit paths after a test repository is selected', () => {
   assert.equal(patchOutside.permissionDecision, 'deny')
 })
 
-test('blocks repository setup until a listed environment is explicitly selected', () => {
+test('blocks repository setup until environments are listed, then binds prepare to a typed selection', () => {
   const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
   const workspace = mkdtempSync(join(tmpdir(), 'voidr-workspace-'))
   const testRepo = join(workspace, 'tests-e2e')
@@ -901,6 +901,18 @@ test('blocks repository setup until a listed environment is explicitly selected'
     dataRoot
   )
 
+  let output = runHook(
+    {
+      sessionId,
+      cwd: workspace,
+      toolName: 'voidr-voidr_workspace_select_test_repository',
+      toolArgs: { path: testRepo }
+    },
+    dataRoot
+  )
+  assert.equal(output.permissionDecision, 'deny')
+  assert.match(output.permissionDecisionReason, /confirm one with the user/i)
+
   assert.deepEqual(
     runHook(
       {
@@ -914,17 +926,18 @@ test('blocks repository setup until a listed environment is explicitly selected'
     {}
   )
 
-  let output = runHook(
-    {
-      sessionId,
-      cwd: workspace,
-      toolName: 'voidr-voidr_workspace_select_test_repository',
-      toolArgs: { path: testRepo }
-    },
-    dataRoot
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId,
+        cwd: workspace,
+        toolName: 'voidr-voidr_workspace_select_test_repository',
+        toolArgs: { path: testRepo, workspaceRoot: workspace }
+      },
+      dataRoot
+    ),
+    {}
   )
-  assert.equal(output.permissionDecision, 'deny')
-  assert.match(output.permissionDecisionReason, /explicitly select/i)
 
   submitPrompt(
     {

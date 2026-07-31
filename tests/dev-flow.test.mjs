@@ -319,7 +319,7 @@ test('ask_user selections arm the workflow and unlock approved plan writes', () 
   )
 })
 
-test('deny diagnostics name every missing plan-write condition', () => {
+test('deny diagnostics explain the missing approval and the recovery', () => {
   const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-dev-flow-'))
   const sessionId = 'dev-flow-diagnostics'
   const denied = runHook(
@@ -332,8 +332,12 @@ test('deny diagnostics name every missing plan-write condition', () => {
     dataRoot
   )
   assert.equal(denied.permissionDecision, 'deny')
-  assert.match(denied.permissionDecisionReason, /never armed/)
-  assert.match(denied.permissionDecisionReason, /plan mode was never recorded/)
+  assert.match(
+    denied.permissionDecisionReason,
+    /never received a user chat message/
+  )
+  assert.match(denied.permissionDecisionReason, /Aprovo este Test Plan/)
+  assert.match(denied.permissionDecisionReason, /retry this call once/)
   assert.match(
     denied.permissionDecisionReason,
     /Add cases to an existing plan/

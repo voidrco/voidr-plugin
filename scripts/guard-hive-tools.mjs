@@ -434,14 +434,18 @@ function enforceExplicitEnvironmentSelection(hookPayload, name, args) {
     state.selectedEnvironmentSlug.length > 0 &&
     Number.isFinite(state.selectedEnvironmentAt) &&
     Date.now() - state.selectedEnvironmentAt <= 4 * 60 * 60 * 1000
-  if (!selectionFresh) {
+  const environmentsListed =
+    Number.isFinite(state.environmentSelectionRequestedAt) &&
+    Date.now() - state.environmentSelectionRequestedAt <= 4 * 60 * 60 * 1000
+  if (!selectionFresh && !environmentsListed) {
     deny(
-      'Blocked by Voidr workflow: list environments with applications_list_environments and ask the user to explicitly select one before repository setup, selection, scaffold, or smoke/build.'
+      'Blocked by Voidr workflow: list environments with applications_list_environments and confirm one with the user before repository setup, selection, scaffold, or smoke/build.'
     )
   }
 
   if (
     name === 'voidr_workspace_prepare_test_repository' &&
+    selectionFresh &&
     String(args?.environmentSlug || '').trim() !==
       state.selectedEnvironmentSlug
   ) {
@@ -741,11 +745,7 @@ function enforceTestPlanWriteApproval(hookPayload, canonicalName) {
       'Blocked by Voidr workflow: a new Test Plan requires collected planning inputs and a new user message saying “Confirmar insumos do planejamento” before the draft can be persisted.'
     )
   }
-  if (
-    state.workflowActive !== true ||
-    !state.planMode ||
-    !approvalFresh
-  ) {
+  if (!approvalFresh) {
     if (state.planMode === 'auto') {
       deny(
         'Blocked by Voidr workflow: show the user the list of test scenarios for the feature and wait for a new user message saying exactly “Criar testes” before writing anything to the platform.'
@@ -757,23 +757,11 @@ function enforceTestPlanWriteApproval(hookPayload, canonicalName) {
         'this session has never received a user chat message — a subagent session can never hold the typed approval, so never delegate Test Plan writes to a subagent; if this is the main chat, the plugin prompt hook is not running (reinstall the plugin and reload the VS Code window)'
       )
     }
-    if (state.workflowActive !== true) {
-      missing.push(
-        'the Voidr testing workflow was never armed in this session'
-      )
-    }
-    if (!state.planMode) {
-      missing.push(
-        'the new-versus-existing plan mode was never recorded — ask it with the plan-mode ask_user question or have the user state it in chat'
-      )
-    }
-    if (!approvalFresh) {
-      missing.push(
-        'a fresh user-typed “Aprovo este Test Plan” approval is missing or expired (a generic “sim” is not approval)'
-      )
-    }
+    missing.push(
+      'a fresh user-typed “Aprovo este Test Plan” approval is missing or expired (a generic “sim” is not approval)'
+    )
     deny(
-      `Blocked by Voidr workflow — missing: ${missing.join('; ')}. Test Plan writes require a visible draft followed by a new user message explicitly saying “Aprovo este Test Plan”. To add cases to an existing plan, follow the “Add cases to an existing plan” section of /voidr-test-plan: show the additions draft and wait for that exact approval message. Recovery: when the workflow or plan mode is missing, ask the plan-mode question with its two ask_user options — a recorded selection arms the workflow, a still-fresh typed approval remains valid, and this exact call may then be retried once. Do not loop retries and do not delegate to a subagent.`
+      `Blocked by Voidr workflow — missing: ${missing.join('; ')}. Test Plan writes require a visible draft followed by a new user message explicitly saying “Aprovo este Test Plan”. To add cases to an existing plan, follow the “Add cases to an existing plan” section of /voidr-test-plan: show the additions draft and wait for that exact approval message. Recovery: show (or refresh) the draft, ask the user to type that exact approval in a new chat message, then retry this call once. Do not loop retries and do not delegate to a subagent.`
     )
   }
 }

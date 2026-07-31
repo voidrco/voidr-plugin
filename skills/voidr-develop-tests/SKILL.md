@@ -417,3 +417,42 @@ At each handoff, summarize:
 - next mutation and the confirmation it requires.
 
 Never auto-deploy and never auto-execute.
+
+## Tool routing
+
+Use exactly these tools for these needs. Any Voidr MCP tool not listed here is
+out of scope for this skill and belongs to the skill named for it.
+
+| When you need | Call exactly |
+| --- | --- |
+| Check authentication after the plan-mode answer | `voidr_auth_status` |
+| Apply the user's organization choice | `voidr_auth_select_organization` |
+| List applications for user selection | `applications_list_applications` |
+| Resolve a missing `type` on the selected application | `applications_get_application` |
+| List environments of the selected application | `applications_list_environments` |
+| List existing Test Plans for user selection | `test_plans_list_test_plans` |
+| Read the explicitly selected Test Plan | `test_plans_get_test_plan` |
+| Discover workspace checkouts (origin matching, read-only context candidates) | `voidr_workspace_inspect` |
+| Initialize the test-project skeleton in a confirmed empty destination, or in an origin-matching checkout that has no test-project files (never clones — cloning belongs to the preparation gate) | `voidr_workspace_bootstrap_test_repository` |
+| Register a user-selected existing repository when the plan has no linked repository | `voidr_workspace_select_test_repository` |
+| Run the mandatory repository setup gate | `voidr_workspace_prepare_test_repository` |
+
+Route the remaining scenarios through skills, not direct tool calls:
+
+- Test Plan mutations (`test_plans_create_test_plan`,
+  `test_plans_populate_test_plan`, `test_plans_create_*`,
+  `test_plans_update_*`): only inside `/voidr-test-plan` after its gates.
+- Implementation and local validation
+  (`voidr_workspace_scaffold_test_cases`, `voidr_smoke_build`): only inside
+  `/voidr-implement-tests`.
+- Deploy and execution (`voidr_release_inspect`,
+  `voidr_release_deploy_merged_pr`, `test_plans_get_test_counts`,
+  `executions_create_execution`, `executions_get_execution`): only inside
+  `/voidr-deploy-run`.
+- Failure analysis (`playwright_*`, `defects_*`,
+  `test_plans_update_test_case_tag`): only inside `/voidr-failure-analysis`.
+- Browser login (`voidr_auth_login`): only inside `/voidr-connect`.
+
+Never call `voidr_workspace_git_context` from this skill; branch/diff feature
+inference belongs to the `/voidr-test` developer-first flow. Never call
+`executions_list_executions` from any point of this workflow.

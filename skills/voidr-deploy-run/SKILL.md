@@ -150,3 +150,32 @@ Report:
 - execution ID and status;
 - link to the platform when available;
 - failures without attempting automatic repair.
+
+## Tool routing
+
+Use exactly these tools for these needs. Any Voidr MCP tool not listed here is
+out of scope for this skill.
+
+| When you need | Call exactly |
+| --- | --- |
+| Rediscover the repository, Test Plan, and merged PR from the checkout | `voidr_release_inspect` |
+| Fast-forward a clean, behind checkout and publish the immutable release | `voidr_release_deploy_merged_pr` |
+| Verify plan synchronization after deploy | `test_plans_get_test_plan` and `test_plans_get_test_counts` |
+| Create the confirmed platform execution | `executions_create_execution` |
+| Observe the status of the execution just created | `executions_get_execution` |
+
+Disambiguation:
+
+- Status observation uses `executions_get_execution`, never
+  `playwright_get_execution_analytics`; analytical evidence belongs to
+  `/voidr-failure-analysis`.
+- Never call `executions_list_executions` or `playwright_list_executions` to
+  find a plan, repository, or execution; `voidr_release_inspect` and the
+  explicit selection are the only sources.
+- Never call `test_plans_create_*`, `test_plans_update_*`, or
+  `test_plans_populate_test_plan`, including after an
+  "Only automated test cases can be executed" error.
+- Never call `voidr_workspace_prepare_test_repository`,
+  `voidr_workspace_scaffold_test_cases`, `voidr_smoke_build`, or
+  `voidr_workspace_publish_tests` from this skill; local implementation and
+  publishing were preconditions.

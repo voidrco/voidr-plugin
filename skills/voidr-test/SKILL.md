@@ -41,7 +41,9 @@ When the flow starts:
    > A Voidr não está conectada. Execute `/copilot voidr-connect` para
    > conectar. Depois volte e peça os testes de novo.
 
-   If multiple organizations exist, ask which one with `ask_user`.
+   If multiple organizations exist, ask which one with `ask_user`, then call
+   `voidr_auth_select_organization` with the chosen entry's organization ID
+   before any other tool.
 2. Infer the feature with `voidr_workspace_git_context`, passing
    `workspaceRoot` (the absolute path of the open VS Code workspace folder).
    It returns, per repository: current branch, default branch, commits
@@ -54,11 +56,15 @@ When the flow starts:
    not ask the user which inputs to use.
 3. Call `applications_list_applications`. If exactly one application exists,
    select it automatically. Otherwise ask with `ask_user` using the returned
-   names. Use the returned `type` (WEB/API) silently.
+   names. Use the returned `type` (WEB/API) silently. If the list is empty,
+   stop and say the organization has no application configured in Voidr yet;
+   do not invent one.
 4. Call `applications_list_environments` for the selected application. If
    exactly one environment exists, select it automatically. Otherwise ask
    with `ask_user`, defaulting to the non-production environment when the
    names make that obvious. Keep `applicationUrl` as the execution target.
+   If no environment is returned, stop and say the selected application has
+   no environment configured in Voidr yet; never substitute a URL.
 5. If the current repository has no feature branch or no diff against the
    default branch, ask one free-text question: which feature should be
    tested, and where is its code.
@@ -89,6 +95,10 @@ already confirmed.
    remove. Do not use `ask_user` for this approval: it is the runtime gate
    and must arrive as a new user-authored message. This is the only phrase
    the developer ever has to type in this flow.
+4. When the user asks to add, remove, or change a scenario instead of
+   approving, apply the change, show the full updated checklist, and ask for
+   `Criar testes` again. Only the checklist shown immediately before that
+   message is the approved scope.
 
 The runtime hook blocks every platform write until that message arrives.
 
@@ -96,9 +106,16 @@ The runtime hook blocks every platform write until that message arrives.
 
 Only after `Criar testes`:
 
-1. Call `test_plans_list_test_plans` for the selected application.
-   - If a plan for this application already exists (single plan, or one named
-     after the application), reuse it: add the feature as a new module with
+1. Call `test_plans_list_test_plans` for the selected application, then pick
+   the plan with this exact precedence:
+   1. a plan whose name exactly matches the application name — reuse it;
+   2. otherwise, when exactly one plan exists — reuse it;
+   3. otherwise, when multiple plans exist with no exact name match — ask
+      with `ask_user`, in plain language ("Em qual conjunto de testes devo
+      adicionar os testes desta feature?"), listing the returned plan names
+      plus the option `Criar um novo`; never pick one silently;
+   4. when no plan exists — create one, as described below.
+   - When reusing a plan, add the feature as a new module with
      `test_plans_create_module`, a suite with `test_plans_create_suite`, and
      one case per approved scenario with `test_plans_create_case`
      (Arrange/Act/Assert derived from the scenario, placeholders only).
@@ -107,6 +124,11 @@ Only after `Criar testes`:
      On a not-found error, read the plan with `test_plans_get_test_plan` to
      get the real slugs; never retry the same identifier. The bridge blocks
      invented slugs and not-found retries.
+     For a reused plan, read it with `test_plans_get_test_plan` and use its
+     `gitProviderConfig.repositoryUrl` as the linked `repositoryUrl` for the
+     preparation step. If the reused plan has no linked repository, stop and
+     direct the user to `/voidr-develop-tests`, which handles repository
+     selection; never pick or create a repository inside this flow.
    - If none exists, call `test_plans_create_test_plan` named after the
      application and `test_plans_populate_test_plan` with the approved
      scenarios. Capture the returned `repository` object.
@@ -124,7 +146,7 @@ Only after `Criar testes`:
    (the tool rejects `/tmp`). If it reports that the destination exists but
    is not a checkout of the linked repository, ask the user what to do with
    that stale directory — do not delete it and do not clone elsewhere.
-4. Implement one Playwright spec per approved scenario inside the test
+3. Implement one Playwright spec per approved scenario inside the test
    repository only. Read the product code read-only for selectors and flows.
    No literal credentials or fallbacks; API endpoints come from the deployed
    product runtime, never from the frontend origin.
@@ -134,12 +156,15 @@ testes…", "Escrevendo os testes…"), not tool-by-tool narration.
 
 ## 5. Run, analyze, fix
 
-1. Run the new specs once with `voidr_smoke_build` against the confirmed
-   environment. Run it automatically — the approval already covers this run.
+1. Run the new specs once with `voidr_smoke_build`, passing the prepared
+   repository path, the linked `repositoryUrl`, the plan ID, only the new
+   spec paths, and the confirmed environment's `applicationUrl` as `baseUrl`.
+   Run it automatically — the approval already covers this run.
 2. Present the result in developer terms: passed/failed per scenario, and for
-   each failure the classification the tool returns (problema no teste ×
-   comportamento do produto × dado/ambiente) with the exact error line and a
-   suggested next step.
+   each failure your own classification derived from the returned `failures`
+   and traces (problema no teste × comportamento do produto × dado/ambiente)
+   with the exact error line and a suggested next step. The tool returns raw
+   evidence, not a classification.
 3. Always close the smoke report by directing the user to the Playwright
    trace for analysis. The tool returns a `traces` list with one trace per
    scenario; show the exact ready-to-run command for each one, failures
@@ -154,7 +179,7 @@ testes…", "Escrevendo os testes…"), not tool-by-tool narration.
    scenarios pass.
 4. Stop after presenting. One smoke run per user message: investigate, edit,
    or rerun only after the user asks (for example "corrige e roda de novo").
-4. When a failure looks like real product behavior, say so explicitly — that
+5. When a failure looks like real product behavior, say so explicitly — that
    is the developer's bug to decide on, not something to paper over in the
    test.
 
@@ -185,8 +210,49 @@ When all scenarios pass locally:
    follow its gates to publish the merged commit as an immutable release and
    create the platform execution. Translate its questions into simple terms
    ("Publicar os testes na Voidr?", "Rodar os testes na plataforma?") but keep
-   its confirmations and verifications exactly as specified.
+   its confirmations and verifications exactly as specified. The translation
+   changes vocabulary only: the deploy gate and the execution gate remain two
+   separate questions, each awaiting its own explicit affirmative answer
+   before its tool call. Never merge them into a single
+   "publicar e rodar?" confirmation.
 3. Report the final platform result with the execution link when available.
 
 Never auto-deploy, never auto-execute, and never expand beyond the approved
 scenarios without a new user request.
+
+## Tool routing
+
+Use exactly these tools for these needs. Any Voidr MCP tool not listed here is
+out of scope for this flow.
+
+| When you need | Call exactly |
+| --- | --- |
+| Check authentication | `voidr_auth_status` |
+| Apply the user's organization choice when several exist | `voidr_auth_select_organization` |
+| Infer the feature from branch and diff | `voidr_workspace_git_context` |
+| List applications | `applications_list_applications` |
+| List environments of the selected application | `applications_list_environments` |
+| Find an existing plan for the application | `test_plans_list_test_plans` |
+| Read a reused plan's linked `repositoryUrl`, or the real slugs after a not-found error | `test_plans_get_test_plan` |
+| Add the feature to an existing plan | `test_plans_create_module`, `test_plans_create_suite`, `test_plans_create_case` |
+| Create and fill a new plan | `test_plans_create_test_plan`, then `test_plans_populate_test_plan` |
+| Materialize and prepare the test repository | `voidr_workspace_prepare_test_repository` |
+| Run the new specs locally | `voidr_smoke_build` |
+| Publish branch, commit, and pull request | `voidr_workspace_publish_tests` |
+| Rediscover the merged PR and IDs before deploy | `voidr_release_inspect`, then load `/voidr-deploy-run` |
+
+Disambiguation:
+
+- Feature inference uses `voidr_workspace_git_context` only; never use
+  `voidr_workspace_inspect` or terminal Git for it.
+- Repository materialization uses `voidr_workspace_prepare_test_repository`
+  only; never call `voidr_workspace_bootstrap_test_repository` or
+  `voidr_workspace_select_test_repository` in this flow.
+- Never call `test_plans_update_*` tools here; this flow only adds new
+  modules, suites, and cases.
+- Deploy and execution tools (`voidr_release_deploy_merged_pr`,
+  `executions_create_execution`, `executions_get_execution`,
+  `test_plans_get_test_counts`) run only inside `/voidr-deploy-run` and its
+  gates.
+- Never call `playwright_*` or `defects_*` tools; failure analysis belongs to
+  `/voidr-failure-analysis`.

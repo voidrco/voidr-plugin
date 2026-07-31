@@ -10,7 +10,7 @@ const skill = readFileSync(
   'utf8'
 )
 
-test('standalone execution skill exposes one remote action', () => {
+test('standalone execution skill exposes one write action plus the sync reads', () => {
   const policy = loadPolicy()
   const allTools = [
     ...policy.localTools,
@@ -19,10 +19,22 @@ test('standalone execution skill exposes one remote action', () => {
   ]
   const referencedTools = allTools.filter(tool => skill.includes(tool))
 
-  assert.deepEqual(referencedTools, ['executions_create_execution'])
+  assert.deepEqual(referencedTools, [
+    'test_plans_get_test_counts',
+    'test_plans_get_test_plan',
+    'executions_create_execution'
+  ])
   assert.equal(
     policy.writeRemoteTools.includes('executions_create_execution'),
     true
+  )
+  assert.equal(
+    policy.writeRemoteTools.includes('test_plans_get_test_plan'),
+    false
+  )
+  assert.equal(
+    policy.writeRemoteTools.includes('test_plans_get_test_counts'),
+    false
   )
 })
 

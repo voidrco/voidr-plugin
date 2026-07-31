@@ -23,6 +23,10 @@ partial read.
    unsupported Node version, report the pinned Node 22 requirement, ask
    the user to activate it in their own terminal (nvm/volta), and retry
    the tool once after they confirm — nothing else.
+7. Write inside the test repository only the files the selected cases
+   require: specs and the actions, helpers, or fixtures they import.
+   Never create analysis, exploration, summary, or scratch documents
+   there — those notes belong in the chat response.
 
 ## Preconditions
 

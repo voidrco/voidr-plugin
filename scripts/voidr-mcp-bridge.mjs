@@ -569,7 +569,29 @@ async function callStructureTool(name, args) {
 
   recordCreatedStructure(name, planId, args, result)
   recordPlanSlugs(planId, remoteResultData(result))
-  return result
+  return slimStructureResult(name, planId, args, result)
+}
+
+function slimStructureResult(name, planId, args, result) {
+  const data = remoteResultData(result)
+  const entity =
+    data?.data && typeof data.data === 'object' && !Array.isArray(data.data)
+      ? data.data
+      : data
+  const slug = structureSlug(data, args)
+  if (!slug && !entity) return result
+  const slim = {
+    created: name.replace('test_plans_create_', ''),
+    name: entity?.name ?? args?.name ?? null,
+    slug: slug || null,
+    id: entity?._id || entity?.id || null,
+    planId,
+    note: `Use exactly this slug for the next structure call: ${slug || 'read the plan with test_plans_get_test_plan'}.`
+  }
+  return {
+    content: [{ type: 'text', text: JSON.stringify(slim) }],
+    structuredContent: slim
+  }
 }
 
 function enforceKnownStructureRefs(name, planId, args) {

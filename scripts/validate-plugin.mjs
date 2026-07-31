@@ -154,7 +154,7 @@ assert(
 const skillFiles = findFiles(join(root, 'skills'), 'SKILL.md')
 assert(skillFiles.length >= 4, 'Expected the four MVP skills.')
 const toolReferencePattern =
-  /`((?:voidr|applications|test_plans|executions|playwright|defects)_[a-z0-9_]+)`/g
+  /`((?:voidr|applications|test_plans|executions|playwright|defects|file_embeddings)_[a-z0-9_]+)`/g
 for (const path of skillFiles) {
   const content = readFileSync(path, 'utf8')
   const frontmatter = parseFrontmatter(content)

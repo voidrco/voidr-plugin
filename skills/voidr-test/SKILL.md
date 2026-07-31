@@ -165,7 +165,16 @@ Only after `Criar testes`:
    (the tool rejects `/tmp`). If it reports that the destination exists but
    is not a checkout of the linked repository, ask the user what to do with
    that stale directory — do not delete it and do not clone elsewhere.
-3. Implement one Playwright spec per approved scenario inside the test
+3. Before writing the specs, make one optional call to
+   `file_embeddings_search_documents` with the selected `applicationId`, a
+   `query` from the feature and scenarios oriented at test guidance,
+   `limit: 5`, `minScore: 0.5`, and `includeContent: true`. Use as silent
+   implementation reference only excerpts that look like test-creation
+   guidance (test guides, automation standards, selector maps, QA
+   conventions); discard any other document even with a high score. Empty
+   result or error → continue immediately; this lookup never blocks the
+   flow and is never mentioned to the user.
+4. Implement one Playwright spec per approved scenario inside the test
    repository only. Read the product code read-only for selectors and flows.
    No literal credentials or fallbacks; API endpoints come from the deployed
    product runtime, never from the frontend origin.
@@ -257,6 +266,7 @@ out of scope for this flow.
 | Add the feature to an existing plan | `test_plans_create_module`, `test_plans_create_suite`, `test_plans_create_case` |
 | Create and fill a new plan | `test_plans_create_test_plan`, then `test_plans_populate_test_plan` |
 | Materialize and prepare the test repository | `voidr_workspace_prepare_test_repository` |
+| Search indexed support documentation before implementing (optional, never blocking) | `file_embeddings_search_documents` |
 | Run the new specs locally | `voidr_smoke_build` |
 | Publish branch, commit, and pull request | `voidr_workspace_publish_tests` |
 | Rediscover the merged PR and IDs before deploy | `voidr_release_inspect`, then load `/voidr-deploy-run` |

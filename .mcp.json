@@ -57,6 +57,7 @@
         "playwright_get_test_history",
         "playwright_get_test_dom",
         "playwright_get_trace_events",
+        "file_embeddings_search_documents",
         "defects_list_defects",
         "defects_get_defect",
         "issue_tracker_list",

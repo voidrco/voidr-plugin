@@ -85,6 +85,17 @@ store; they never report or change platform lifecycle state.
 | `playwright_get_test_history` | Cross-execution recurrence. |
 | `playwright_get_test_dom` | DOM snapshot when the failure row reports one. |
 
+## Support documentation
+
+| Tool | Owner skills | Purpose |
+| --- | --- | --- |
+| `file_embeddings_search_documents` | `voidr-implement-tests`, `voidr-test` | Optional, never-blocking semantic search over the application's indexed support documents before implementing specs (`applicationId` + test-guidance query, `limit: 5`, `minScore: 0.5`, `includeContent: true`). Only excerpts that look like test-creation guidance (guides, automation standards, selector maps, QA conventions) feed the implementation; anything else is discarded regardless of score. Empty results and errors mean "no documentation" and the flow continues unchanged. |
+
+The indexing and deletion counterparts of this family are deliberately not
+exposed by the bridge, and the platform's knowledge tools for customer
+conversations are a different base — application support documents come only
+from this search tool.
+
 ## Defects and issue trackers
 
 Owned exclusively by `voidr-failure-analysis`. Every write happens behind its

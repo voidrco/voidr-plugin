@@ -745,10 +745,29 @@ function enforceTestPlanWriteApproval(hookPayload, canonicalName) {
     !state.planMode ||
     !approvalFresh
   ) {
+    if (state.planMode === 'auto') {
+      deny(
+        'Blocked by Voidr workflow: show the user the list of test scenarios for the feature and wait for a new user message saying exactly “Criar testes” before writing anything to the platform.'
+      )
+    }
+    const missing = []
+    if (state.workflowActive !== true) {
+      missing.push(
+        'the Voidr testing workflow was never armed in this session'
+      )
+    }
+    if (!state.planMode) {
+      missing.push(
+        'the new-versus-existing plan mode was never recorded — ask it with the plan-mode ask_user question or have the user state it in chat'
+      )
+    }
+    if (!approvalFresh) {
+      missing.push(
+        'a fresh user-typed “Aprovo este Test Plan” approval is missing or expired (a generic “sim” is not approval)'
+      )
+    }
     deny(
-      state.planMode === 'auto'
-        ? 'Blocked by Voidr workflow: show the user the list of test scenarios for the feature and wait for a new user message saying exactly “Criar testes” before writing anything to the platform.'
-        : 'Blocked by Voidr workflow: Test Plan writes require a visible draft followed by a new user message explicitly saying “Aprovo este Test Plan”. A generic “sim” is not approval. To add cases to an existing plan, follow the “Add cases to an existing plan” section of /voidr-test-plan: show the additions draft and wait for that exact approval message.'
+      `Blocked by Voidr workflow — missing: ${missing.join('; ')}. Test Plan writes require a visible draft followed by a new user message explicitly saying “Aprovo este Test Plan”. To add cases to an existing plan, follow the “Add cases to an existing plan” section of /voidr-test-plan: show the additions draft and wait for that exact approval message.`
     )
   }
 }

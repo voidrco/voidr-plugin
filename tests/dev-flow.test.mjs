@@ -233,3 +233,109 @@ test('the approved card also covers the displayed environment in auto mode', () 
     {}
   )
 })
+
+test('ask_user selections arm the workflow and unlock approved plan writes', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-dev-flow-'))
+  const sessionId = 'dev-flow-ask-user'
+  const postHook = join(root, 'scripts/post-tool-execution-links.mjs')
+  const now = Date.now()
+
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now,
+      prompt: 'Quero criar um teste',
+      transformedPrompt: 'Quero criar um teste'
+    },
+    dataRoot
+  )
+
+  const askResult = spawnSync(process.execPath, [postHook], {
+    input: JSON.stringify({
+      sessionId,
+      toolName: 'vscode_askQuestions',
+      toolResult: [
+        JSON.stringify({
+          answers: {
+            test_plan_type: {
+              selected: ['Usar um Test Plan existente'],
+              freeText: null,
+              skipped: false
+            }
+          }
+        })
+      ]
+    }),
+    encoding: 'utf8',
+    env: { ...process.env, COPILOT_PLUGIN_DATA: dataRoot }
+  })
+  assert.equal(askResult.status, 0, askResult.stderr)
+
+  const missingApproval = runHook(
+    {
+      sessionId,
+      cwd: process.cwd(),
+      toolName: 'voidr-test_plans_create_module',
+      toolArgs: { planId: '0123456789abcdef01234567', name: 'Novo módulo' }
+    },
+    dataRoot
+  )
+  assert.equal(missingApproval.permissionDecision, 'deny')
+  assert.match(missingApproval.permissionDecisionReason, /missing:/)
+  assert.match(
+    missingApproval.permissionDecisionReason,
+    /Aprovo este Test Plan/
+  )
+  assert.doesNotMatch(
+    missingApproval.permissionDecisionReason,
+    /plan mode was never recorded/
+  )
+  assert.doesNotMatch(
+    missingApproval.permissionDecisionReason,
+    /never armed/
+  )
+
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 1000,
+      prompt: 'Aprovo este Test Plan',
+      transformedPrompt: 'Aprovo este Test Plan'
+    },
+    dataRoot
+  )
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId,
+        cwd: process.cwd(),
+        toolName: 'voidr-test_plans_create_module',
+        toolArgs: { planId: '0123456789abcdef01234567', name: 'Novo módulo' }
+      },
+      dataRoot
+    ),
+    {}
+  )
+})
+
+test('deny diagnostics name every missing plan-write condition', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-dev-flow-'))
+  const sessionId = 'dev-flow-diagnostics'
+  const denied = runHook(
+    {
+      sessionId,
+      cwd: process.cwd(),
+      toolName: 'voidr-test_plans_create_module',
+      toolArgs: { planId: '0123456789abcdef01234567', name: 'X' }
+    },
+    dataRoot
+  )
+  assert.equal(denied.permissionDecision, 'deny')
+  assert.match(denied.permissionDecisionReason, /never armed/)
+  assert.match(denied.permissionDecisionReason, /plan mode was never recorded/)
+  assert.match(
+    denied.permissionDecisionReason,
+    /Add cases to an existing plan/
+  )
+})

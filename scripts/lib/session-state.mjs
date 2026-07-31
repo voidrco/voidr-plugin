@@ -140,6 +140,95 @@ export function recordUserPromptState(payload) {
   })
 }
 
+export function recordAskUserSelections(payload, { toolName, toolResult }) {
+  if (!/ask.*question|ask_user/i.test(String(toolName || ''))) return null
+  const answers = collectAskUserAnswers(toolResult)
+  if (answers.length === 0) return null
+
+  return updateSessionState(payload, current => {
+    const next = { ...current }
+    let changed = false
+    for (const { header, text } of answers) {
+      if (isNewPlanChoice(text)) {
+        next.planMode = 'new'
+        next.workflowActive = true
+        next.planContextConfirmed = false
+        next.planContextConfirmedAt = null
+        changed = true
+      } else if (isExistingPlanChoice(text)) {
+        next.planMode = 'existing'
+        next.workflowActive = true
+        changed = true
+      }
+      if (
+        !next.selectedEnvironmentSlug &&
+        Number.isFinite(next.environmentSelectionRequestedAt) &&
+        /amb|env/i.test(String(header || ''))
+      ) {
+        const slug = extractEnvironmentSelection(text)
+        if (slug) {
+          next.selectedEnvironmentSlug = slug
+          next.selectedEnvironmentAt = Date.now()
+          changed = true
+        }
+      }
+    }
+    return changed ? next : current
+  })
+}
+
+function collectAskUserAnswers(toolResult) {
+  const parsed = parseAskUserPayload(toolResult)
+  const record = parsed?.answers
+  if (!record || typeof record !== 'object') return []
+  const answers = []
+  for (const [header, value] of Object.entries(record)) {
+    const selected = Array.isArray(value?.selected) ? value.selected : []
+    for (const text of [...selected, value?.freeText]) {
+      if (typeof text === 'string' && text.trim()) {
+        answers.push({ header, text })
+      }
+    }
+  }
+  return answers
+}
+
+function parseAskUserPayload(result) {
+  const candidates = []
+  const visit = value => {
+    if (value == null) return
+    if (typeof value === 'string') {
+      candidates.push(value)
+      return
+    }
+    if (Array.isArray(value)) {
+      value.forEach(visit)
+      return
+    }
+    if (typeof value === 'object') {
+      if (value.answers && typeof value.answers === 'object') {
+        candidates.push(value)
+        return
+      }
+      if (typeof value.text === 'string') candidates.push(value.text)
+      if (value.content) visit(value.content)
+      if (value.result) visit(value.result)
+      if (value.output) visit(value.output)
+    }
+  }
+  visit(result)
+  for (const candidate of candidates) {
+    if (candidate && typeof candidate === 'object') return candidate
+    try {
+      const parsed = JSON.parse(candidate)
+      if (parsed?.answers && typeof parsed.answers === 'object') return parsed
+    } catch {
+      continue
+    }
+  }
+  return null
+}
+
 export function extractUserAuthoredPrompt(value) {
   return String(value || '')
     .replace(/<skill-context\b[^>]*>[\s\S]*?<\/skill-context>/gi, '')

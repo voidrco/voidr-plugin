@@ -540,6 +540,11 @@ const STRUCTURE_TOOLS = new Set([
 
 async function callStructureTool(name, args) {
   const planId = bridgeTestPlanId(args).toLowerCase()
+  if (!/^[a-f0-9]{24}$/.test(planId)) {
+    throw new Error(
+      `Blocked by Voidr workflow: ${name} requires planId with the exact _id returned by test_plans_get_test_plan or test_plans_list_test_plans this session. Never pass a plan name instead of the ID.`
+    )
+  }
   if (executionNeedsDeploy) {
     throw new Error(
       'Blocked by Voidr workflow: the platform already reported that the cases exist but are not automated (not deployed). Creating modules, suites, or cases again will never fix that and duplicates the plan. Merge the tests pull request, run voidr_release_deploy_merged_pr, verify sync, and retry the execution.'

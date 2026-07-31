@@ -10,6 +10,7 @@ import {
 } from './lib/execution-links.mjs'
 import {
   readSessionState,
+  recordAskUserSelections,
   updateSessionState
 } from './lib/session-state.mjs'
 
@@ -19,6 +20,10 @@ const toolName = canonicalToolName(
 )
 const toolArgs = payload.toolArgs ?? payload.tool_input ?? {}
 const toolResult = payload.toolResult ?? payload.tool_response
+recordAskUserSelections(payload, {
+  toolName: payload.toolName || payload.tool_name || '',
+  toolResult
+})
 const state = readSessionState(payload)
 const inputIds = executionIdsFromToolInput(
   toolName,

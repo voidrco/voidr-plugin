@@ -456,3 +456,43 @@ test('typed approvals recorded under a different hook session still unlock chat 
     {}
   )
 })
+
+test('typed plan-mode answers under the window session unlock chat writes without ask_user', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-dev-flow-'))
+  const windowSession = 'window-typed-mode'
+  const chatSession = 'chat-typed-mode'
+  const now = Date.now()
+
+  submitPrompt(
+    {
+      sessionId: windowSession,
+      timestamp: now,
+      prompt: 'É um existente\nNão sei o nome da aplicação, mas é um teste web',
+      transformedPrompt:
+        'É um existente\nNão sei o nome da aplicação, mas é um teste web'
+    },
+    dataRoot
+  )
+  submitPrompt(
+    {
+      sessionId: windowSession,
+      timestamp: now + 1000,
+      prompt: 'Aprovo este Test Plan',
+      transformedPrompt: 'Aprovo este Test Plan'
+    },
+    dataRoot
+  )
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId: chatSession,
+        cwd: process.cwd(),
+        toolName: 'voidr-test_plans_create_module',
+        toolArgs: { planId: '0123456789abcdef01234567', name: 'Teste Plugin' }
+      },
+      dataRoot
+    ),
+    {}
+  )
+})

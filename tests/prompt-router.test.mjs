@@ -141,7 +141,10 @@ test('plan-mode choices are recognized in natural phrasings', async () => {
     'Quero implementar testes de um Test Plan existente',
     'trabalhar em um plano de testes existente',
     'Usar um já existente.',
-    'usar um existente'
+    'usar um existente',
+    'É um existente\nNão sei o nome da aplicação, mas é um teste web',
+    'Já existente',
+    'Existente'
   ]) {
     assert.equal(isExistingPlanChoice(prompt), true, prompt)
   }

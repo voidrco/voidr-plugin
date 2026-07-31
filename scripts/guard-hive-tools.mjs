@@ -773,7 +773,7 @@ function enforceTestPlanWriteApproval(hookPayload, canonicalName) {
       )
     }
     deny(
-      `Blocked by Voidr workflow — missing: ${missing.join('; ')}. Test Plan writes require a visible draft followed by a new user message explicitly saying “Aprovo este Test Plan”. To add cases to an existing plan, follow the “Add cases to an existing plan” section of /voidr-test-plan: show the additions draft and wait for that exact approval message.`
+      `Blocked by Voidr workflow — missing: ${missing.join('; ')}. Test Plan writes require a visible draft followed by a new user message explicitly saying “Aprovo este Test Plan”. To add cases to an existing plan, follow the “Add cases to an existing plan” section of /voidr-test-plan: show the additions draft and wait for that exact approval message. Recovery: when the workflow or plan mode is missing, ask the plan-mode question with its two ask_user options — a recorded selection arms the workflow, a still-fresh typed approval remains valid, and this exact call may then be retried once. Do not loop retries and do not delegate to a subagent.`
     )
   }
 }

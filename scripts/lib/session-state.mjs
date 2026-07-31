@@ -44,7 +44,9 @@ const PROMPT_GATE_KEYS = [
   'planContextConfirmed',
   'planContextConfirmedAt',
   'selectedEnvironmentSlug',
-  'selectedEnvironmentAt'
+  'selectedEnvironmentAt',
+  'planMode',
+  'workflowActive'
 ]
 
 export function readGateState(payload) {
@@ -375,6 +377,14 @@ export function isNewPlanChoice(prompt) {
 export function isExistingPlanChoice(prompt) {
   const text = normalizeText(prompt)
   if (/^(?:quero\s+)?usar\s+(?:um\s+)?(?:ja\s+)?existente[.!]?$/.test(text.trim())) {
+    return true
+  }
+  const firstLine = String(text.split(/\r?\n/, 1)[0] || '').trim()
+  if (
+    /^(?:e|eh)?\s*(?:o\s+|um\s+)?(?:test\s*plan\s+|plano\s+(?:de\s+testes?\s+)?)?(?:ja\s+)?existente[.!]?$/.test(
+      firstLine
+    )
+  ) {
     return true
   }
   const existingPlan = /\b(?:test\s*plan|plano\s+de\s+testes?)\s+existente\b/

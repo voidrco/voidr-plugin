@@ -339,3 +339,47 @@ test('deny diagnostics name every missing plan-write condition', () => {
     /Add cases to an existing plan/
   )
 })
+
+test('plan writes in a session without any user message name the subagent cause', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-dev-flow-'))
+  const sessionId = 'dev-flow-subagent'
+  const postHook = join(root, 'scripts/post-tool-execution-links.mjs')
+
+  const askResult = spawnSync(process.execPath, [postHook], {
+    input: JSON.stringify({
+      sessionId,
+      toolName: 'vscode_askQuestions',
+      toolResult: [
+        JSON.stringify({
+          answers: {
+            plan_mode: {
+              selected: ['Usar Test Plan existente'],
+              freeText: null,
+              skipped: false
+            }
+          }
+        })
+      ]
+    }),
+    encoding: 'utf8',
+    env: { ...process.env, COPILOT_PLUGIN_DATA: dataRoot }
+  })
+  assert.equal(askResult.status, 0, askResult.stderr)
+
+  const denied = runHook(
+    {
+      sessionId,
+      cwd: process.cwd(),
+      toolName: 'voidr-test_plans_create_module',
+      toolArgs: { planId: '0123456789abcdef01234567', name: 'X' }
+    },
+    dataRoot
+  )
+  assert.equal(denied.permissionDecision, 'deny')
+  assert.match(
+    denied.permissionDecisionReason,
+    /never received a user chat message/
+  )
+  assert.match(denied.permissionDecisionReason, /subagent/)
+  assert.match(denied.permissionDecisionReason, /prompt hook is not running/)
+})

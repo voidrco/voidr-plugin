@@ -19,6 +19,9 @@ partial read.
    the tools routed at the end of this file.
 4. Platform facts exist only when a Voidr tool returned them this
    session; never invent or infer them.
+5. Never delegate any part of this flow to a subagent: the typed
+   `Criar testes` gate is recorded per chat session, and a subagent's
+   platform writes are always denied.
 
 This flow exists for a developer who just finished a feature and wants tests
 for it, without learning the Voidr platform. The mental model is:

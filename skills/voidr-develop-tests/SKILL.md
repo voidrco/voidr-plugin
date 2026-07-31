@@ -28,6 +28,9 @@ question or tool call; never act from a partial read.
    never a fallback to implementing existing cases.
 5. The platform environment and the local smoke target are different
    values; never substitute one for the other.
+6. Never delegate any part of this workflow to a subagent. Approval gates
+   are recorded per chat session, and a subagent session can never receive
+   the user's typed approval — its platform writes are always denied.
 
 Selection contract: every choice in this workflow — plan mode, application,
 environment, Test Plan, repository, planning inputs — must be rendered with

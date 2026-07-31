@@ -26,6 +26,9 @@ partial read.
    returned them in this session; never infer them from the workspace.
 5. Routing metadata (application name, type, environment, feature name,
    base URL) is never test-design evidence.
+6. Never delegate drafting, approval, or any Test Plan mutation to a
+   subagent. Gates are recorded per chat session; a subagent can never
+   receive the user's typed approval and its writes are always denied.
 
 ## Authentication gate
 

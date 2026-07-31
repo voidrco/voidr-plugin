@@ -3,6 +3,9 @@ import { isDevTestFlowPrompt, isDevTestsApproval } from './session-state.mjs'
 const voidrTestingIntent =
   /\b(?:desenvolver|criar|implementar|automatizar|planejar|publicar|subir|executar|rodar)\b[\s\S]{0,80}\b(?:testes?|test plans?|planos? de testes?)\b[\s\S]{0,80}\bvoidr\b|\bvoidr\b[\s\S]{0,80}\b(?:desenvolver|criar|implementar|automatizar|planejar|publicar|subir|executar|rodar)\b[\s\S]{0,80}\b(?:testes?|test plans?|planos? de testes?)\b/i
 
+const englishVoidrTestingIntent =
+  /\b(?:create|implement|develop|add|list|select|update|run|execute)\b[\s\S]{0,80}\btest\s*plans?\b|\bvoidr\b[\s\S]{0,80}\btest\s*(?:plans?|cases?)\b/i
+
 const explicitVoidrSkill = /\/(?:copilot\s+)?voidr-[a-z-]+/i
 
 function isDeployTestsPrompt(prompt) {
@@ -56,7 +59,7 @@ cases need the deploy, not re-creation.`
     }
   }
 
-  if (voidrTestingIntent.test(prompt)) {
+  if (voidrTestingIntent.test(prompt) || englishVoidrTestingIntent.test(prompt)) {
     return {
       modifiedTransformedPrompt: `${transformedPrompt}
 

@@ -751,6 +751,11 @@ function enforceTestPlanWriteApproval(hookPayload, canonicalName) {
       )
     }
     const missing = []
+    if (!Number.isFinite(state.lastPromptAt)) {
+      missing.push(
+        'this session has never received a user chat message — a subagent session can never hold the typed approval, so never delegate Test Plan writes to a subagent; if this is the main chat, the plugin prompt hook is not running (reinstall the plugin and reload the VS Code window)'
+      )
+    }
     if (state.workflowActive !== true) {
       missing.push(
         'the Voidr testing workflow was never armed in this session'

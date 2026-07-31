@@ -26,6 +26,24 @@ test('routes natural Portuguese Voidr testing intents to the entry skill', () =>
   }
 })
 
+test('routes English handoff intents to the entry skill', () => {
+  for (const prompt of [
+    'List all Test Plans for the application "Itaú Crédito Rural" (applicationId: abc)',
+    'Create a new module, suite, and test case in the Voidr Test Plan "smoke-teste"',
+    'The user wants to implement tests from an existing Test Plan'
+  ]) {
+    const routed = routeVoidrPrompt({
+      prompt,
+      transformedPrompt: prompt
+    })
+    assert.match(
+      routed.modifiedTransformedPrompt || '',
+      /\/voidr-develop-tests/,
+      prompt
+    )
+  }
+})
+
 test('routes bare test-creation intents to a Voidr triage note', () => {
   for (const prompt of [
     'Quero criar um teste',

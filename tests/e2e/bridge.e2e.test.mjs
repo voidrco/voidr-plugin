@@ -684,7 +684,10 @@ test('bridge blocks invented module/suite slugs and not-found retries', async t 
     name: 'test_plans_create_case',
     arguments: { planId, moduleSlug: 'antecipacao', suiteSlug: 'LIMITE', name: 'Caso' }
   })
-  assert.match(invented.error.message, /never created in module/i)
+  assert.match(
+    invented.error.message,
+    /never (?:created in module|returned by the platform)/i
+  )
   assert.match(invented.error.message, /solicitacao-acima-limite/)
   assert.equal(
     receivedCalls.filter(call => call.name === 'test_plans_create_case').length,
@@ -703,25 +706,18 @@ test('bridge blocks invented module/suite slugs and not-found retries', async t 
   })
   assert.match(validCase.content[0].text, /case-1/)
 
-  const legacyMiss = await client.request('tools/call', {
+  const legacyMiss = await client.requestRaw('tools/call', {
     name: 'test_plans_create_case',
     arguments: { planId, moduleSlug: 'legacy', suiteSlug: 'GHOST', name: 'Caso' }
   })
-  assert.equal(legacyMiss.isError, true)
   assert.match(
-    structureText(legacyMiss),
-    /Do not retry the same identifier/i
+    legacyMiss.error.message,
+    /never returned by the platform this session/i
   )
-
-  const blockedRetry = await client.requestRaw('tools/call', {
-    name: 'test_plans_create_case',
-    arguments: { planId, moduleSlug: 'legacy', suiteSlug: 'GHOST', name: 'Caso 2' }
-  })
-  assert.match(blockedRetry.error.message, /already failed with not-found/i)
   assert.equal(
     receivedCalls.filter(call => call.args?.suiteSlug === 'GHOST').length,
-    1,
-    'a not-found identifier must not be retried against the network'
+    0,
+    'an unknown module slug must be blocked before any network call'
   )
 })
 

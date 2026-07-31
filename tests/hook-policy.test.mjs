@@ -1334,3 +1334,61 @@ test('blocks unsafe literals and frontend-derived API origins in spec edits', ()
 function transcriptEntry(type, data) {
   return JSON.stringify({ type, data })
 }
+
+test('blocks Node runtime installs from the agent terminal during a workflow', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
+  const sessionId = 'runtime-install-gate'
+  const now = Date.now()
+
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now,
+      prompt: 'Quero desenvolver testes na Voidr',
+      transformedPrompt: 'Quero desenvolver testes na Voidr'
+    },
+    dataRoot
+  )
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 1,
+      prompt: 'Usar Test Plan existente',
+      transformedPrompt: 'Usar Test Plan existente'
+    },
+    dataRoot
+  )
+
+  for (const command of [
+    'nvm install 22',
+    'nvm use 22 && npm test',
+    'volta install node@22',
+    'sudo apt-get install -y nodejs',
+    'curl -fsSL https://nodejs.org/dist/v22.0.0/node-v22.0.0-linux-x64.tar.xz -o node.tar.xz'
+  ]) {
+    const output = runHook(
+      {
+        sessionId,
+        cwd: process.cwd(),
+        toolName: 'bash',
+        toolArgs: { command }
+      },
+      dataRoot
+    )
+    assert.equal(output.permissionDecision, 'deny', command)
+    assert.match(output.permissionDecisionReason, /Node 22/, command)
+  }
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId,
+        cwd: process.cwd(),
+        toolName: 'bash',
+        toolArgs: { command: 'git status --porcelain' }
+      },
+      dataRoot
+    ),
+    {}
+  )
+})

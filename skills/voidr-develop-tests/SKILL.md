@@ -444,7 +444,10 @@ application when product repositories are added.
 - The preparation and smoke tools validate the Node.js runtime before running
   anything: Playwright 1.48 hangs on Node 23+. If they report an unsupported
   Node version, ask the user to activate the pinned Node 22 (volta/nvm) and
-  retry. Do not attempt to run Playwright on the unsupported version.
+  retry. Do not attempt to run Playwright on the unsupported version, and
+  never install, switch, or pin Node yourself — no `nvm install`,
+  `volta install`, or package-manager Node installs in the terminal; runtime
+  activation belongs to the user.
 
 ## 8. Continue through the gates
 

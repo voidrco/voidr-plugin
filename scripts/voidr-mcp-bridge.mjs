@@ -321,9 +321,10 @@ const lines = createInterface({
   crlfDelay: Infinity
 })
 
+let requestQueue = Promise.resolve()
 lines.on('line', line => {
   if (!line.trim()) return
-  void handleLine(line)
+  requestQueue = requestQueue.then(() => handleLine(line))
 })
 
 async function handleLine(line) {
@@ -579,6 +580,31 @@ function enforceKnownStructureRefs(name, planId, args) {
     if (slug && failedStructureRefs.has(`${planId}|${slug.toLowerCase()}`)) {
       throw new Error(
         `Blocked by Voidr workflow: identifier '${slug}' already failed with not-found in this session. Do not retry invented identifiers. Read the plan with test_plans_get_test_plan and use the exact slug the platform returns.${knownStructureHint(planId)}`
+      )
+    }
+  }
+
+  const knownModules = new Set([
+    ...(sessionModules.get(planId) || []),
+    ...(seenPlanSlugs.get(planId) || [])
+  ])
+  if (
+    (name === 'test_plans_create_suite' || name === 'test_plans_create_case') &&
+    moduleSlug &&
+    !knownModules.has(moduleSlug.toLowerCase())
+  ) {
+    throw new Error(
+      `Blocked by Voidr workflow: module '${moduleSlug}' was never returned by the platform this session. Create the module first and wait for its response — one structure call at a time, never module and suite in the same batch — or read the plan with test_plans_get_test_plan (by planId) and use the exact slug it returns.${knownStructureHint(planId)}`
+    )
+  }
+  if (name === 'test_plans_create_case' && suiteSlug) {
+    const knownSuites = new Set([
+      ...(sessionSuites.get(planId)?.get(moduleSlug.toLowerCase()) || []),
+      ...(seenPlanSlugs.get(planId) || [])
+    ])
+    if (!knownSuites.has(suiteSlug.toLowerCase())) {
+      throw new Error(
+        `Blocked by Voidr workflow: suite '${suiteSlug}' was never returned by the platform this session. Create the suite first (after its module, one call at a time) or read the plan with test_plans_get_test_plan (by planId) and use the exact slug it returns.${knownStructureHint(planId)}`
       )
     }
   }

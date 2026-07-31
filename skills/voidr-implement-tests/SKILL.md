@@ -19,6 +19,10 @@ partial read.
 3. Never create or modify Test Plan content from this skill.
 4. Implement only the explicitly selected cases.
 5. Never read or print `.env` values.
+6. Never install, switch, or pin a Node runtime. When a tool reports an
+   unsupported Node version, report the pinned Node 22 requirement, ask
+   the user to activate it in their own terminal (nvm/volta), and retry
+   the tool once after they confirm — nothing else.
 
 ## Preconditions
 

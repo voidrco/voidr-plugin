@@ -135,8 +135,11 @@ Only after `Criar testes`:
      `test_plans_create_module`, a suite with `test_plans_create_suite`, and
      one case per approved scenario with `test_plans_create_case`
      (Arrange/Act/Assert derived from the scenario, placeholders only).
-     Reference modules and suites only by the exact `slug` each creation
-     response returned — never invent, abbreviate, or re-case an identifier.
+     Create strictly one structure call at a time — never module and suite
+     in the same batch; each call waits for the previous response and uses
+     only the exact `slug` that response returned (the platform generates
+     slugs; never derive one from the name, and never invent, abbreviate,
+     or re-case an identifier).
      On a not-found error, read the plan with `test_plans_get_test_plan` to
      get the real slugs; never retry the same identifier. The bridge blocks
      invented slugs and not-found retries.
@@ -202,8 +205,9 @@ testes…", "Escrevendo os testes…"), not tool-by-tool narration.
 If `npm install` or another step fails with a network error, say the shell has
 no network access (Copilot sandbox) and ask once to rerun with network. If the
 tools report an unsupported Node version, ask the user to activate Node 22
-(volta/nvm) and retry. Never change registry, cache, lockfile, or package
-manager, and never read or print `.env` contents.
+(volta/nvm) and retry — never install, switch, or pin Node yourself. Never
+change registry, cache, lockfile, or package manager, and never read or print
+`.env` contents.
 
 ## 6. Ship: PR, publish, run on the platform
 

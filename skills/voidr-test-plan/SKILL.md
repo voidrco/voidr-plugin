@@ -142,10 +142,17 @@ creation tool directly:
    chat input and end the response. The runtime hook blocks these writes
    until that new user-authored message arrives; `ask_user` selections do
    not satisfy it. Exception for a stale prompt hook: when a write was denied and the denial reports that the typed approval was never recorded, collect it with an `ask_user` question containing a single free-text field where the user types exactly the same phrase — typed free-text answers are recorded reliably and preserve authorship. Never present the phrase as a clickable option.
-5. Only after that approval, call `test_plans_create_module` and
-   `test_plans_create_suite` for genuinely new structure, then
-   `test_plans_create_case` once per approved case, referencing only the
-   exact slugs each creation response returned.
+5. Only after that approval, create the structure strictly one call at a
+   time — never two structure calls in the same message. Call
+   `test_plans_create_module`, wait for its response, and take the exact
+   `slug` it returns (the platform generates slugs; never derive one from
+   the name). Only then call `test_plans_create_suite` with that module
+   slug, and only after its response call `test_plans_create_case` once
+   per approved case with the returned suite slug. The approved names are
+   binding: on a not-found or blocked retry, read the plan with
+   `test_plans_get_test_plan` (by `planId`) and continue with the approved
+   names and the real slugs — never invent different module or suite names
+   to work around an error.
 6. Read the plan back with `test_plans_get_test_plan`, verify the added
    content, and report it.
 

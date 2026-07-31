@@ -94,6 +94,7 @@ if (isShell) {
   }
   enforceShellEnvFileRead(payload, normalizedShell)
   enforceDependencyStrategyProtection(payload, normalizedShell)
+  enforceRuntimeInstallProtection(payload, normalizedShell)
   const forbiddenDeploy = (policy.forbiddenDeployShellFragments || []).find(value =>
     normalizedShell.includes(value.toLowerCase())
   )
@@ -266,6 +267,23 @@ function enforceDependencyStrategyProtection(hookPayload, normalizedShell) {
   if (!fragment && !mutatesDependencyStrategy) return
   deny(
     'Blocked by Voidr policy: do not change npm registry, cache, lockfiles, dependency flags, or package manager while diagnosing an install failure. If the install failed without network access (Copilot sandbox), report that restriction and ask the user once to rerun the step with network access.'
+  )
+}
+
+function enforceRuntimeInstallProtection(hookPayload, normalizedShell) {
+  const state = readGateState(hookPayload)
+  if (state.workflowActive !== true) return
+  const installsRuntime =
+    /\b(?:nvm|volta|fnm|asdf)\b[^;&|\n]*\b(?:install|use|pin|global|exec)\b/.test(
+      normalizedShell
+    ) ||
+    /\b(?:apt|apt-get|dnf|yum|pacman|brew|snap)\b[^;&|\n]*\binstall\b[^;&|\n]*\bnode/.test(
+      normalizedShell
+    ) ||
+    /nodesource|nodejs\.org\/dist/.test(normalizedShell)
+  if (!installsRuntime) return
+  deny(
+    'Blocked by Voidr policy: never install, switch, or pin a Node runtime from the agent terminal. The Voidr framework requires the pinned Node 22; ask the user to activate it in their own terminal (for example nvm use 22 or volta pin node@22) and then retry voidr_workspace_prepare_test_repository or voidr_smoke_build once. Do not keep retrying and do not attempt any other runtime workaround.'
   )
 }
 

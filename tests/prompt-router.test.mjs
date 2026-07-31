@@ -26,6 +26,28 @@ test('routes natural Portuguese Voidr testing intents to the entry skill', () =>
   }
 })
 
+test('routes bare test-creation intents to a Voidr triage note', () => {
+  for (const prompt of [
+    'Quero criar um teste',
+    'Preciso implementar testes',
+    'Me ajuda a escrever um teste novo'
+  ]) {
+    const routed = routeVoidrPrompt({
+      prompt,
+      transformedPrompt: prompt
+    })
+    assert.match(routed.modifiedTransformedPrompt, /\/voidr-develop-tests/)
+    assert.match(
+      routed.modifiedTransformedPrompt,
+      /never invent your own triage options/i
+    )
+    assert.match(
+      routed.modifiedTransformedPrompt,
+      /clearly about plain local tests unrelated to Voidr, ignore/i
+    )
+  }
+})
+
 test('does not rewrite unrelated prompts or explicit Voidr skill calls', () => {
   assert.deepEqual(
     routeVoidrPrompt({
@@ -85,4 +107,28 @@ test('prompt hook resolves its script when VS Code omits PLUGIN_ROOT', () => {
   assert.equal(result.status, 0, result.stderr)
   const output = JSON.parse(result.stdout)
   assert.match(output.modifiedTransformedPrompt, /\/voidr-develop-tests/)
+})
+
+test('plan-mode choices are recognized in natural phrasings', async () => {
+  const { isExistingPlanChoice, isNewPlanChoice } = await import(
+    '../scripts/lib/session-state.mjs'
+  )
+  for (const prompt of [
+    'Usar Test Plan existente',
+    'Num test plan existente',
+    'Quero implementar testes de um Test Plan existente',
+    'trabalhar em um plano de testes existente'
+  ]) {
+    assert.equal(isExistingPlanChoice(prompt), true, prompt)
+  }
+  for (const prompt of [
+    'Não quero usar o test plan existente',
+    'Criar novo Test Plan',
+    'Corrija o teste unitário deste arquivo'
+  ]) {
+    assert.equal(isExistingPlanChoice(prompt), false, prompt)
+  }
+  assert.equal(isNewPlanChoice('Criar um novo plano de testes'), true)
+  assert.equal(isNewPlanChoice('criar novo test plan'), true)
+  assert.equal(isNewPlanChoice('usar test plan existente'), false)
 })

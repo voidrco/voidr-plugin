@@ -1,4 +1,4 @@
-import { isDevTestFlowPrompt } from './session-state.mjs'
+import { isDevTestFlowPrompt, isDevTestsApproval } from './session-state.mjs'
 
 const voidrTestingIntent =
   /\b(?:desenvolver|criar|implementar|automatizar|planejar|publicar|subir|executar|rodar)\b[\s\S]{0,80}\b(?:testes?|test plans?|planos? de testes?)\b[\s\S]{0,80}\bvoidr\b|\bvoidr\b[\s\S]{0,80}\b(?:desenvolver|criar|implementar|automatizar|planejar|publicar|subir|executar|rodar)\b[\s\S]{0,80}\b(?:testes?|test plans?|planos? de testes?)\b/i
@@ -20,6 +20,7 @@ export function routeVoidrPrompt(input) {
   const transformedPrompt = String(input?.transformedPrompt || prompt)
 
   if (!prompt || explicitVoidrSkill.test(prompt)) return {}
+  if (isDevTestsApproval(prompt)) return {}
 
   if (isDevTestFlowPrompt(prompt)) {
     return {
@@ -55,10 +56,9 @@ cases need the deploy, not re-creation.`
     }
   }
 
-  if (!voidrTestingIntent.test(prompt)) return {}
-
-  return {
-    modifiedTransformedPrompt: `${transformedPrompt}
+  if (voidrTestingIntent.test(prompt)) {
+    return {
+      modifiedTransformedPrompt: `${transformedPrompt}
 
 Use the /voidr-develop-tests skill for this request. Load that skill before
 inspecting files or calling any tool. Its first-turn Test Plan mode question,
@@ -67,5 +67,31 @@ Render every workflow choice (plan mode, application, environment, Test Plan,
 repository, planning inputs) with the native ask_user selectable options when
 available; free text is only a fallback. Only the two runtime confirmations
 must be typed in chat.`
+    }
   }
+
+  if (isGenericTestCreationPrompt(prompt)) {
+    return {
+      modifiedTransformedPrompt: `${transformedPrompt}
+
+If this request is about tests managed on the Voidr platform (Test Plans and
+Playwright suites run by Voidr), load the /voidr-develop-tests skill before
+asking anything or calling any tool, and start with its mandatory
+new-versus-existing Test Plan question. Never invent your own triage options
+and never ask the user to type IDs or repository paths. If the request is
+clearly about plain local tests unrelated to Voidr, ignore this note.`
+    }
+  }
+
+  return {}
+}
+
+function isGenericTestCreationPrompt(prompt) {
+  const text = String(prompt || '')
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase()
+  return /\b(?:criar?|crie|desenvolver?|implementar?|escrever?|escreva|gerar?|gere|montar?|monte|automatizar?)\b[\s\S]{0,60}\btestes?\b/.test(
+    text
+  )
 }

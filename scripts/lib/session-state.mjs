@@ -53,7 +53,12 @@ export function recordUserPromptState(payload) {
     }
 
     const devFlowStarted = isDevTestFlowPrompt(prompt)
-    const workflowStarted = isVoidrTestingPrompt(prompt) || devFlowStarted
+    const planChoiceStated =
+      isNewPlanChoice(prompt) || isExistingPlanChoice(prompt)
+    const workflowStarted =
+      isVoidrTestingPrompt(prompt) ||
+      devFlowStarted ||
+      (planChoiceStated && current.workflowActive !== true)
     const connectStarted = isVoidrConnectPrompt(prompt)
     const smokeRemediationAuthorized = isSmokeRemediationPrompt(prompt)
     const planningInputsConfirmed =
@@ -222,13 +227,26 @@ function isVoidrConnectPrompt(prompt) {
   return /\/(?:copilot\s+)?voidr-connect\b/i.test(prompt)
 }
 
-function isNewPlanChoice(prompt) {
-  return /\bcriar\s+(?:um\s+)?novo\s+test plan\b/i.test(prompt)
+export function isNewPlanChoice(prompt) {
+  const text = normalizeText(prompt)
+  return /\bcriar\s+(?:um\s+)?novo\s+(?:test\s*plan|plano\s+de\s+testes?)\b/.test(
+    text
+  )
 }
 
-function isExistingPlanChoice(prompt) {
-  return /\b(?:usar|trabalhar\s+em)\s+(?:um\s+)?test plan\s+existente\b/i.test(
-    prompt
+export function isExistingPlanChoice(prompt) {
+  const text = normalizeText(prompt)
+  const existingPlan = /\b(?:test\s*plan|plano\s+de\s+testes?)\s+existente\b/
+  if (!existingPlan.test(text)) return false
+  if (
+    /\b(?:nao|nem|sem)\b[^.!?]{0,40}(?:test\s*plan|plano\s+de\s+testes?)\s+existente\b/.test(
+      text
+    )
+  ) {
+    return false
+  }
+  return /\b(?:usar|trabalhar\s+em|implementar|escolher|selecionar|continuar|de\s+um|em\s+um|num|no)\b[^.!?]{0,60}(?:test\s*plan|plano\s+de\s+testes?)\s+existente\b|^(?:num|no|em\s+um)?\s*(?:test\s*plan|plano\s+de\s+testes?)\s+existente\b/.test(
+    text
   )
 }
 

@@ -64,6 +64,11 @@ selectable options:
 2. `Usar Test Plan existente`
 
 End the response after this question. Do not answer it on the user's behalf.
+The only exception: when the user's current message already states the
+choice unambiguously (for example “implementar testes de um Test Plan
+existente” or “criar um novo Test Plan”), do not re-ask an already-answered
+question — restate the detected mode in one line and continue directly to
+the authentication check.
 Do not include application, flow, or repository questions in that first
 question batch. Do not inspect `project.json`, scan repositories, or call a
 platform tool before the user answers. A local file is not evidence of current

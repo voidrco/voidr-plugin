@@ -45,6 +45,7 @@ enforcePlanModeGate(payload, rawToolName, toolName)
 enforceNewPlanModeListing(payload, toolName)
 enforcePostSmokeStop(payload, rawToolName, toolName)
 enforceSensitiveProductRead(payload, rawToolName, toolArgs)
+enforceEnvFileProtection(payload, rawToolName, toolArgs)
 enforcePreSelectionWriteGate(payload, rawToolName)
 recordInitialTestPlanSelection(payload, toolName, toolArgs)
 enforceSelectedTestPlanIdentity(payload, toolName, toolArgs)
@@ -268,6 +269,24 @@ function enforceDependencyStrategyProtection(hookPayload, normalizedShell) {
   if (!fragment && !mutatesDependencyStrategy) return
   deny(
     'Blocked by Voidr policy: do not change npm registry, cache, lockfiles, dependency flags, or package manager while diagnosing an install failure. If the install failed without network access (Copilot sandbox), report that restriction and ask the user once to rerun the step with network access.'
+  )
+}
+
+function enforceEnvFileProtection(hookPayload, name, args) {
+  if (!isGenericReadTool(name) && !isGenericWriteTool(name)) return
+  const state = readGateState(hookPayload)
+  if (state.workflowActive !== true) return
+  const paths = [
+    ...collectPathArguments(args),
+    ...collectPatchPathsFromValue(args)
+  ]
+  const touchesEnv = paths.some(value => {
+    const base = basename(String(value))
+    return /^\.env(?:\..+)?$/.test(base) && base !== '.env.example'
+  })
+  if (!touchesEnv) return
+  deny(
+    'Blocked by Voidr policy: .env files are opaque secret material — never read, create, or edit them with editor tools. voidr_workspace_prepare_test_repository provisions the file through voidr env pull; check only its existence, never its values.'
   )
 }
 

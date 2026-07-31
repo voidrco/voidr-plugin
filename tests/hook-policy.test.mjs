@@ -1459,3 +1459,65 @@ test('blocks terminal git publishing during a workflow and points to the bridge 
     )
   }
 })
+
+test('blocks editor reads and writes of .env files during a workflow', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
+  const sessionId = 'env-file-gate'
+  const now = Date.now()
+
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now,
+      prompt: 'Quero desenvolver testes na Voidr',
+      transformedPrompt: 'Quero desenvolver testes na Voidr'
+    },
+    dataRoot
+  )
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 1,
+      prompt: 'Usar Test Plan existente',
+      transformedPrompt: 'Usar Test Plan existente'
+    },
+    dataRoot
+  )
+
+  for (const request of [
+    {
+      toolName: 'read_file',
+      toolArgs: { filePath: '/tmp/tests/.env', startLine: 1, endLine: 30 }
+    },
+    {
+      toolName: 'create_file',
+      toolArgs: { filePath: '/tmp/tests/.env', content: '' }
+    },
+    {
+      toolName: 'read_file',
+      toolArgs: { filePath: '/tmp/tests/.env.local', startLine: 1, endLine: 5 }
+    }
+  ]) {
+    const output = runHook(
+      { sessionId, cwd: process.cwd(), ...request },
+      dataRoot
+    )
+    assert.equal(output.permissionDecision, 'deny', request.toolName)
+    assert.match(
+      output.permissionDecisionReason,
+      /opaque secret material|never read \.env files/,
+      request.toolArgs.filePath
+    )
+  }
+
+  const template = runHook(
+    {
+      sessionId,
+      cwd: process.cwd(),
+      toolName: 'create_file',
+      toolArgs: { filePath: '/tmp/tests/notes.md', content: 'ok' }
+    },
+    dataRoot
+  )
+  assert.notEqual(template.permissionDecisionReason?.includes('opaque secret material'), true)
+})

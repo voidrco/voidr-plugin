@@ -269,6 +269,10 @@ For an existing Test Plan, follow `/voidr-test-plan` in select mode. Call
 `test_plans_list_test_plans` for the selected application, then use `ask_user`
 when available to present the returned plan names as selectable options. Keep
 the selected ID internally and never ask the user to type a `testPlanId`.
+When the user asks for a new case or scenario instead of implementing the
+pending ones, stay in `/voidr-test-plan` and follow its
+“Add cases to an existing plan” section — never push the user back to the
+existing cases and never convert the request into a new Test Plan.
 When the user already supplied an explicit Test Plan ID, read only that exact
 ID. If it is not available in the current Voidr environment, stop and ask for
 a new explicit selection. Never list plans as a fallback or silently replace

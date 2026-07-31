@@ -76,12 +76,45 @@ Otherwise:
    test count as selectable options. Keep IDs internally and never ask the user
    to type a `testPlanId`.
 3. Call `test_plans_get_test_plan` for the selected ID.
-4. Ask whether to implement all pending cases or a named subset.
+4. Ask whether to implement all pending cases, a named subset, or to add
+   new cases (see “Add cases to an existing plan”).
 5. Repeat the exact selected case slugs and wait for confirmation.
 
 Never resolve the plan from `project.json`.
 Never silently replace a Test Plan after any not-found, authorization, or
 environment mismatch response.
+
+## Add cases to an existing plan
+
+When the user wants new scenarios in an already-persisted plan (for example
+answering a case-selection question with "quero criar um novo caso"), this
+is the supported route. Do not push the user back to implementing existing
+cases, do not treat the request as a new Test Plan, and do not call a
+creation tool directly:
+
+1. Read the selected plan with `test_plans_get_test_plan` and show its
+   modules and suites.
+2. Ask whether the new cases belong to an existing module and suite or to
+   new ones, and collect from the user (or from an explicitly authorized
+   repository or document) the scenarios, expected behavior, and
+   preconditions.
+3. Show a draft containing only the additions: target module and suite
+   (exact existing slugs, or proposed names for new structure), each case
+   with Arrange/Act/Assert, priority/severity, and
+   `{{env.VARIABLE_NAME}}` placeholders only.
+4. Instruct the user to type exactly `Aprovo este Test Plan` in the normal
+   chat input and end the response. The runtime hook blocks these writes
+   until that new user-authored message arrives; `ask_user` selections do
+   not satisfy it.
+5. Only after that approval, call `test_plans_create_module` and
+   `test_plans_create_suite` for genuinely new structure, then
+   `test_plans_create_case` once per approved case, referencing only the
+   exact slugs each creation response returned.
+6. Read the plan back with `test_plans_get_test_plan`, verify the added
+   content, and report it.
+
+New cases enter the plan as not automated. Implementing and deploying them
+follows the normal `/voidr-implement-tests` and `/voidr-deploy-run` gates.
 
 ## New plan
 
@@ -310,7 +343,7 @@ out of scope for this skill.
 | List workspace repository candidates for read-only code context | `voidr_workspace_inspect` |
 | Persist the approved new plan (first mutation) | `test_plans_create_test_plan` |
 | Persist the approved structure right after a complete creation response | `test_plans_populate_test_plan` |
-| Add a module, suite, or case to an already-persisted plan on an explicit user request | `test_plans_create_module`, `test_plans_create_suite`, `test_plans_create_case` |
+| Add a module, suite, or case to an already-persisted plan, after the additions draft was approved (see “Add cases to an existing plan”) | `test_plans_create_module`, `test_plans_create_suite`, `test_plans_create_case` |
 | Edit an already-persisted plan, module, suite, or case only when the user explicitly requests that exact change | `test_plans_update_test_plan`, `test_plans_update_module`, `test_plans_update_suite`, `test_plans_update_case` |
 
 Disambiguation:

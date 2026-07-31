@@ -199,7 +199,22 @@ export function recordAskUserSelections(payload, { toolName, toolResult }) {
   return updateSessionState(payload, current => {
     const next = { ...current }
     let changed = false
-    for (const { header, text } of answers) {
+    for (const { header, text, typed } of answers) {
+      if (typed) {
+        if (isExplicitTestPlanApproval(text)) {
+          next.planWriteApproved = true
+          next.planWriteApprovedAt = Date.now()
+          changed = true
+        } else if (isPlanningInputsConfirmation(text)) {
+          next.planContextConfirmed = true
+          next.planContextConfirmedAt = Date.now()
+          changed = true
+        } else if (next.planMode === 'auto' && isDevTestsApproval(text)) {
+          next.planWriteApproved = true
+          next.planWriteApprovedAt = Date.now()
+          changed = true
+        }
+      }
       if (isNewPlanChoice(text)) {
         next.planMode = 'new'
         next.workflowActive = true
@@ -235,10 +250,13 @@ function collectAskUserAnswers(toolResult) {
   const answers = []
   for (const [header, value] of Object.entries(record)) {
     const selected = Array.isArray(value?.selected) ? value.selected : []
-    for (const text of [...selected, value?.freeText]) {
+    for (const text of selected) {
       if (typeof text === 'string' && text.trim()) {
-        answers.push({ header, text })
+        answers.push({ header, text, typed: false })
       }
+    }
+    if (typeof value?.freeText === 'string' && value.freeText.trim()) {
+      answers.push({ header, text: value.freeText, typed: true })
     }
   }
   return answers

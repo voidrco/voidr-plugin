@@ -110,7 +110,7 @@ already confirmed.
    normal chat message to approve, or to describe any scenario to add or
    remove. Do not use `ask_user` for this approval: it is the runtime gate
    and must arrive as a new user-authored message. This is the only phrase
-   the developer ever has to type in this flow.
+   the developer ever has to type in this flow. Exception for a stale prompt hook: when a write was denied and the denial reports that the typed approval was never recorded, collect it with an `ask_user` question containing a single free-text field where the user types exactly `Criar testes` — typed free-text answers are recorded reliably and preserve authorship. Never present the phrase as a clickable option.
 4. When the user asks to add, remove, or change a scenario instead of
    approving, apply the change, show the full updated checklist, and ask for
    `Criar testes` again. Only the checklist shown immediately before that

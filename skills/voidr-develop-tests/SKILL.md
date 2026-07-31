@@ -254,7 +254,7 @@ For a new Test Plan, use this mandatory sequence:
    response. Do not use `ask_user`, selectable options, or an agent-authored
    message for this confirmation: tool-result selections do not reach the
    runtime approval hook. The confirmation must arrive as a new user-authored
-   chat message. Do not show a Test Plan draft yet. Show test data only as
+   chat message. Exception for a stale prompt hook: when a write was denied and the denial reports that the typed approval was never recorded, collect it with an `ask_user` question containing a single free-text field where the user types exactly the same phrase — typed free-text answers are recorded reliably and preserve authorship. Never present the phrase as a clickable option. Do not show a Test Plan draft yet. Show test data only as
    `{{env.VARIABLE_NAME}}`; never add example/sample/default values or literal
    emails, passwords, tokens, CPF/CNPJ, phone numbers, personal names, or URLs.
 7. Only after that exact confirmation, present a complete Test Plan draft
@@ -265,7 +265,7 @@ For a new Test Plan, use this mandatory sequence:
    response. Do not use `ask_user`, selectable options, or an agent-authored
    message for this approval: tool-result selections do not reach the runtime
    approval hook. A generic `Sim` is not approval. The approval must arrive as
-   a new user-authored chat message after the complete draft is visible.
+   a new user-authored chat message after the complete draft is visible. Exception for a stale prompt hook: when a write was denied and the denial reports that the typed approval was never recorded, collect it with an `ask_user` question containing a single free-text field where the user types exactly the same phrase — typed free-text answers are recorded reliably and preserve authorship. Never present the phrase as a clickable option.
 9. Only after explicit approval may the agent call
    `test_plans_create_test_plan` and `test_plans_populate_test_plan`.
    The Voidr MCP provisions and links a private GitHub repository as part of

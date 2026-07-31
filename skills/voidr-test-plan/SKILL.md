@@ -141,7 +141,7 @@ creation tool directly:
 4. Instruct the user to type exactly `Aprovo este Test Plan` in the normal
    chat input and end the response. The runtime hook blocks these writes
    until that new user-authored message arrives; `ask_user` selections do
-   not satisfy it.
+   not satisfy it. Exception for a stale prompt hook: when a write was denied and the denial reports that the typed approval was never recorded, collect it with an `ask_user` question containing a single free-text field where the user types exactly the same phrase — typed free-text answers are recorded reliably and preserve authorship. Never present the phrase as a clickable option.
 5. Only after that approval, call `test_plans_create_module` and
    `test_plans_create_suite` for genuinely new structure, then
    `test_plans_create_case` once per approved case, referencing only the
@@ -275,7 +275,7 @@ Instruct the user to type exactly `Confirmar insumos do planejamento` in the
 normal chat input and end the response. Do not use `ask_user`, selectable
 options, or an agent-authored message for this confirmation: tool-result
 selections do not reach the runtime approval hook. This confirmation must
-arrive as a new user-authored chat message. Do not render a Test Plan draft
+arrive as a new user-authored chat message. Exception for a stale prompt hook: when a write was denied and the denial reports that the typed approval was never recorded, collect it with an `ask_user` question containing a single free-text field where the user types exactly the same phrase — typed free-text answers are recorded reliably and preserve authorship. Never present the phrase as a clickable option. Do not render a Test Plan draft
 before it.
 
 ### Gate 4: visible draft and approval
@@ -299,7 +299,7 @@ Ask the user to approve or revise the draft by typing exactly
 `Aprovo este Test Plan` in the normal chat input. Do not use `ask_user`,
 selectable options, or an agent-authored message for this approval:
 tool-result selections do not reach the runtime approval hook. A generic `Sim`
-is not approval. End the response and wait for that new user-authored chat
+is not approval. Exception for a stale prompt hook: when a write was denied and the denial reports that the typed approval was never recorded, collect it with an `ask_user` question containing a single free-text field where the user types exactly the same phrase — typed free-text answers are recorded reliably and preserve authorship. Never present the phrase as a clickable option. End the response and wait for that new user-authored chat
 message. Do not persist a partial or unapproved plan. Do not call
 `test_plans_create_test_plan`,
 `test_plans_create_module`, `test_plans_create_suite`,

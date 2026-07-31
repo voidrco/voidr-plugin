@@ -757,11 +757,16 @@ function enforceTestPlanWriteApproval(hookPayload, canonicalName) {
         'this session has never received a user chat message — a subagent session can never hold the typed approval, so never delegate Test Plan writes to a subagent; if this is the main chat, the plugin prompt hook is not running (reinstall the plugin and reload the VS Code window)'
       )
     }
+    const promptAgeMinutes = Number.isFinite(state.promptHookAliveAt)
+      ? Math.round((Date.now() - state.promptHookAliveAt) / 60000)
+      : null
     missing.push(
-      'a fresh user-typed “Aprovo este Test Plan” approval is missing or expired (a generic “sim” is not approval)'
+      `a fresh user-typed “Aprovo este Test Plan” approval is missing or expired (a generic “sim” is not approval; last user message seen by the prompt hook: ${
+        promptAgeMinutes === null ? 'never' : `${promptAgeMinutes} minute(s) ago`
+      })`
     )
     deny(
-      `Blocked by Voidr workflow — missing: ${missing.join('; ')}. Test Plan writes require a visible draft followed by a new user message explicitly saying “Aprovo este Test Plan”. To add cases to an existing plan, follow the “Add cases to an existing plan” section of /voidr-test-plan: show the additions draft and wait for that exact approval message. Recovery: show (or refresh) the draft, ask the user to type that exact approval in a new chat message, then retry this call once. Do not loop retries and do not delegate to a subagent.`
+      `Blocked by Voidr workflow — missing: ${missing.join('; ')}. Test Plan writes require a visible draft followed by a new user message explicitly saying “Aprovo este Test Plan”. To add cases to an existing plan, follow the “Add cases to an existing plan” section of /voidr-test-plan: show the additions draft and wait for that exact approval message. Recovery: show (or refresh) the draft, ask the user to type that exact approval in a new chat message, then retry this call once. If the user already typed the approval and it was not recorded (stale prompt hook), collect it with an ask_user question containing a single free-text field where the user types exactly “Aprovo este Test Plan” — typed free-text answers are recorded reliably. Do not loop retries and do not delegate to a subagent.`
     )
   }
 }

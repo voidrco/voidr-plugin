@@ -500,3 +500,86 @@ test('typed plan-mode answers under the window session unlock chat writes withou
     {}
   )
 })
+
+test('a typed free-text ask_user approval unlocks writes when the prompt hook is dead', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-dev-flow-'))
+  const sessionId = 'chat-freetext-approval'
+  const postHook = join(root, 'scripts/post-tool-execution-links.mjs')
+
+  const askResult = spawnSync(process.execPath, [postHook], {
+    input: JSON.stringify({
+      sessionId,
+      toolName: 'vscode_askQuestions',
+      toolResult: [
+        JSON.stringify({
+          answers: {
+            approval: {
+              selected: [],
+              freeText: 'Aprovo este Test Plan',
+              skipped: false
+            }
+          }
+        })
+      ]
+    }),
+    encoding: 'utf8',
+    env: { ...process.env, COPILOT_PLUGIN_DATA: dataRoot }
+  })
+  assert.equal(askResult.status, 0, askResult.stderr)
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId,
+        cwd: process.cwd(),
+        toolName: 'voidr-test_plans_create_module',
+        toolArgs: { planId: '0123456789abcdef01234567', name: 'Novo módulo' }
+      },
+      dataRoot
+    ),
+    {}
+  )
+})
+
+test('a clicked ask_user option never counts as the typed approval', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-dev-flow-'))
+  const sessionId = 'chat-clicked-approval'
+  const postHook = join(root, 'scripts/post-tool-execution-links.mjs')
+
+  const askResult = spawnSync(process.execPath, [postHook], {
+    input: JSON.stringify({
+      sessionId,
+      toolName: 'vscode_askQuestions',
+      toolResult: [
+        JSON.stringify({
+          answers: {
+            approval: {
+              selected: ['Aprovo este Test Plan'],
+              freeText: null,
+              skipped: false
+            }
+          }
+        })
+      ]
+    }),
+    encoding: 'utf8',
+    env: { ...process.env, COPILOT_PLUGIN_DATA: dataRoot }
+  })
+  assert.equal(askResult.status, 0, askResult.stderr)
+
+  const denied = runHook(
+    {
+      sessionId,
+      cwd: process.cwd(),
+      toolName: 'voidr-test_plans_create_module',
+      toolArgs: { planId: '0123456789abcdef01234567', name: 'Novo módulo' }
+    },
+    dataRoot
+  )
+  assert.equal(denied.permissionDecision, 'deny')
+  assert.match(denied.permissionDecisionReason, /free-text field/)
+  assert.match(
+    denied.permissionDecisionReason,
+    /last user message seen by the prompt hook: never/
+  )
+})

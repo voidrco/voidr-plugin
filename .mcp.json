@@ -7,6 +7,7 @@
         "${PLUGIN_ROOT}/scripts/voidr-mcp-bridge.mjs"
       ],
       "env": {
+        "NODE_USE_ENV_PROXY": "1",
         "VOIDR_PLATFORM_URL": "https://platform.voidr.co",
         "VOIDR_AUTH_CALLBACK_URL": "https://platform.voidr.co/auth/cli-connect",
         "VOIDR_API_URL": "https://api.voidr.co/v1",

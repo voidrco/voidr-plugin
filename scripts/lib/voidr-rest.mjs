@@ -1,4 +1,5 @@
 import { basicAuthorizationHeader } from './credentials.mjs'
+import { describeNetworkFailure } from './network-trust.mjs'
 
 export class VoidrRestClient {
   constructor({
@@ -18,15 +19,20 @@ export class VoidrRestClient {
   }
 
   async request(method, path, body) {
-    const response = await this.fetch(`${this.url}/${String(path).replace(/^\/+/, '')}`, {
-      method,
-      headers: {
-        accept: 'application/json',
-        authorization: basicAuthorizationHeader(),
-        ...(body === undefined ? {} : { 'content-type': 'application/json' })
-      },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) })
-    })
+    let response
+    try {
+      response = await this.fetch(`${this.url}/${String(path).replace(/^\/+/, '')}`, {
+        method,
+        headers: {
+          accept: 'application/json',
+          authorization: basicAuthorizationHeader(),
+          ...(body === undefined ? {} : { 'content-type': 'application/json' })
+        },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) })
+      })
+    } catch (error) {
+      throw new Error(describeNetworkFailure(error))
+    }
     const text = await response.text()
     if (!response.ok) {
       const message =

@@ -1,4 +1,5 @@
 import { basicAuthorizationHeader } from './credentials.mjs'
+import { describeNetworkFailure } from './network-trust.mjs'
 
 export class RemoteMcpClient {
   constructor({
@@ -75,11 +76,16 @@ export class RemoteMcpClient {
     }
     if (this.sessionId) headers['mcp-session-id'] = this.sessionId
 
-    const response = await this.fetch(this.url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(payload)
-    })
+    let response
+    try {
+      response = await this.fetch(this.url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload)
+      })
+    } catch (error) {
+      throw new Error(describeNetworkFailure(error, 'the Voidr MCP endpoint'))
+    }
 
     const returnedSession =
       response.headers.get('mcp-session-id') ||

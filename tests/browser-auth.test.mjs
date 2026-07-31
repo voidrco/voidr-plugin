@@ -218,6 +218,45 @@ test('loopback callback rejects invalid origin and nonce before accepting one re
   })
 })
 
+test('loopback callback accepts a form-POST navigation and renders HTML', async () => {
+  const server = await startLocalBrowserAuthServer({
+    expectedNonce: 'navigation-nonce',
+    allowedOrigins: ['https://platform.test'],
+    timeoutMs: 2000
+  })
+
+  const navigationRequest = (fields, origin = 'https://platform.test') =>
+    fetch(`http://127.0.0.1:${server.port}/cli-callback`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        'sec-fetch-mode': 'navigate',
+        origin
+      },
+      body: new URLSearchParams(fields).toString()
+    })
+
+  const invalidNonce = await navigationRequest({
+    nonce: 'wrong-nonce',
+    accessToken: 'synthetic-navigation-token'
+  })
+  assert.equal(invalidNonce.status, 400)
+  assert.match(invalidNonce.headers.get('content-type'), /text\/html/)
+  assert.match(await invalidNonce.text(), /invalid_nonce/)
+
+  const waiting = server.waitForResult()
+  const accepted = await navigationRequest({
+    nonce: 'navigation-nonce',
+    accessToken: 'synthetic-navigation-token'
+  })
+  assert.equal(accepted.status, 200)
+  assert.match(accepted.headers.get('content-type'), /text\/html/)
+  assert.match(await accepted.text(), /Login concluído/)
+  assert.deepEqual(await waiting, {
+    accessToken: 'synthetic-navigation-token'
+  })
+})
+
 test('platform connect URL binds the browser to an ephemeral port and nonce', () => {
   const built = new URL(
     buildBrowserConnectUrl({

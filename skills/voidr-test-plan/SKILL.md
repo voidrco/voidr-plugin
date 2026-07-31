@@ -1,6 +1,6 @@
 ---
 name: voidr-test-plan
-description: Creates or selects a Voidr Test Plan with mandatory user-selected feature, scope collection, visible draft, explicit human approval gates, and the linked repository URL as a required creation output. Use after the user has said whether the plan is new or existing.
+description: Creates or selects a Voidr Test Plan with mandatory user-selected feature, scope collection, visible draft, explicit human approval gates, and the linked repository URL as a required creation output. Also adds new cases to an existing plan through an additions-only draft and the typed approval. Use after the user has said whether the plan is new or existing, and whenever the user asks to create a new test or case ("quero criar um novo teste", "criar um novo caso").
 ---
 
 # Voidr Test Plan
@@ -102,9 +102,17 @@ Otherwise:
    test count as selectable options. Keep IDs internally and never ask the user
    to type a `testPlanId`.
 3. Call `test_plans_get_test_plan` for the selected ID.
-4. Ask whether to implement all pending cases, a named subset, or to add
-   new cases (see “Add cases to an existing plan”).
-5. Repeat the exact selected case slugs and wait for confirmation.
+4. Ask what to do with this plan, always presenting exactly these
+   `ask_user` options:
+   - `Implementar casos pendentes`
+   - `Criar novos casos` (the “Add cases to an existing plan” route)
+   Never render an implementation-only case list: every case-selection
+   question must also offer `Criar novos casos`. When the user's original
+   request was to create a new test or case, `Criar novos casos` is the
+   recommended option — implementing existing cases is never a substitute
+   for that request.
+5. For implementation, repeat the exact selected case slugs and wait for
+   confirmation.
 
 Never resolve the plan from `project.json`.
 Never silently replace a Test Plan after any not-found, authorization, or
@@ -120,10 +128,12 @@ creation tool directly:
 
 1. Read the selected plan with `test_plans_get_test_plan` and show its
    modules and suites.
-2. Ask whether the new cases belong to an existing module and suite or to
-   new ones, and collect from the user (or from an explicitly authorized
-   repository or document) the scenarios, expected behavior, and
-   preconditions.
+2. Ask where the new cases belong, with `ask_user` options built from the
+   plan: every existing module plus `Criar novo módulo`. After the module
+   choice, offer its existing suites plus `Criar nova suite`. For new
+   structure, collect the module name and severity, and the suite name.
+   Then collect from the user (or from an explicitly authorized repository
+   or document) the scenarios, expected behavior, and preconditions.
 3. Show a draft containing only the additions: target module and suite
    (exact existing slugs, or proposed names for new structure), each case
    with Arrange/Act/Assert, priority/severity, and

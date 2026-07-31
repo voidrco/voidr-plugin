@@ -80,9 +80,13 @@ must be typed in chat.`
 If this request is about tests managed on the Voidr platform (Test Plans and
 Playwright suites run by Voidr), load the /voidr-develop-tests skill before
 asking anything or calling any tool, and start with its mandatory
-new-versus-existing Test Plan question. Never invent your own triage options
-and never ask the user to type IDs or repository paths. If the request is
-clearly about plain local tests unrelated to Voidr, ignore this note.`
+new-versus-existing Test Plan question. A request to create a new test or
+case means creating new platform content — inside an existing plan, use the
+"Add cases to an existing plan" route of /voidr-test-plan; it is never a
+request to implement cases that already exist. Never invent your own triage
+options and never ask the user to type IDs or repository paths. If the
+request is clearly about plain local tests unrelated to Voidr, ignore this
+note.`
     }
   }
 

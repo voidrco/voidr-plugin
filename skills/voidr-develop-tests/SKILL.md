@@ -1,6 +1,6 @@
 ---
 name: voidr-develop-tests
-description: Inicia e orquestra o desenvolvimento de testes na Voidr. Use SEMPRE quando o usuário disser "quero desenvolver testes na Voidr", "quero criar testes na Voidr", "automatizar testes na Voidr", "criar um Test Plan", "usar um Test Plan existente" ou pedir para implementar, publicar ou executar testes Playwright pela Voidr. Antes de qualquer tool, pergunta se o Test Plan é novo ou existente; depois exige seleção humana de aplicação e ambiente via MCP, usa o tipo WEB/API do produto, coleta feature e smoke local, apresenta draft e exige aprovação.
+description: Inicia e orquestra o desenvolvimento de testes na Voidr. Use SEMPRE quando o usuário disser "quero desenvolver testes na Voidr", "quero criar testes na Voidr", "automatizar testes na Voidr", "criar um Test Plan", "usar um Test Plan existente", "quero criar um novo teste", "criar um novo caso de teste" ou pedir para implementar, publicar ou executar testes Playwright pela Voidr. Criar um teste novo significa criar conteúdo novo na plataforma (caso novo em plano existente ou plano novo), nunca implementar casos que já existem. Antes de qualquer tool, pergunta se o Test Plan é novo ou existente; depois exige seleção humana de aplicação e ambiente via MCP, usa o tipo WEB/API do produto, coleta feature e smoke local, apresenta draft e exige aprovação.
 ---
 
 # Develop tests in Voidr
@@ -23,9 +23,10 @@ question or tool call; never act from a partial read.
    discovery, setup, validation, publishing, and deploy happen only
    through the bridge tools routed at the end of this file.
 4. Test Plan content is created or changed only inside `/voidr-test-plan`,
-   behind its typed approval gates. A request for a new case in an
-   existing plan follows its “Add cases to an existing plan” section —
-   never a fallback to implementing existing cases.
+   behind its typed approval gates. A request to create a new test or
+   case means new platform content (the “Add cases to an existing plan”
+   section, or a new plan) — never implementing cases that already exist,
+   and never a reason to steer the user toward the existing ones.
 5. The platform environment and the local smoke target are different
    values; never substitute one for the other.
 6. Never delegate any part of this workflow to a subagent. Approval gates
@@ -306,6 +307,14 @@ When the user asks for a new case or scenario instead of implementing the
 pending ones, stay in `/voidr-test-plan` and follow its
 “Add cases to an existing plan” section — never push the user back to the
 existing cases and never convert the request into a new Test Plan.
+Intent contract: a request to "criar um teste", "criar um novo teste", or
+"criar um caso" means creating new platform content — a new case in an
+existing plan, or a new plan when none fits. It is never a request to
+implement cases that already exist. Carry that goal through the whole
+workflow, offer `Criar novos casos` as a selectable option in every
+case-selection question (marked recommended when creation was the original
+request), and only implement existing cases when the user explicitly
+chooses that.
 When the user already supplied an explicit Test Plan ID, read only that exact
 ID. If it is not available in the current Voidr environment, stop and ask for
 a new explicit selection. Never list plans as a fallback or silently replace

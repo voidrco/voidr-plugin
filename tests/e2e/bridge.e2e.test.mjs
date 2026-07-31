@@ -470,11 +470,32 @@ test('bridge blocks unscoped Test Plan listing before any network call', async t
         serverInfo: { name: 'mock', version: '1' }
       })
     } else if (message.method === 'tools/call') {
+      const listing = {
+        data: {
+          data: [
+            {
+              _id: '6a4431ebb7276d5f9781eaac',
+              applicationId: 'app-scope',
+              name: 'Credit Simulation Journey Protection',
+              status: 'ACTIVE',
+              modules: [{ name: 'Heavy', cases: ['a'.repeat(2000)] }]
+            },
+            {
+              _id: '6a572ef07a9f233a6edc06cb',
+              applicationId: 'app-scope',
+              name: 'smoke-teste',
+              status: 'ACTIVE',
+              summary: 'x'.repeat(3000)
+            }
+          ],
+          total: 2,
+          page: 1,
+          limit: 100
+        }
+      }
       sendResult(response, message.id, {
-        structuredContent: { data: { called: message.params.name } },
-        content: [
-          { type: 'text', text: JSON.stringify({ called: message.params.name }) }
-        ]
+        structuredContent: listing,
+        content: [{ type: 'text', text: JSON.stringify(listing) }]
       })
     } else {
       sendResult(response, message.id, { tools: [] })
@@ -534,6 +555,18 @@ test('bridge blocks unscoped Test Plan listing before any network call', async t
   })
   assert.equal(scoped.error, undefined)
   assert.equal(receivedTools.includes('test_plans_list_test_plans'), true)
+
+  const slim = JSON.parse(scoped.result.content[0].text)
+  const names = slim.data.data.map(plan => plan.name)
+  assert.deepEqual(names, [
+    'Credit Simulation Journey Protection',
+    'smoke-teste'
+  ])
+  assert.equal(slim.data.total, 2)
+  assert.equal(JSON.stringify(slim).includes('modules'), false)
+  assert.equal(JSON.stringify(slim).includes('summary'), false)
+  assert.match(slim.note, /every returned plan is included/i)
+  assert.equal(scoped.result.content[0].text.length < 1000, true)
 })
 
 test('bridge blocks invented module/suite slugs and not-found retries', async t => {

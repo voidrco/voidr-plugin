@@ -117,14 +117,18 @@ test('plan-mode choices are recognized in natural phrasings', async () => {
     'Usar Test Plan existente',
     'Num test plan existente',
     'Quero implementar testes de um Test Plan existente',
-    'trabalhar em um plano de testes existente'
+    'trabalhar em um plano de testes existente',
+    'Usar um já existente.',
+    'usar um existente'
   ]) {
     assert.equal(isExistingPlanChoice(prompt), true, prompt)
   }
   for (const prompt of [
     'Não quero usar o test plan existente',
     'Criar novo Test Plan',
-    'Corrija o teste unitário deste arquivo'
+    'Corrija o teste unitário deste arquivo',
+    'quero usar um repositório existente',
+    'usar o ambiente existente para o smoke'
   ]) {
     assert.equal(isExistingPlanChoice(prompt), false, prompt)
   }

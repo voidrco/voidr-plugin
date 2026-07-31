@@ -435,13 +435,14 @@ async function callTool(params) {
     return result
   }
 
-  if (
-    name === 'test_plans_list_test_plans' &&
-    !String(args?.applicationId || '').trim()
-  ) {
-    throw new Error(
-      'Blocked by Voidr workflow: test_plans_list_test_plans requires the selected applicationId. Select the application with applications_list_applications first, then list only that application’s Test Plans.'
-    )
+  if (name === 'test_plans_list_test_plans') {
+    if (!String(args?.applicationId || '').trim()) {
+      throw new Error(
+        'Blocked by Voidr workflow: test_plans_list_test_plans requires the selected applicationId. Select the application with applications_list_applications first, then list only that application’s Test Plans.'
+      )
+    }
+    const result = await remote.callTool(name, args)
+    return slimTestPlanListing(result)
   }
 
   if (name === 'executions_create_execution') {
@@ -906,6 +907,56 @@ function validateProvisionedTestPlan(result) {
     )
   }
   return { planId, repository }
+}
+
+const TEST_PLAN_SUMMARY_KEYS = [
+  '_id',
+  'id',
+  'applicationId',
+  'name',
+  'slug',
+  'status',
+  'version',
+  'createdAt',
+  'updatedAt',
+  'totalCases',
+  'automatedCases',
+  'testCount',
+  'testCounts'
+]
+
+function slimTestPlanListing(result) {
+  if (!result || result.isError) return result
+  const data = remoteResultData(result)
+  let container = null
+  if (Array.isArray(data)) container = { data }
+  else if (Array.isArray(data?.data)) container = data
+  else if (Array.isArray(data?.data?.data)) container = data.data
+  if (!container) return result
+
+  const pagination = Object.fromEntries(
+    Object.entries(container).filter(([key]) => key !== 'data')
+  )
+  const slim = {
+    data: {
+      ...pagination,
+      data: container.data.map(plan => {
+        if (!plan || typeof plan !== 'object') return plan
+        return Object.fromEntries(
+          TEST_PLAN_SUMMARY_KEYS.filter(key => key in plan).map(key => [
+            key,
+            plan[key]
+          ])
+        )
+      })
+    },
+    note:
+      'Summary listing: every returned plan is included. Read one plan with test_plans_get_test_plan for its full content.'
+  }
+  return {
+    content: [{ type: 'text', text: JSON.stringify(slim) }],
+    structuredContent: slim
+  }
 }
 
 function remoteResultData(result) {

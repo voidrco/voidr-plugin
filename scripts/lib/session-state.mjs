@@ -325,6 +325,9 @@ export function isNewPlanChoice(prompt) {
 
 export function isExistingPlanChoice(prompt) {
   const text = normalizeText(prompt)
+  if (/^(?:quero\s+)?usar\s+(?:um\s+)?(?:ja\s+)?existente[.!]?$/.test(text.trim())) {
+    return true
+  }
   const existingPlan = /\b(?:test\s*plan|plano\s+de\s+testes?)\s+existente\b/
   if (!existingPlan.test(text)) return false
   if (

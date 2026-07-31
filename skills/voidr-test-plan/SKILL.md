@@ -54,7 +54,9 @@ This step is mandatory for both new and existing plans:
    returned `type` as selectable options. Keep IDs and types internally; never
    ask the user to type an `applicationId`.
    Confirm the application even when the MCP returns only one.
-   Never auto-select a single result.
+   Never auto-select a single result. The question UI rejects a
+   single-option question: with one application, offer `Usar <nome>` plus
+   `Cancelar`.
 4. Keep the returned application ID as the authoritative `applicationId` and
    its `type` as the authoritative WEB/API classification.
 5. If the list response omits `type`, call `applications_get_application` for
@@ -74,6 +76,9 @@ After the application is explicitly confirmed:
 2. Present only environments returned by MCP, using `name`, `slug`, and
    `applicationUrl`.
 3. Ask the user to select or confirm one, even when only one is returned.
+   The question UI rejects a single-option question: with one environment,
+   offer `Usar <nome>` plus `Cancelar` instead of retrying or skipping the
+   confirmation.
 4. Preserve that environment separately from the local smoke target.
 
 Never ask the user to type a platform URL when MCP returned environments.

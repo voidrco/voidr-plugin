@@ -35,6 +35,10 @@ the native `ask_user` selectable options whenever that control is available.
 Present free-text lists only when `ask_user` is genuinely unavailable, and say
 so. The only exceptions are the two runtime gates that require a typed chat
 message: `Confirmar insumos do planejamento` and `Aprovo este Test Plan`.
+The question UI rejects a question with a single option. When exactly one
+candidate exists, still confirm it with two options — `Usar <nome>` and
+`Cancelar` — never retry a one-option question and never skip the
+confirmation because the UI errored.
 
 Secrets contract: never reproduce credentials, emails, tokens, CPF/CNPJ, or
 other personal identifiers found in product code, documentation, or `.env`

@@ -1392,3 +1392,70 @@ test('blocks Node runtime installs from the agent terminal during a workflow', (
     {}
   )
 })
+
+test('blocks terminal git publishing during a workflow and points to the bridge tool', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
+  const sessionId = 'terminal-publish-gate'
+  const now = Date.now()
+
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now,
+      prompt: 'Quero desenvolver testes na Voidr',
+      transformedPrompt: 'Quero desenvolver testes na Voidr'
+    },
+    dataRoot
+  )
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 1,
+      prompt: 'Usar Test Plan existente',
+      transformedPrompt: 'Usar Test Plan existente'
+    },
+    dataRoot
+  )
+
+  for (const command of [
+    'cd /tmp/tests && git add . && git commit -m "feat: new test"',
+    'git push origin feat/new-tests',
+    'gh pr create --title "tests"'
+  ]) {
+    const output = runHook(
+      {
+        sessionId,
+        cwd: process.cwd(),
+        toolName: 'bash',
+        toolArgs: { command }
+      },
+      dataRoot
+    )
+    assert.equal(output.permissionDecision, 'deny', command)
+    assert.match(
+      output.permissionDecisionReason,
+      /voidr_workspace_publish_tests/,
+      command
+    )
+  }
+
+  for (const command of [
+    'git status --porcelain',
+    'git reset --soft HEAD~1',
+    'git log --oneline -5'
+  ]) {
+    assert.deepEqual(
+      runHook(
+        {
+          sessionId,
+          cwd: process.cwd(),
+          toolName: 'bash',
+          toolArgs: { command }
+        },
+        dataRoot
+      ),
+      {},
+      command
+    )
+  }
+})

@@ -95,6 +95,7 @@ if (isShell) {
   enforceShellEnvFileRead(payload, normalizedShell)
   enforceDependencyStrategyProtection(payload, normalizedShell)
   enforceRuntimeInstallProtection(payload, normalizedShell)
+  enforcePublishThroughBridge(payload, normalizedShell)
   const forbiddenDeploy = (policy.forbiddenDeployShellFragments || []).find(value =>
     normalizedShell.includes(value.toLowerCase())
   )
@@ -267,6 +268,21 @@ function enforceDependencyStrategyProtection(hookPayload, normalizedShell) {
   if (!fragment && !mutatesDependencyStrategy) return
   deny(
     'Blocked by Voidr policy: do not change npm registry, cache, lockfiles, dependency flags, or package manager while diagnosing an install failure. If the install failed without network access (Copilot sandbox), report that restriction and ask the user once to rerun the step with network access.'
+  )
+}
+
+function enforcePublishThroughBridge(hookPayload, normalizedShell) {
+  const state = readGateState(hookPayload)
+  if (state.workflowActive !== true) return
+  const publishes =
+    /\bgit\b[^;&|\n]*\bcommit\b/.test(normalizedShell) ||
+    /\bgit\b[^;&|\n]*\bpush\b/.test(normalizedShell) ||
+    /\bgh\b[^;&|\n]*\bpr\b[^;&|\n]*\b(?:create|merge|edit|close)\b/.test(
+      normalizedShell
+    )
+  if (!publishes) return
+  deny(
+    'Blocked by Voidr policy: never run git commit, git push, or gh pr from the agent terminal. Publishing test changes goes only through voidr_workspace_publish_tests, after the user explicitly authorizes the shown branch, changed files, commit message, and PR title. The sandbox has no Git credentials, and pushing to the default branch is forbidden.'
   )
 }
 

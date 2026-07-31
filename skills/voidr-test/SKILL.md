@@ -7,6 +7,19 @@ description: Fluxo dev-first para criar e rodar testes da feature que o desenvol
 
 Never call a tool that starts a Hive process.
 
+## Non-negotiables
+
+Read this entire skill file once when it activates; never act from a
+partial read.
+
+1. Never expose platform vocabulary to the user.
+2. The only typed gate is `Criar testes`; no platform write happens
+   before it.
+3. Never run Git, npm, npx, or the Voidr CLI in the terminal; use only
+   the tools routed at the end of this file.
+4. Platform facts exist only when a Voidr tool returned them this
+   session; never invent or infer them.
+
 This flow exists for a developer who just finished a feature and wants tests
 for it, without learning the Voidr platform. The mental model is:
 

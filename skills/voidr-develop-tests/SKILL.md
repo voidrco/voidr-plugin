@@ -8,6 +8,27 @@ description: Inicia e orquestra o desenvolvimento de testes na Voidr. Use SEMPRE
 Treat this as a gated workflow. Never call a tool that starts a Hive process,
 including indirectly through a generic or batch tool.
 
+## Non-negotiables
+
+Read this entire skill file once when it activates, before the first
+question or tool call; never act from a partial read.
+
+1. The first response of a new workflow asks exactly one decision — new
+   versus existing Test Plan — unless the user's message already states
+   that choice unambiguously.
+2. Never ask the user to type an organization ID, application ID, Test
+   Plan ID, case slug, or repository path. Every choice is selected from a
+   platform listing rendered with `ask_user`.
+3. Never run Git, npm, npx, or the Voidr CLI in the terminal. Repository
+   discovery, setup, validation, publishing, and deploy happen only
+   through the bridge tools routed at the end of this file.
+4. Test Plan content is created or changed only inside `/voidr-test-plan`,
+   behind its typed approval gates. A request for a new case in an
+   existing plan follows its “Add cases to an existing plan” section —
+   never a fallback to implementing existing cases.
+5. The platform environment and the local smoke target are different
+   values; never substitute one for the other.
+
 Selection contract: every choice in this workflow — plan mode, application,
 environment, Test Plan, repository, planning inputs — must be rendered with
 the native `ask_user` selectable options whenever that control is available.

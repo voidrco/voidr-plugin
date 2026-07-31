@@ -9,6 +9,24 @@ Never call a tool that starts a Hive process. Draft plans locally from the
 user's answers and repository context; use only Test Plan CRUD tools to
 persist an approved result.
 
+## Non-negotiables
+
+Read this entire skill file once when it activates; never act from a
+partial read.
+
+1. Never persist or mutate any Test Plan content before the required
+   typed gates: `Confirmar insumos do planejamento` (new plans) and
+   `Aprovo este Test Plan` (every persisted draft, including cases added
+   to an existing plan).
+2. Never render a Test Plan draft before the planning inputs are
+   confirmed.
+3. Never ask the user to type an application ID or Test Plan ID;
+   selections come from platform listings rendered with `ask_user`.
+4. Application, environment, and plan facts exist only when a Voidr tool
+   returned them in this session; never infer them from the workspace.
+5. Routing metadata (application name, type, environment, feature name,
+   base URL) is never test-design evidence.
+
 ## Authentication gate
 
 Unless the calling workflow already confirmed authentication, call

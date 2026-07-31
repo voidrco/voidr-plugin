@@ -8,6 +8,18 @@ description: Implements an explicitly selected set of Voidr Test Plan cases in o
 Never call a tool that starts a Hive process. The Copilot agent writes and
 validates the Playwright code locally.
 
+## Non-negotiables
+
+Read this entire skill file once when it activates; never act from a
+partial read.
+
+1. The repository preparation gate runs before reading or editing any
+   spec — it is the only setup path.
+2. Never run Git, npm, npx, Playwright, or the Voidr CLI in the terminal.
+3. Never create or modify Test Plan content from this skill.
+4. Implement only the explicitly selected cases.
+5. Never read or print `.env` values.
+
 ## Preconditions
 
 Require all of:

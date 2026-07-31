@@ -8,16 +8,24 @@ import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { dirname, resolve } from 'node:path'
 
-export function sessionStatePath(payload) {
-  const dataRoot =
+function stateDataRoot() {
+  return (
     process.env.COPILOT_PLUGIN_DATA ||
     process.env.VOIDR_PLUGIN_DATA ||
     resolve(tmpdir(), 'voidr-copilot-plugin-data')
+  )
+}
+
+export function sessionStatePath(payload) {
   const sessionId = String(
     payload?.sessionId || payload?.session_id || 'unknown-session'
   )
   const safeId = createHash('sha256').update(sessionId).digest('hex')
-  return resolve(dataRoot, 'sessions', `${safeId}.json`)
+  return resolve(stateDataRoot(), 'sessions', `${safeId}.json`)
+}
+
+export function latestPromptStatePath() {
+  return resolve(stateDataRoot(), 'sessions', 'latest-prompt-state.json')
 }
 
 export function readSessionState(payload) {
@@ -28,6 +36,37 @@ export function readSessionState(payload) {
   } catch {
     return {}
   }
+}
+
+const PROMPT_GATE_KEYS = [
+  'planWriteApproved',
+  'planWriteApprovedAt',
+  'planContextConfirmed',
+  'planContextConfirmedAt',
+  'selectedEnvironmentSlug',
+  'selectedEnvironmentAt'
+]
+
+export function readGateState(payload) {
+  const session = readSessionState(payload)
+  let prompt = {}
+  try {
+    prompt = JSON.parse(readFileSync(latestPromptStatePath(), 'utf8'))
+  } catch {
+    prompt = {}
+  }
+  const merged = { ...session }
+  for (const key of PROMPT_GATE_KEYS) {
+    if (merged[key] === undefined || merged[key] === null) {
+      if (prompt[key] !== undefined) merged[key] = prompt[key]
+    }
+  }
+  merged.promptHookAliveAt = Number.isFinite(prompt.lastPromptAt)
+    ? prompt.lastPromptAt
+    : Number.isFinite(session.lastPromptAt)
+      ? session.lastPromptAt
+      : null
+  return merged
 }
 
 export function updateSessionState(payload, update) {
@@ -43,7 +82,7 @@ export function updateSessionState(payload, update) {
 export function recordUserPromptState(payload) {
   const prompt = extractUserAuthoredPrompt(payload?.prompt)
   const timestamp = normalizeTimestamp(payload?.timestamp)
-  return updateSessionState(payload, current => {
+  const next = updateSessionState(payload, current => {
     if (
       current.lastPromptAt &&
       timestamp &&
@@ -138,6 +177,16 @@ export function recordUserPromptState(payload) {
       lastPromptAt: timestamp || Date.now()
     }
   })
+  try {
+    writeFileSync(
+      latestPromptStatePath(),
+      JSON.stringify(next, null, 2),
+      'utf8'
+    )
+  } catch {
+    return next
+  }
+  return next
 }
 
 export function recordAskUserSelections(payload, { toolName, toolResult }) {

@@ -10,6 +10,7 @@ import { basename, dirname, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { canonicalToolName, loadPolicy } from './lib/policy.mjs'
 import {
+  readGateState,
   readSessionState,
   updateSessionState
 } from './lib/session-state.mjs'
@@ -406,7 +407,7 @@ function enforceExplicitEnvironmentSelection(hookPayload, name, args) {
     return
   }
 
-  const state = readSessionState(hookPayload)
+  const state = readGateState(hookPayload)
   if (state.workflowActive !== true) return
 
   // In the dev-first auto flow the environment is displayed on the single
@@ -725,7 +726,7 @@ function enforceTestPlanWriteApproval(hookPayload, canonicalName) {
   ) {
     return
   }
-  const state = readSessionState(hookPayload)
+  const state = readGateState(hookPayload)
   const approvalFresh =
     state.planWriteApproved === true &&
     Number.isFinite(state.planWriteApprovedAt) &&
@@ -751,7 +752,7 @@ function enforceTestPlanWriteApproval(hookPayload, canonicalName) {
       )
     }
     const missing = []
-    if (!Number.isFinite(state.lastPromptAt)) {
+    if (!Number.isFinite(state.promptHookAliveAt)) {
       missing.push(
         'this session has never received a user chat message — a subagent session can never hold the typed approval, so never delegate Test Plan writes to a subagent; if this is the main chat, the plugin prompt hook is not running (reinstall the plugin and reload the VS Code window)'
       )

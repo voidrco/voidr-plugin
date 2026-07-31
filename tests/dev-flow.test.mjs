@@ -383,3 +383,76 @@ test('plan writes in a session without any user message name the subagent cause'
   assert.match(denied.permissionDecisionReason, /subagent/)
   assert.match(denied.permissionDecisionReason, /prompt hook is not running/)
 })
+
+test('typed approvals recorded under a different hook session still unlock chat writes', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-dev-flow-'))
+  const windowSession = 'window-hooks'
+  const chatSession = 'chat-tools'
+  const postHook = join(root, 'scripts/post-tool-execution-links.mjs')
+  const now = Date.now()
+
+  submitPrompt(
+    {
+      sessionId: windowSession,
+      timestamp: now,
+      prompt: 'Quero criar um teste',
+      transformedPrompt: 'Quero criar um teste'
+    },
+    dataRoot
+  )
+
+  const askResult = spawnSync(process.execPath, [postHook], {
+    input: JSON.stringify({
+      sessionId: chatSession,
+      toolName: 'vscode_askQuestions',
+      toolResult: [
+        JSON.stringify({
+          answers: {
+            plan_mode: {
+              selected: ['Usar Test Plan existente'],
+              freeText: null,
+              skipped: false
+            }
+          }
+        })
+      ]
+    }),
+    encoding: 'utf8',
+    env: { ...process.env, COPILOT_PLUGIN_DATA: dataRoot }
+  })
+  assert.equal(askResult.status, 0, askResult.stderr)
+
+  const beforeApproval = runHook(
+    {
+      sessionId: chatSession,
+      cwd: process.cwd(),
+      toolName: 'voidr-test_plans_create_module',
+      toolArgs: { planId: '0123456789abcdef01234567', name: 'Novo módulo' }
+    },
+    dataRoot
+  )
+  assert.equal(beforeApproval.permissionDecision, 'deny')
+
+  submitPrompt(
+    {
+      sessionId: windowSession,
+      timestamp: now + 1000,
+      prompt: 'Aprovo este Test Plan',
+      transformedPrompt: 'Aprovo este Test Plan'
+    },
+    dataRoot
+  )
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId: chatSession,
+        cwd: process.cwd(),
+        toolName: 'voidr-test_plans_create_module',
+        toolArgs: { planId: '0123456789abcdef01234567', name: 'Novo módulo' }
+      },
+      dataRoot
+    ),
+    {}
+  )
+})

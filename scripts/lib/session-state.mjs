@@ -209,7 +209,12 @@ export function recordAskUserSelections(payload, { toolName, toolResult }) {
           next.planContextConfirmed = true
           next.planContextConfirmedAt = Date.now()
           changed = true
-        } else if (next.planMode === 'auto' && isDevTestsApproval(text)) {
+        } else if (
+          isDevTestsApproval(text) &&
+          (next.planMode === 'auto' || !next.planMode)
+        ) {
+          next.planMode = 'auto'
+          next.workflowActive = true
           next.planWriteApproved = true
           next.planWriteApprovedAt = Date.now()
           changed = true

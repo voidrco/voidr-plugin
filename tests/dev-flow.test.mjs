@@ -678,3 +678,124 @@ test('a clicked Criar testes option never counts and the auto deny teaches the f
     /last user message seen by the prompt hook/i
   )
 })
+
+test('post-smoke remediation crosses hook session ids and ask_user answers', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-dev-flow-'))
+  const windowSession = 'window-smoke'
+  const chatSession = 'chat-smoke'
+  const postHook = join(root, 'scripts/post-tool-execution-links.mjs')
+  const now = Date.now()
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId: chatSession,
+        cwd: process.cwd(),
+        toolName: 'voidr-voidr_smoke_build',
+        toolArgs: {
+          repositoryPath: '/tmp/tests',
+          repositoryUrl: 'https://github.com/voidrco/tests',
+          testPlanId: '0123456789abcdef01234567',
+          specs: ['modules/a/a.spec.js'],
+          baseUrl: 'https://app.test'
+        }
+      },
+      dataRoot
+    ),
+    {}
+  )
+
+  const blocked = runHook(
+    {
+      sessionId: chatSession,
+      cwd: process.cwd(),
+      toolName: 'read_file',
+      toolArgs: { filePath: '/tmp/tests/modules/a/a.spec.js' }
+    },
+    dataRoot
+  )
+  assert.equal(blocked.permissionDecision, 'deny')
+  assert.match(blocked.permissionDecisionReason, /after voidr_smoke_build/)
+
+  submitPrompt(
+    {
+      sessionId: windowSession,
+      timestamp: now + 5000,
+      prompt: 'corrige o teste e roda de novo',
+      transformedPrompt: 'corrige o teste e roda de novo'
+    },
+    dataRoot
+  )
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId: chatSession,
+        cwd: process.cwd(),
+        toolName: 'read_file',
+        toolArgs: { filePath: '/tmp/tests/modules/a/a.spec.js' }
+      },
+      dataRoot
+    ),
+    {}
+  )
+})
+
+test('an ask_user answer authorizing the fix clears the post-smoke stop', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-dev-flow-'))
+  const sessionId = 'chat-smoke-ask'
+  const postHook = join(root, 'scripts/post-tool-execution-links.mjs')
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId,
+        cwd: process.cwd(),
+        toolName: 'voidr-voidr_smoke_build',
+        toolArgs: {
+          repositoryPath: '/tmp/tests',
+          repositoryUrl: 'https://github.com/voidrco/tests',
+          testPlanId: '0123456789abcdef01234567',
+          specs: ['modules/a/a.spec.js'],
+          baseUrl: 'https://app.test'
+        }
+      },
+      dataRoot
+    ),
+    {}
+  )
+
+  const askResult = spawnSync(process.execPath, [postHook], {
+    input: JSON.stringify({
+      sessionId,
+      toolName: 'vscode_askQuestions',
+      toolResult: [
+        JSON.stringify({
+          answers: {
+            next_step: {
+              selected: ['Corrigir o teste e rodar de novo'],
+              freeText: null,
+              skipped: false
+            }
+          }
+        })
+      ]
+    }),
+    encoding: 'utf8',
+    env: { ...process.env, COPILOT_PLUGIN_DATA: dataRoot }
+  })
+  assert.equal(askResult.status, 0, askResult.stderr)
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId,
+        cwd: process.cwd(),
+        toolName: 'read_file',
+        toolArgs: { filePath: '/tmp/tests/modules/a/a.spec.js' }
+      },
+      dataRoot
+    ),
+    {}
+  )
+})

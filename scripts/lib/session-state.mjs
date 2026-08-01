@@ -46,7 +46,8 @@ const PROMPT_GATE_KEYS = [
   'selectedEnvironmentSlug',
   'selectedEnvironmentAt',
   'planMode',
-  'workflowActive'
+  'workflowActive',
+  'smokeRemediationAt'
 ]
 
 export function readGateState(payload) {
@@ -151,6 +152,10 @@ export function recordUserPromptState(payload) {
         workflowStarted || smokeRemediationAuthorized
           ? null
           : current.smokeAttemptedAt || null,
+      smokeRemediationAt:
+        workflowStarted || smokeRemediationAuthorized
+          ? timestamp || Date.now()
+          : current.smokeRemediationAt || null,
       planMode,
       selectedTestPlanId,
       selectedTestPlanAt: promptTestPlanId
@@ -219,6 +224,11 @@ export function recordAskUserSelections(payload, { toolName, toolResult }) {
           next.planWriteApprovedAt = Date.now()
           changed = true
         }
+      }
+      if (isSmokeRemediationPrompt(text)) {
+        next.smokeAttemptedAt = null
+        next.smokeRemediationAt = Date.now()
+        changed = true
       }
       if (isNewPlanChoice(text)) {
         next.planMode = 'new'
@@ -424,13 +434,13 @@ export function isExistingPlanChoice(prompt) {
   )
 }
 
-function isSmokeRemediationPrompt(prompt) {
+export function isSmokeRemediationPrompt(prompt) {
   const text = normalizeText(prompt)
   return (
-    /\b(?:corrij\w*|ajust\w*|investig\w*|diagnostic\w*|retent\w*|reexecut\w*|rod\w*\s+novamente)\b/.test(
+    /\b(?:corri[gj]\w*|consert\w*|arrum\w*|ajust\w*|mud\w*|alter\w*|troc\w*|melhor\w*|refator\w*|investig\w*|diagnostic\w*|retent\w*|reexecut\w*|rod\w*\s+novamente|fix\w*|debug\w*|rerun)\b/.test(
       text
     ) &&
-    /\b(?:smoke|teste|testes|falha|falhas|erro|erros)\b/.test(text)
+    /\b(?:smoke|teste|testes|tests?|falha|falhas|failures?|erro|erros|errors?|specs?)\b/.test(text)
   )
 }
 

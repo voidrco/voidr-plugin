@@ -519,8 +519,14 @@ function enforceExplicitEnvironmentSelection(hookPayload, name, args) {
 }
 
 function enforcePostSmokeStop(hookPayload, rawName, canonicalName) {
-  const state = readSessionState(hookPayload)
+  const state = readGateState(hookPayload)
   if (!Number.isFinite(state.smokeAttemptedAt)) return
+  if (
+    Number.isFinite(state.smokeRemediationAt) &&
+    state.smokeRemediationAt > state.smokeAttemptedAt
+  ) {
+    return
+  }
   if (
     [
       'voidr_release_deploy_merged_pr',
@@ -531,7 +537,7 @@ function enforcePostSmokeStop(hookPayload, rawName, canonicalName) {
   }
   if (/(?:ask_user|askuserquestion|todo)/i.test(rawName)) return
   deny(
-    'Blocked by Voidr workflow: after voidr_smoke_build, stop and report its exact result. Do not inspect files, edit specs, retry smoke, or diagnose by guessing in the same turn. Wait for a new user message explicitly asking to investigate/correct the smoke failure before continuing.'
+    'Blocked by Voidr workflow: after voidr_smoke_build, stop and report its exact result. Do not inspect files, edit specs, retry smoke, or diagnose by guessing in the same turn. Wait for the user to authorize the investigation or correction in a new chat message or an ask_user answer (for example “corrige e roda de novo”) before continuing.'
   )
 }
 

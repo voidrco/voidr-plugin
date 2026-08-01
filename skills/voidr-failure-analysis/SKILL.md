@@ -234,7 +234,14 @@ out of scope for this skill.
 | Read the expected behavior from the Test Plan case | `test_plans_get_case` |
 | Read governance tag history | `test_plans_get_tag_history` |
 | Check for an existing defect before drafting one | `defects_list_defects` |
-| Create the confirmed defect | `defects_create_defect` |
+| Read one defect in full before showing or mutating it, and verify every persisted mutation | `defects_get_defect` |
+| List issue trackers before a linked creation | `issue_tracker_list` |
+| List the selected tracker's projects | `issue_tracker_list_projects` |
+| Create the confirmed plain Voidr defect (no tracker selected) | `defects_create_defect` |
+| Create the confirmed defect linked to the selected tracker project | `defects_create_defect_with_issue` |
+| Edit confirmed defect content (title, severity, priority, description, fix version, target date) | `defects_update_defect` |
+| Apply the confirmed status transition | `defects_update_defect_status` |
+| Apply the confirmed assignee change | `defects_assign_defect` |
 | Apply the confirmed governance tag change | `test_plans_update_test_case_tag` |
 
 Disambiguation:
@@ -248,6 +255,15 @@ Disambiguation:
 - Never call `test_plans_create_*`, `test_plans_update_test_plan`,
   `test_plans_update_module`, `test_plans_update_suite`,
   `test_plans_update_case`, or `test_plans_populate_test_plan`; the only
-  mutations allowed here are `defects_create_defect` and
-  `test_plans_update_test_case_tag`, each behind its own confirmation.
+  mutations allowed here are the defect write tools listed above and
+  `test_plans_update_test_case_tag`, each behind its own confirmation and
+  verified with a read-back (`defects_get_defect` or `test_plans_get_case`).
+- `defects_update_defect` never changes status or assignee; those transitions
+  use `defects_update_defect_status` and `defects_assign_defect` exclusively.
+- `defects_create_defect_with_issue` requires an explicitly selected tracker
+  and project from `issue_tracker_list` and `issue_tracker_list_projects`;
+  without that selection, the plain `defects_create_defect` is the only
+  creation tool.
+- Never mutate a defect from a list summary: load it with
+  `defects_get_defect` first.
 - Never call workspace, release, or deploy tools from this skill.

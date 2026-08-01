@@ -36,6 +36,15 @@ copilot plugin list
 copilot mcp get voidr --json
 ```
 
+After every `copilot plugin install`, reload every open VS Code window
+(`Developer: Reload Window`). The MCP bridge and the prompt hook keep
+running with the previously loaded code until the window reloads, and a
+stale prompt hook silently drops typed gate messages such as
+`Aprovo este Test Plan`. The write-denial message reports when the prompt
+hook last saw a user message; `never` or a stale age means the window
+needs a reload, and the approval can still be collected through an
+`ask_user` free-text field.
+
 This build uses these production endpoints through the plugin MCP process:
 
 - platform:

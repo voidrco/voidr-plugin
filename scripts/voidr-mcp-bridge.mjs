@@ -331,9 +331,10 @@ const lines = createInterface({
   crlfDelay: Infinity
 })
 
+let requestQueue = Promise.resolve()
 lines.on('line', line => {
   if (!line.trim()) return
-  void handleLine(line)
+  requestQueue = requestQueue.then(() => handleLine(line))
 })
 
 async function handleLine(line) {
@@ -445,6 +446,16 @@ async function callTool(params) {
     return result
   }
 
+  if (name === 'test_plans_list_test_plans') {
+    if (!String(args?.applicationId || '').trim()) {
+      throw new Error(
+        'Blocked by Voidr workflow: test_plans_list_test_plans requires the selected applicationId. Select the application with applications_list_applications first, then list only that application’s Test Plans.'
+      )
+    }
+    const result = await remote.callTool(name, args)
+    return slimTestPlanListing(result)
+  }
+
   if (name === 'executions_create_execution') {
     if (!planReadAt || !countsReadAt) {
       throw new Error(
@@ -541,6 +552,11 @@ const STRUCTURE_TOOLS = new Set([
 
 async function callStructureTool(name, args) {
   const planId = bridgeTestPlanId(args).toLowerCase()
+  if (!/^[a-f0-9]{24}$/.test(planId)) {
+    throw new Error(
+      `Blocked by Voidr workflow: ${name} requires planId with the exact _id returned by test_plans_get_test_plan or test_plans_list_test_plans this session. Never pass a plan name instead of the ID.`
+    )
+  }
   if (executionNeedsDeploy) {
     throw new Error(
       'Blocked by Voidr workflow: the platform already reported that the cases exist but are not automated (not deployed). Creating modules, suites, or cases again will never fix that and duplicates the plan. Merge the tests pull request, run voidr_release_deploy_merged_pr, verify sync, and retry the execution.'
@@ -563,7 +579,29 @@ async function callStructureTool(name, args) {
 
   recordCreatedStructure(name, planId, args, result)
   recordPlanSlugs(planId, remoteResultData(result))
-  return result
+  return slimStructureResult(name, planId, args, result)
+}
+
+function slimStructureResult(name, planId, args, result) {
+  const data = remoteResultData(result)
+  const entity =
+    data?.data && typeof data.data === 'object' && !Array.isArray(data.data)
+      ? data.data
+      : data
+  const slug = structureSlug(data, args)
+  if (!slug && !entity) return result
+  const slim = {
+    created: name.replace('test_plans_create_', ''),
+    name: entity?.name ?? args?.name ?? null,
+    slug: slug || null,
+    id: entity?._id || entity?.id || null,
+    planId,
+    note: `Use exactly this slug for the next structure call: ${slug || 'read the plan with test_plans_get_test_plan'}.`
+  }
+  return {
+    content: [{ type: 'text', text: JSON.stringify(slim) }],
+    structuredContent: slim
+  }
 }
 
 function enforceKnownStructureRefs(name, planId, args) {
@@ -574,6 +612,31 @@ function enforceKnownStructureRefs(name, planId, args) {
     if (slug && failedStructureRefs.has(`${planId}|${slug.toLowerCase()}`)) {
       throw new Error(
         `Blocked by Voidr workflow: identifier '${slug}' already failed with not-found in this session. Do not retry invented identifiers. Read the plan with test_plans_get_test_plan and use the exact slug the platform returns.${knownStructureHint(planId)}`
+      )
+    }
+  }
+
+  const knownModules = new Set([
+    ...(sessionModules.get(planId) || []),
+    ...(seenPlanSlugs.get(planId) || [])
+  ])
+  if (
+    (name === 'test_plans_create_suite' || name === 'test_plans_create_case') &&
+    moduleSlug &&
+    !knownModules.has(moduleSlug.toLowerCase())
+  ) {
+    throw new Error(
+      `Blocked by Voidr workflow: module '${moduleSlug}' was never returned by the platform this session. Create the module first and wait for its response — one structure call at a time, never module and suite in the same batch — or read the plan with test_plans_get_test_plan (by planId) and use the exact slug it returns.${knownStructureHint(planId)}`
+    )
+  }
+  if (name === 'test_plans_create_case' && suiteSlug) {
+    const knownSuites = new Set([
+      ...(sessionSuites.get(planId)?.get(moduleSlug.toLowerCase()) || []),
+      ...(seenPlanSlugs.get(planId) || [])
+    ])
+    if (!knownSuites.has(suiteSlug.toLowerCase())) {
+      throw new Error(
+        `Blocked by Voidr workflow: suite '${suiteSlug}' was never returned by the platform this session. Create the suite first (after its module, one call at a time) or read the plan with test_plans_get_test_plan (by planId) and use the exact slug it returns.${knownStructureHint(planId)}`
       )
     }
   }
@@ -902,6 +965,56 @@ function validateProvisionedTestPlan(result) {
     )
   }
   return { planId, repository }
+}
+
+const TEST_PLAN_SUMMARY_KEYS = [
+  '_id',
+  'id',
+  'applicationId',
+  'name',
+  'slug',
+  'status',
+  'version',
+  'createdAt',
+  'updatedAt',
+  'totalCases',
+  'automatedCases',
+  'testCount',
+  'testCounts'
+]
+
+function slimTestPlanListing(result) {
+  if (!result || result.isError) return result
+  const data = remoteResultData(result)
+  let container = null
+  if (Array.isArray(data)) container = { data }
+  else if (Array.isArray(data?.data)) container = data
+  else if (Array.isArray(data?.data?.data)) container = data.data
+  if (!container) return result
+
+  const pagination = Object.fromEntries(
+    Object.entries(container).filter(([key]) => key !== 'data')
+  )
+  const slim = {
+    data: {
+      ...pagination,
+      data: container.data.map(plan => {
+        if (!plan || typeof plan !== 'object') return plan
+        return Object.fromEntries(
+          TEST_PLAN_SUMMARY_KEYS.filter(key => key in plan).map(key => [
+            key,
+            plan[key]
+          ])
+        )
+      })
+    },
+    note:
+      'Summary listing: every returned plan is included. Read one plan with test_plans_get_test_plan for its full content.'
+  }
+  return {
+    content: [{ type: 'text', text: JSON.stringify(slim) }],
+    structuredContent: slim
+  }
 }
 
 function remoteResultData(result) {

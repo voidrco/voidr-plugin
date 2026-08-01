@@ -85,12 +85,33 @@ store; they never report or change platform lifecycle state.
 | `playwright_get_test_history` | Cross-execution recurrence. |
 | `playwright_get_test_dom` | DOM snapshot when the failure row reports one. |
 
-## Defects
+## Support documentation
 
 | Tool | Owner skills | Purpose |
 | --- | --- | --- |
-| `defects_list_defects` | `voidr-failure-analysis` | Check for an existing non-closed defect before drafting one. |
-| `defects_create_defect` | `voidr-failure-analysis` | Create the confirmed defect with the mandatory execution link. |
+| `file_embeddings_search_documents` | `voidr-implement-tests`, `voidr-test` | Optional, never-blocking semantic search over the application's indexed support documents before implementing specs (`applicationId` + test-guidance query, `limit: 5`, `minScore: 0.5`, `includeContent: true`). Only excerpts that look like test-creation guidance (guides, automation standards, selector maps, QA conventions) feed the implementation; anything else is discarded regardless of score. Empty results and errors mean "no documentation" and the flow continues unchanged. |
+
+The indexing and deletion counterparts of this family are deliberately not
+exposed by the bridge, and the platform's knowledge tools for customer
+conversations are a different base — application support documents come only
+from this search tool.
+
+## Defects and issue trackers
+
+Owned exclusively by `voidr-failure-analysis`. Every write happens behind its
+own confirmation and is verified with a `defects_get_defect` read-back.
+
+| Tool | Owner skills | Purpose |
+| --- | --- | --- |
+| `defects_list_defects` | `voidr-failure-analysis` | Check for an existing defect before drafting one (`testCaseId`, sorted by `updatedAt`). |
+| `defects_get_defect` | `voidr-failure-analysis` | Load one defect in full before showing or mutating it; verify every persisted mutation. |
+| `issue_tracker_list` | `voidr-failure-analysis` | List active issue trackers before a linked creation. |
+| `issue_tracker_list_projects` | `voidr-failure-analysis` | List the selected tracker's projects by `connectorContextId`. |
+| `defects_create_defect` | `voidr-failure-analysis` | Create the confirmed plain Voidr defect (no tracker selected) with the mandatory execution link. |
+| `defects_create_defect_with_issue` | `voidr-failure-analysis` | Create the confirmed defect linked to the explicitly selected tracker project. |
+| `defects_update_defect` | `voidr-failure-analysis` | Edit confirmed content only: title, severity, priority, description, fix version, target date. Never status or assignee. |
+| `defects_update_defect_status` | `voidr-failure-analysis` | Apply the confirmed status transition (`assignee` for `in_progress`, `fixVersion` for `resolved`, `reopened` to reopen). |
+| `defects_assign_defect` | `voidr-failure-analysis` | Apply the confirmed assignee change (`@me` only for the user themselves; never invent a user ID). |
 
 ## Lookalike pairs
 
@@ -105,3 +126,6 @@ store; they never report or change platform lifecycle state.
 | Add to an existing plan | `test_plans_create_module`/`suite`/`case` | `test_plans_populate_test_plan` |
 | Change persisted plan content on user request | `test_plans_update_*` | re-creating modules/suites/cases |
 | Set up a selected repository | `voidr_workspace_prepare_test_repository` | manual `npm install`/`npx voidr *` |
+| Change a defect's status or assignee | `defects_update_defect_status` / `defects_assign_defect` | `defects_update_defect` |
+| Mutate a defect found in a listing | `defects_get_defect` first, then the write tool | mutating from the list summary |
+| Create a defect linked to a tracker | `defects_create_defect_with_issue` after tracker/project selection | `defects_create_defect` with an invented link |

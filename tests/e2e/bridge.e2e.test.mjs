@@ -453,6 +453,122 @@ test('bridge blocks Test Plan listing after a failed creation instead of a silen
   )
 })
 
+test('bridge blocks unscoped Test Plan listing before any network call', async t => {
+  const receivedTools = []
+  const server = createServer(async (request, response) => {
+    const message = JSON.parse(await readBody(request))
+    if (message.params?.name) receivedTools.push(message.params.name)
+    response.setHeader('content-type', 'application/json')
+    response.setHeader('mcp-session-id', 'synthetic-session')
+    if (message.method === 'notifications/initialized') {
+      response.writeHead(202)
+      response.end()
+    } else if (message.method === 'initialize') {
+      sendResult(response, message.id, {
+        protocolVersion: '2024-11-05',
+        capabilities: { tools: {} },
+        serverInfo: { name: 'mock', version: '1' }
+      })
+    } else if (message.method === 'tools/call') {
+      const listing = {
+        data: {
+          data: [
+            {
+              _id: '6a4431ebb7276d5f9781eaac',
+              applicationId: 'app-scope',
+              name: 'Credit Simulation Journey Protection',
+              status: 'ACTIVE',
+              modules: [{ name: 'Heavy', cases: ['a'.repeat(2000)] }]
+            },
+            {
+              _id: '6a572ef07a9f233a6edc06cb',
+              applicationId: 'app-scope',
+              name: 'smoke-teste',
+              status: 'ACTIVE',
+              summary: 'x'.repeat(3000)
+            }
+          ],
+          total: 2,
+          page: 1,
+          limit: 100
+        }
+      }
+      sendResult(response, message.id, {
+        structuredContent: listing,
+        content: [{ type: 'text', text: JSON.stringify(listing) }]
+      })
+    } else {
+      sendResult(response, message.id, { tools: [] })
+    }
+  })
+  server.listen(0, '127.0.0.1')
+  await once(server, 'listening')
+  t.after(() => server.close())
+
+  const temp = mkdtempSync(join(tmpdir(), 'voidr-bridge-list-scope-'))
+  const storePath = join(temp, 'service-accounts.json')
+  writeFileSync(
+    storePath,
+    JSON.stringify({
+      activeOrgId: 'org-scope',
+      accounts: {
+        'org-scope': {
+          clientId: 'sa_scope_e2e',
+          clientSecret: 'synthetic-scope-secret',
+          scopes: ['read', 'write']
+        }
+      }
+    })
+  )
+  const child = spawn(process.execPath, [bridgePath], {
+    cwd: temp,
+    env: {
+      ...process.env,
+      VOIDR_SERVICE_ACCOUNTS_PATH: storePath,
+      VOIDR_MCP_URL: `http://127.0.0.1:${server.address().port}/mcp`
+    },
+    stdio: ['pipe', 'pipe', 'pipe']
+  })
+  t.after(() => child.kill())
+  const client = jsonRpcClient(child)
+
+  await client.request('initialize', {
+    protocolVersion: '2024-11-05',
+    capabilities: {},
+    clientInfo: { name: 'e2e', version: '1' }
+  })
+
+  const blocked = await client.requestRaw('tools/call', {
+    name: 'test_plans_list_test_plans',
+    arguments: {}
+  })
+  assert.match(blocked.error.message, /requires the selected applicationId/i)
+  assert.equal(
+    receivedTools.includes('test_plans_list_test_plans'),
+    false,
+    'the unscoped listing must be blocked before any network call'
+  )
+
+  const scoped = await client.requestRaw('tools/call', {
+    name: 'test_plans_list_test_plans',
+    arguments: { applicationId: 'app-scope' }
+  })
+  assert.equal(scoped.error, undefined)
+  assert.equal(receivedTools.includes('test_plans_list_test_plans'), true)
+
+  const slim = JSON.parse(scoped.result.content[0].text)
+  const names = slim.data.data.map(plan => plan.name)
+  assert.deepEqual(names, [
+    'Credit Simulation Journey Protection',
+    'smoke-teste'
+  ])
+  assert.equal(slim.data.total, 2)
+  assert.equal(JSON.stringify(slim).includes('modules'), false)
+  assert.equal(JSON.stringify(slim).includes('summary'), false)
+  assert.match(slim.note, /every returned plan is included/i)
+  assert.equal(scoped.result.content[0].text.length < 1000, true)
+})
+
 test('bridge blocks invented module/suite slugs and not-found retries', async t => {
   const receivedCalls = []
   const server = createServer(async (request, response) => {
@@ -568,7 +684,10 @@ test('bridge blocks invented module/suite slugs and not-found retries', async t 
     name: 'test_plans_create_case',
     arguments: { planId, moduleSlug: 'antecipacao', suiteSlug: 'LIMITE', name: 'Caso' }
   })
-  assert.match(invented.error.message, /never created in module/i)
+  assert.match(
+    invented.error.message,
+    /never (?:created in module|returned by the platform)/i
+  )
   assert.match(invented.error.message, /solicitacao-acima-limite/)
   assert.equal(
     receivedCalls.filter(call => call.name === 'test_plans_create_case').length,
@@ -587,25 +706,18 @@ test('bridge blocks invented module/suite slugs and not-found retries', async t 
   })
   assert.match(validCase.content[0].text, /case-1/)
 
-  const legacyMiss = await client.request('tools/call', {
+  const legacyMiss = await client.requestRaw('tools/call', {
     name: 'test_plans_create_case',
     arguments: { planId, moduleSlug: 'legacy', suiteSlug: 'GHOST', name: 'Caso' }
   })
-  assert.equal(legacyMiss.isError, true)
   assert.match(
-    structureText(legacyMiss),
-    /Do not retry the same identifier/i
+    legacyMiss.error.message,
+    /never returned by the platform this session/i
   )
-
-  const blockedRetry = await client.requestRaw('tools/call', {
-    name: 'test_plans_create_case',
-    arguments: { planId, moduleSlug: 'legacy', suiteSlug: 'GHOST', name: 'Caso 2' }
-  })
-  assert.match(blockedRetry.error.message, /already failed with not-found/i)
   assert.equal(
     receivedCalls.filter(call => call.args?.suiteSlug === 'GHOST').length,
-    1,
-    'a not-found identifier must not be retried against the network'
+    0,
+    'an unknown module slug must be blocked before any network call'
   )
 })
 

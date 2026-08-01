@@ -233,3 +233,353 @@ test('the approved card also covers the displayed environment in auto mode', () 
     {}
   )
 })
+
+test('ask_user selections arm the workflow and unlock approved plan writes', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-dev-flow-'))
+  const sessionId = 'dev-flow-ask-user'
+  const postHook = join(root, 'scripts/post-tool-execution-links.mjs')
+  const now = Date.now()
+
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now,
+      prompt: 'Quero criar um teste',
+      transformedPrompt: 'Quero criar um teste'
+    },
+    dataRoot
+  )
+
+  const askResult = spawnSync(process.execPath, [postHook], {
+    input: JSON.stringify({
+      sessionId,
+      toolName: 'vscode_askQuestions',
+      toolResult: [
+        JSON.stringify({
+          answers: {
+            test_plan_type: {
+              selected: ['Usar um Test Plan existente'],
+              freeText: null,
+              skipped: false
+            }
+          }
+        })
+      ]
+    }),
+    encoding: 'utf8',
+    env: { ...process.env, COPILOT_PLUGIN_DATA: dataRoot }
+  })
+  assert.equal(askResult.status, 0, askResult.stderr)
+
+  const missingApproval = runHook(
+    {
+      sessionId,
+      cwd: process.cwd(),
+      toolName: 'voidr-test_plans_create_module',
+      toolArgs: { planId: '0123456789abcdef01234567', name: 'Novo módulo' }
+    },
+    dataRoot
+  )
+  assert.equal(missingApproval.permissionDecision, 'deny')
+  assert.match(missingApproval.permissionDecisionReason, /missing:/)
+  assert.match(
+    missingApproval.permissionDecisionReason,
+    /Aprovo este Test Plan/
+  )
+  assert.doesNotMatch(
+    missingApproval.permissionDecisionReason,
+    /plan mode was never recorded/
+  )
+  assert.doesNotMatch(
+    missingApproval.permissionDecisionReason,
+    /never armed/
+  )
+
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 1000,
+      prompt: 'Aprovo este Test Plan',
+      transformedPrompt: 'Aprovo este Test Plan'
+    },
+    dataRoot
+  )
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId,
+        cwd: process.cwd(),
+        toolName: 'voidr-test_plans_create_module',
+        toolArgs: { planId: '0123456789abcdef01234567', name: 'Novo módulo' }
+      },
+      dataRoot
+    ),
+    {}
+  )
+})
+
+test('deny diagnostics explain the missing approval and the recovery', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-dev-flow-'))
+  const sessionId = 'dev-flow-diagnostics'
+  const denied = runHook(
+    {
+      sessionId,
+      cwd: process.cwd(),
+      toolName: 'voidr-test_plans_create_module',
+      toolArgs: { planId: '0123456789abcdef01234567', name: 'X' }
+    },
+    dataRoot
+  )
+  assert.equal(denied.permissionDecision, 'deny')
+  assert.match(
+    denied.permissionDecisionReason,
+    /never received a user chat message/
+  )
+  assert.match(denied.permissionDecisionReason, /Aprovo este Test Plan/)
+  assert.match(denied.permissionDecisionReason, /retry this call once/)
+  assert.match(
+    denied.permissionDecisionReason,
+    /Add cases to an existing plan/
+  )
+})
+
+test('plan writes in a session without any user message name the subagent cause', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-dev-flow-'))
+  const sessionId = 'dev-flow-subagent'
+  const postHook = join(root, 'scripts/post-tool-execution-links.mjs')
+
+  const askResult = spawnSync(process.execPath, [postHook], {
+    input: JSON.stringify({
+      sessionId,
+      toolName: 'vscode_askQuestions',
+      toolResult: [
+        JSON.stringify({
+          answers: {
+            plan_mode: {
+              selected: ['Usar Test Plan existente'],
+              freeText: null,
+              skipped: false
+            }
+          }
+        })
+      ]
+    }),
+    encoding: 'utf8',
+    env: { ...process.env, COPILOT_PLUGIN_DATA: dataRoot }
+  })
+  assert.equal(askResult.status, 0, askResult.stderr)
+
+  const denied = runHook(
+    {
+      sessionId,
+      cwd: process.cwd(),
+      toolName: 'voidr-test_plans_create_module',
+      toolArgs: { planId: '0123456789abcdef01234567', name: 'X' }
+    },
+    dataRoot
+  )
+  assert.equal(denied.permissionDecision, 'deny')
+  assert.match(
+    denied.permissionDecisionReason,
+    /never received a user chat message/
+  )
+  assert.match(denied.permissionDecisionReason, /subagent/)
+  assert.match(denied.permissionDecisionReason, /prompt hook is not running/)
+})
+
+test('typed approvals recorded under a different hook session still unlock chat writes', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-dev-flow-'))
+  const windowSession = 'window-hooks'
+  const chatSession = 'chat-tools'
+  const postHook = join(root, 'scripts/post-tool-execution-links.mjs')
+  const now = Date.now()
+
+  submitPrompt(
+    {
+      sessionId: windowSession,
+      timestamp: now,
+      prompt: 'Quero criar um teste',
+      transformedPrompt: 'Quero criar um teste'
+    },
+    dataRoot
+  )
+
+  const askResult = spawnSync(process.execPath, [postHook], {
+    input: JSON.stringify({
+      sessionId: chatSession,
+      toolName: 'vscode_askQuestions',
+      toolResult: [
+        JSON.stringify({
+          answers: {
+            plan_mode: {
+              selected: ['Usar Test Plan existente'],
+              freeText: null,
+              skipped: false
+            }
+          }
+        })
+      ]
+    }),
+    encoding: 'utf8',
+    env: { ...process.env, COPILOT_PLUGIN_DATA: dataRoot }
+  })
+  assert.equal(askResult.status, 0, askResult.stderr)
+
+  const beforeApproval = runHook(
+    {
+      sessionId: chatSession,
+      cwd: process.cwd(),
+      toolName: 'voidr-test_plans_create_module',
+      toolArgs: { planId: '0123456789abcdef01234567', name: 'Novo módulo' }
+    },
+    dataRoot
+  )
+  assert.equal(beforeApproval.permissionDecision, 'deny')
+
+  submitPrompt(
+    {
+      sessionId: windowSession,
+      timestamp: now + 1000,
+      prompt: 'Aprovo este Test Plan',
+      transformedPrompt: 'Aprovo este Test Plan'
+    },
+    dataRoot
+  )
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId: chatSession,
+        cwd: process.cwd(),
+        toolName: 'voidr-test_plans_create_module',
+        toolArgs: { planId: '0123456789abcdef01234567', name: 'Novo módulo' }
+      },
+      dataRoot
+    ),
+    {}
+  )
+})
+
+test('typed plan-mode answers under the window session unlock chat writes without ask_user', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-dev-flow-'))
+  const windowSession = 'window-typed-mode'
+  const chatSession = 'chat-typed-mode'
+  const now = Date.now()
+
+  submitPrompt(
+    {
+      sessionId: windowSession,
+      timestamp: now,
+      prompt: 'É um existente\nNão sei o nome da aplicação, mas é um teste web',
+      transformedPrompt:
+        'É um existente\nNão sei o nome da aplicação, mas é um teste web'
+    },
+    dataRoot
+  )
+  submitPrompt(
+    {
+      sessionId: windowSession,
+      timestamp: now + 1000,
+      prompt: 'Aprovo este Test Plan',
+      transformedPrompt: 'Aprovo este Test Plan'
+    },
+    dataRoot
+  )
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId: chatSession,
+        cwd: process.cwd(),
+        toolName: 'voidr-test_plans_create_module',
+        toolArgs: { planId: '0123456789abcdef01234567', name: 'Teste Plugin' }
+      },
+      dataRoot
+    ),
+    {}
+  )
+})
+
+test('a typed free-text ask_user approval unlocks writes when the prompt hook is dead', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-dev-flow-'))
+  const sessionId = 'chat-freetext-approval'
+  const postHook = join(root, 'scripts/post-tool-execution-links.mjs')
+
+  const askResult = spawnSync(process.execPath, [postHook], {
+    input: JSON.stringify({
+      sessionId,
+      toolName: 'vscode_askQuestions',
+      toolResult: [
+        JSON.stringify({
+          answers: {
+            approval: {
+              selected: [],
+              freeText: 'Aprovo este Test Plan',
+              skipped: false
+            }
+          }
+        })
+      ]
+    }),
+    encoding: 'utf8',
+    env: { ...process.env, COPILOT_PLUGIN_DATA: dataRoot }
+  })
+  assert.equal(askResult.status, 0, askResult.stderr)
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId,
+        cwd: process.cwd(),
+        toolName: 'voidr-test_plans_create_module',
+        toolArgs: { planId: '0123456789abcdef01234567', name: 'Novo módulo' }
+      },
+      dataRoot
+    ),
+    {}
+  )
+})
+
+test('a clicked ask_user option never counts as the typed approval', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-dev-flow-'))
+  const sessionId = 'chat-clicked-approval'
+  const postHook = join(root, 'scripts/post-tool-execution-links.mjs')
+
+  const askResult = spawnSync(process.execPath, [postHook], {
+    input: JSON.stringify({
+      sessionId,
+      toolName: 'vscode_askQuestions',
+      toolResult: [
+        JSON.stringify({
+          answers: {
+            approval: {
+              selected: ['Aprovo este Test Plan'],
+              freeText: null,
+              skipped: false
+            }
+          }
+        })
+      ]
+    }),
+    encoding: 'utf8',
+    env: { ...process.env, COPILOT_PLUGIN_DATA: dataRoot }
+  })
+  assert.equal(askResult.status, 0, askResult.stderr)
+
+  const denied = runHook(
+    {
+      sessionId,
+      cwd: process.cwd(),
+      toolName: 'voidr-test_plans_create_module',
+      toolArgs: { planId: '0123456789abcdef01234567', name: 'Novo módulo' }
+    },
+    dataRoot
+  )
+  assert.equal(denied.permissionDecision, 'deny')
+  assert.match(denied.permissionDecisionReason, /free-text field/)
+  assert.match(
+    denied.permissionDecisionReason,
+    /last user message seen by the prompt hook: never/
+  )
+})

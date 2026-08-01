@@ -7,6 +7,22 @@ description: Fluxo dev-first para criar e rodar testes da feature que o desenvol
 
 Never call a tool that starts a Hive process.
 
+## Non-negotiables
+
+Read this entire skill file once when it activates; never act from a
+partial read.
+
+1. Never expose platform vocabulary to the user.
+2. The only typed gate is `Criar testes`; no platform write happens
+   before it.
+3. Never run Git, npm, npx, or the Voidr CLI in the terminal; use only
+   the tools routed at the end of this file.
+4. Platform facts exist only when a Voidr tool returned them this
+   session; never invent or infer them.
+5. Never delegate any part of this flow to a subagent: the typed
+   `Criar testes` gate is recorded per chat session, and a subagent's
+   platform writes are always denied.
+
 This flow exists for a developer who just finished a feature and wants tests
 for it, without learning the Voidr platform. The mental model is:
 
@@ -94,7 +110,7 @@ already confirmed.
    normal chat message to approve, or to describe any scenario to add or
    remove. Do not use `ask_user` for this approval: it is the runtime gate
    and must arrive as a new user-authored message. This is the only phrase
-   the developer ever has to type in this flow.
+   the developer ever has to type in this flow. Exception for a stale prompt hook: when a write was denied and the denial reports that the typed approval was never recorded, collect it with an `ask_user` question containing a single free-text field where the user types exactly `Criar testes` — typed free-text answers are recorded reliably and preserve authorship. Never present the phrase as a clickable option.
 4. When the user asks to add, remove, or change a scenario instead of
    approving, apply the change, show the full updated checklist, and ask for
    `Criar testes` again. Only the checklist shown immediately before that
@@ -119,8 +135,11 @@ Only after `Criar testes`:
      `test_plans_create_module`, a suite with `test_plans_create_suite`, and
      one case per approved scenario with `test_plans_create_case`
      (Arrange/Act/Assert derived from the scenario, placeholders only).
-     Reference modules and suites only by the exact `slug` each creation
-     response returned — never invent, abbreviate, or re-case an identifier.
+     Create strictly one structure call at a time — never module and suite
+     in the same batch; each call waits for the previous response and uses
+     only the exact `slug` that response returned (the platform generates
+     slugs; never derive one from the name, and never invent, abbreviate,
+     or re-case an identifier).
      On a not-found error, read the plan with `test_plans_get_test_plan` to
      get the real slugs; never retry the same identifier. The bridge blocks
      invented slugs and not-found retries.
@@ -146,7 +165,16 @@ Only after `Criar testes`:
    (the tool rejects `/tmp`). If it reports that the destination exists but
    is not a checkout of the linked repository, ask the user what to do with
    that stale directory — do not delete it and do not clone elsewhere.
-3. Implement one Playwright spec per approved scenario inside the test
+3. Before writing the specs, make one optional call to
+   `file_embeddings_search_documents` with the selected `applicationId`, a
+   `query` from the feature and scenarios oriented at test guidance,
+   `limit: 5`, `minScore: 0.5`, and `includeContent: true`. Use as silent
+   implementation reference only excerpts that look like test-creation
+   guidance (test guides, automation standards, selector maps, QA
+   conventions); discard any other document even with a high score. Empty
+   result or error → continue immediately; this lookup never blocks the
+   flow and is never mentioned to the user.
+4. Implement one Playwright spec per approved scenario inside the test
    repository only. Read the product code read-only for selectors and flows.
    No literal credentials or fallbacks; API endpoints come from the deployed
    product runtime, never from the frontend origin.
@@ -186,8 +214,9 @@ testes…", "Escrevendo os testes…"), not tool-by-tool narration.
 If `npm install` or another step fails with a network error, say the shell has
 no network access (Copilot sandbox) and ask once to rerun with network. If the
 tools report an unsupported Node version, ask the user to activate Node 22
-(volta/nvm) and retry. Never change registry, cache, lockfile, or package
-manager, and never read or print `.env` contents.
+(volta/nvm) and retry — never install, switch, or pin Node yourself. Never
+change registry, cache, lockfile, or package manager, and never read or print
+`.env` contents.
 
 ## 6. Ship: PR, publish, run on the platform
 
@@ -237,6 +266,7 @@ out of scope for this flow.
 | Add the feature to an existing plan | `test_plans_create_module`, `test_plans_create_suite`, `test_plans_create_case` |
 | Create and fill a new plan | `test_plans_create_test_plan`, then `test_plans_populate_test_plan` |
 | Materialize and prepare the test repository | `voidr_workspace_prepare_test_repository` |
+| Search indexed support documentation before implementing (optional, never blocking) | `file_embeddings_search_documents` |
 | Run the new specs locally | `voidr_smoke_build` |
 | Publish branch, commit, and pull request | `voidr_workspace_publish_tests` |
 | Rediscover the merged PR and IDs before deploy | `voidr_release_inspect`, then load `/voidr-deploy-run` |

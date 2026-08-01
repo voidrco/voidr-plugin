@@ -26,6 +26,50 @@ test('routes natural Portuguese Voidr testing intents to the entry skill', () =>
   }
 })
 
+test('routes English handoff intents to the entry skill', () => {
+  for (const prompt of [
+    'List all Test Plans for the application "Itaú Crédito Rural" (applicationId: abc)',
+    'Create a new module, suite, and test case in the Voidr Test Plan "smoke-teste"',
+    'The user wants to implement tests from an existing Test Plan'
+  ]) {
+    const routed = routeVoidrPrompt({
+      prompt,
+      transformedPrompt: prompt
+    })
+    assert.match(
+      routed.modifiedTransformedPrompt || '',
+      /\/voidr-develop-tests/,
+      prompt
+    )
+  }
+})
+
+test('routes bare test-creation intents to a Voidr triage note', () => {
+  for (const prompt of [
+    'Quero criar um teste',
+    'Preciso implementar testes',
+    'Me ajuda a escrever um teste novo'
+  ]) {
+    const routed = routeVoidrPrompt({
+      prompt,
+      transformedPrompt: prompt
+    })
+    assert.match(routed.modifiedTransformedPrompt, /\/voidr-develop-tests/)
+    assert.match(
+      routed.modifiedTransformedPrompt,
+      /never invent your own triage\s+options/i
+    )
+    assert.match(
+      routed.modifiedTransformedPrompt,
+      /clearly about plain local tests unrelated to Voidr,\s+ignore/i
+    )
+    assert.match(
+      routed.modifiedTransformedPrompt,
+      /never a\s+request to implement cases that already exist/i
+    )
+  }
+})
+
 test('does not rewrite unrelated prompts or explicit Voidr skill calls', () => {
   assert.deepEqual(
     routeVoidrPrompt({
@@ -85,4 +129,35 @@ test('prompt hook resolves its script when VS Code omits PLUGIN_ROOT', () => {
   assert.equal(result.status, 0, result.stderr)
   const output = JSON.parse(result.stdout)
   assert.match(output.modifiedTransformedPrompt, /\/voidr-develop-tests/)
+})
+
+test('plan-mode choices are recognized in natural phrasings', async () => {
+  const { isExistingPlanChoice, isNewPlanChoice } = await import(
+    '../scripts/lib/session-state.mjs'
+  )
+  for (const prompt of [
+    'Usar Test Plan existente',
+    'Num test plan existente',
+    'Quero implementar testes de um Test Plan existente',
+    'trabalhar em um plano de testes existente',
+    'Usar um já existente.',
+    'usar um existente',
+    'É um existente\nNão sei o nome da aplicação, mas é um teste web',
+    'Já existente',
+    'Existente'
+  ]) {
+    assert.equal(isExistingPlanChoice(prompt), true, prompt)
+  }
+  for (const prompt of [
+    'Não quero usar o test plan existente',
+    'Criar novo Test Plan',
+    'Corrija o teste unitário deste arquivo',
+    'quero usar um repositório existente',
+    'usar o ambiente existente para o smoke'
+  ]) {
+    assert.equal(isExistingPlanChoice(prompt), false, prompt)
+  }
+  assert.equal(isNewPlanChoice('Criar um novo plano de testes'), true)
+  assert.equal(isNewPlanChoice('criar novo test plan'), true)
+  assert.equal(isNewPlanChoice('usar test plan existente'), false)
 })

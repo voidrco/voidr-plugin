@@ -10,6 +10,7 @@ import { basename, dirname, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { canonicalToolName, loadPolicy } from './lib/policy.mjs'
 import {
+  readGateState,
   readSessionState,
   updateSessionState
 } from './lib/session-state.mjs'
@@ -44,6 +45,7 @@ enforcePlanModeGate(payload, rawToolName, toolName)
 enforceNewPlanModeListing(payload, toolName)
 enforcePostSmokeStop(payload, rawToolName, toolName)
 enforceSensitiveProductRead(payload, rawToolName, toolArgs)
+enforceEnvFileProtection(payload, rawToolName, toolArgs)
 enforcePreSelectionWriteGate(payload, rawToolName)
 recordInitialTestPlanSelection(payload, toolName, toolArgs)
 enforceSelectedTestPlanIdentity(payload, toolName, toolArgs)
@@ -93,6 +95,8 @@ if (isShell) {
   }
   enforceShellEnvFileRead(payload, normalizedShell)
   enforceDependencyStrategyProtection(payload, normalizedShell)
+  enforceRuntimeInstallProtection(payload, normalizedShell)
+  enforcePublishThroughBridge(payload, normalizedShell)
   const forbiddenDeploy = (policy.forbiddenDeployShellFragments || []).find(value =>
     normalizedShell.includes(value.toLowerCase())
   )
@@ -268,6 +272,56 @@ function enforceDependencyStrategyProtection(hookPayload, normalizedShell) {
   )
 }
 
+function enforceEnvFileProtection(hookPayload, name, args) {
+  if (!isGenericReadTool(name) && !isGenericWriteTool(name)) return
+  const state = readGateState(hookPayload)
+  if (state.workflowActive !== true) return
+  const paths = [
+    ...collectPathArguments(args),
+    ...collectPatchPathsFromValue(args)
+  ]
+  const touchesEnv = paths.some(value => {
+    const base = basename(String(value))
+    return /^\.env(?:\..+)?$/.test(base) && base !== '.env.example'
+  })
+  if (!touchesEnv) return
+  deny(
+    'Blocked by Voidr policy: .env files are opaque secret material — never read, create, or edit them with editor tools. voidr_workspace_prepare_test_repository provisions the file through voidr env pull; check only its existence, never its values.'
+  )
+}
+
+function enforcePublishThroughBridge(hookPayload, normalizedShell) {
+  const state = readGateState(hookPayload)
+  if (state.workflowActive !== true) return
+  const publishes =
+    /\bgit\b[^;&|\n]*\bcommit\b/.test(normalizedShell) ||
+    /\bgit\b[^;&|\n]*\bpush\b/.test(normalizedShell) ||
+    /\bgh\b[^;&|\n]*\bpr\b[^;&|\n]*\b(?:create|merge|edit|close)\b/.test(
+      normalizedShell
+    )
+  if (!publishes) return
+  deny(
+    'Blocked by Voidr policy: never run git commit, git push, or gh pr from the agent terminal. Publishing test changes goes only through voidr_workspace_publish_tests, after the user explicitly authorizes the shown branch, changed files, commit message, and PR title. The sandbox has no Git credentials, and pushing to the default branch is forbidden.'
+  )
+}
+
+function enforceRuntimeInstallProtection(hookPayload, normalizedShell) {
+  const state = readGateState(hookPayload)
+  if (state.workflowActive !== true) return
+  const installsRuntime =
+    /\b(?:nvm|volta|fnm|asdf)\b[^;&|\n]*\b(?:install|use|pin|global|exec)\b/.test(
+      normalizedShell
+    ) ||
+    /\b(?:apt|apt-get|dnf|yum|pacman|brew|snap)\b[^;&|\n]*\binstall\b[^;&|\n]*\bnode/.test(
+      normalizedShell
+    ) ||
+    /nodesource|nodejs\.org\/dist/.test(normalizedShell)
+  if (!installsRuntime) return
+  deny(
+    'Blocked by Voidr policy: never install, switch, or pin a Node runtime from the agent terminal. The Voidr framework requires the pinned Node 22; ask the user to activate it in their own terminal (for example nvm use 22 or volta pin node@22) and then retry voidr_workspace_prepare_test_repository or voidr_smoke_build once. Do not keep retrying and do not attempt any other runtime workaround.'
+  )
+}
+
 function enforceSelectedRepositoryBoundary(hookPayload, name, args) {
   if (!isGenericWriteTool(name)) {
     return
@@ -406,7 +460,7 @@ function enforceExplicitEnvironmentSelection(hookPayload, name, args) {
     return
   }
 
-  const state = readSessionState(hookPayload)
+  const state = readGateState(hookPayload)
   if (state.workflowActive !== true) return
 
   // In the dev-first auto flow the environment is displayed on the single
@@ -433,14 +487,18 @@ function enforceExplicitEnvironmentSelection(hookPayload, name, args) {
     state.selectedEnvironmentSlug.length > 0 &&
     Number.isFinite(state.selectedEnvironmentAt) &&
     Date.now() - state.selectedEnvironmentAt <= 4 * 60 * 60 * 1000
-  if (!selectionFresh) {
+  const environmentsListed =
+    Number.isFinite(state.environmentSelectionRequestedAt) &&
+    Date.now() - state.environmentSelectionRequestedAt <= 4 * 60 * 60 * 1000
+  if (!selectionFresh && !environmentsListed) {
     deny(
-      'Blocked by Voidr workflow: list environments with applications_list_environments and ask the user to explicitly select one before repository setup, selection, scaffold, or smoke/build.'
+      'Blocked by Voidr workflow: list environments with applications_list_environments and confirm one with the user before repository setup, selection, scaffold, or smoke/build.'
     )
   }
 
   if (
     name === 'voidr_workspace_prepare_test_repository' &&
+    selectionFresh &&
     String(args?.environmentSlug || '').trim() !==
       state.selectedEnvironmentSlug
   ) {
@@ -725,7 +783,7 @@ function enforceTestPlanWriteApproval(hookPayload, canonicalName) {
   ) {
     return
   }
-  const state = readSessionState(hookPayload)
+  const state = readGateState(hookPayload)
   const approvalFresh =
     state.planWriteApproved === true &&
     Number.isFinite(state.planWriteApprovedAt) &&
@@ -740,15 +798,28 @@ function enforceTestPlanWriteApproval(hookPayload, canonicalName) {
       'Blocked by Voidr workflow: a new Test Plan requires collected planning inputs and a new user message saying “Confirmar insumos do planejamento” before the draft can be persisted.'
     )
   }
-  if (
-    state.workflowActive !== true ||
-    !state.planMode ||
-    !approvalFresh
-  ) {
+  if (!approvalFresh) {
+    if (state.planMode === 'auto') {
+      deny(
+        'Blocked by Voidr workflow: show the user the list of test scenarios for the feature and wait for a new user message saying exactly “Criar testes” before writing anything to the platform.'
+      )
+    }
+    const missing = []
+    if (!Number.isFinite(state.promptHookAliveAt)) {
+      missing.push(
+        'this session has never received a user chat message — a subagent session can never hold the typed approval, so never delegate Test Plan writes to a subagent; if this is the main chat, the plugin prompt hook is not running (reinstall the plugin and reload the VS Code window)'
+      )
+    }
+    const promptAgeMinutes = Number.isFinite(state.promptHookAliveAt)
+      ? Math.round((Date.now() - state.promptHookAliveAt) / 60000)
+      : null
+    missing.push(
+      `a fresh user-typed “Aprovo este Test Plan” approval is missing or expired (a generic “sim” is not approval; last user message seen by the prompt hook: ${
+        promptAgeMinutes === null ? 'never' : `${promptAgeMinutes} minute(s) ago`
+      })`
+    )
     deny(
-      state.planMode === 'auto'
-        ? 'Blocked by Voidr workflow: show the user the list of test scenarios for the feature and wait for a new user message saying exactly “Criar testes” before writing anything to the platform.'
-        : 'Blocked by Voidr workflow: Test Plan writes require a visible draft followed by a new user message explicitly saying “Aprovo este Test Plan”. A generic “sim” is not approval.'
+      `Blocked by Voidr workflow — missing: ${missing.join('; ')}. Test Plan writes require a visible draft followed by a new user message explicitly saying “Aprovo este Test Plan”. To add cases to an existing plan, follow the “Add cases to an existing plan” section of /voidr-test-plan: show the additions draft and wait for that exact approval message. Recovery: show (or refresh) the draft, ask the user to type that exact approval in a new chat message, then retry this call once. If the user already typed the approval and it was not recorded (stale prompt hook), collect it with an ask_user question containing a single free-text field where the user types exactly “Aprovo este Test Plan” — typed free-text answers are recorded reliably. Do not loop retries and do not delegate to a subagent.`
     )
   }
 }

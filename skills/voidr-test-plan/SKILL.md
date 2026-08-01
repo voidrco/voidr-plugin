@@ -1,6 +1,6 @@
 ---
 name: voidr-test-plan
-description: Creates or selects a Voidr Test Plan with mandatory user-selected feature, scope collection, visible draft, explicit human approval gates, and the linked repository URL as a required creation output. Use after the user has said whether the plan is new or existing.
+description: Creates or selects a Voidr Test Plan with mandatory user-selected feature, scope collection, visible draft, explicit human approval gates, and the linked repository URL as a required creation output. Also adds new cases to an existing plan through an additions-only draft and the typed approval. Use after the user has said whether the plan is new or existing, and whenever the user asks to create a new test or case ("quero criar um novo teste", "criar um novo caso").
 ---
 
 # Voidr Test Plan
@@ -8,6 +8,27 @@ description: Creates or selects a Voidr Test Plan with mandatory user-selected f
 Never call a tool that starts a Hive process. Draft plans locally from the
 user's answers and repository context; use only Test Plan CRUD tools to
 persist an approved result.
+
+## Non-negotiables
+
+Read this entire skill file once when it activates; never act from a
+partial read.
+
+1. Never persist or mutate any Test Plan content before the required
+   typed gates: `Confirmar insumos do planejamento` (new plans) and
+   `Aprovo este Test Plan` (every persisted draft, including cases added
+   to an existing plan).
+2. Never render a Test Plan draft before the planning inputs are
+   confirmed.
+3. Never ask the user to type an application ID or Test Plan ID;
+   selections come from platform listings rendered with `ask_user`.
+4. Application, environment, and plan facts exist only when a Voidr tool
+   returned them in this session; never infer them from the workspace.
+5. Routing metadata (application name, type, environment, feature name,
+   base URL) is never test-design evidence.
+6. Never delegate drafting, approval, or any Test Plan mutation to a
+   subagent. Gates are recorded per chat session; a subagent can never
+   receive the user's typed approval and its writes are always denied.
 
 ## Authentication gate
 
@@ -36,7 +57,9 @@ This step is mandatory for both new and existing plans:
    returned `type` as selectable options. Keep IDs and types internally; never
    ask the user to type an `applicationId`.
    Confirm the application even when the MCP returns only one.
-   Never auto-select a single result.
+   Never auto-select a single result. The question UI rejects a
+   single-option question: with one application, offer `Usar <nome>` plus
+   `Cancelar`.
 4. Keep the returned application ID as the authoritative `applicationId` and
    its `type` as the authoritative WEB/API classification.
 5. If the list response omits `type`, call `applications_get_application` for
@@ -56,6 +79,9 @@ After the application is explicitly confirmed:
 2. Present only environments returned by MCP, using `name`, `slug`, and
    `applicationUrl`.
 3. Ask the user to select or confirm one, even when only one is returned.
+   The question UI rejects a single-option question: with one environment,
+   offer `Usar <nome>` plus `Cancelar` instead of retrying or skipping the
+   confirmation.
 4. Preserve that environment separately from the local smoke target.
 
 Never ask the user to type a platform URL when MCP returned environments.
@@ -76,12 +102,62 @@ Otherwise:
    test count as selectable options. Keep IDs internally and never ask the user
    to type a `testPlanId`.
 3. Call `test_plans_get_test_plan` for the selected ID.
-4. Ask whether to implement all pending cases or a named subset.
-5. Repeat the exact selected case slugs and wait for confirmation.
+4. Ask what to do with this plan, always presenting exactly these
+   `ask_user` options:
+   - `Implementar casos pendentes`
+   - `Criar novos casos` (the “Add cases to an existing plan” route)
+   Never render an implementation-only case list: every case-selection
+   question must also offer `Criar novos casos`. When the user's original
+   request was to create a new test or case, `Criar novos casos` is the
+   recommended option — implementing existing cases is never a substitute
+   for that request.
+5. For implementation, repeat the exact selected case slugs and wait for
+   confirmation.
 
 Never resolve the plan from `project.json`.
 Never silently replace a Test Plan after any not-found, authorization, or
 environment mismatch response.
+
+## Add cases to an existing plan
+
+When the user wants new scenarios in an already-persisted plan (for example
+answering a case-selection question with "quero criar um novo caso"), this
+is the supported route. Do not push the user back to implementing existing
+cases, do not treat the request as a new Test Plan, and do not call a
+creation tool directly:
+
+1. Read the selected plan with `test_plans_get_test_plan` and show its
+   modules and suites.
+2. Ask where the new cases belong, with `ask_user` options built from the
+   plan: every existing module plus `Criar novo módulo`. After the module
+   choice, offer its existing suites plus `Criar nova suite`. For new
+   structure, collect the module name and severity, and the suite name.
+   Then collect from the user (or from an explicitly authorized repository
+   or document) the scenarios, expected behavior, and preconditions.
+3. Show a draft containing only the additions: target module and suite
+   (exact existing slugs, or proposed names for new structure), each case
+   with Arrange/Act/Assert, priority/severity, and
+   `{{env.VARIABLE_NAME}}` placeholders only.
+4. Instruct the user to type exactly `Aprovo este Test Plan` in the normal
+   chat input and end the response. The runtime hook blocks these writes
+   until that new user-authored message arrives; `ask_user` selections do
+   not satisfy it. Exception for a stale prompt hook: when a write was denied and the denial reports that the typed approval was never recorded, collect it with an `ask_user` question containing a single free-text field where the user types exactly the same phrase — typed free-text answers are recorded reliably and preserve authorship. Never present the phrase as a clickable option.
+5. Only after that approval, create the structure strictly one call at a
+   time — never two structure calls in the same message. Call
+   `test_plans_create_module`, wait for its response, and take the exact
+   `slug` it returns (the platform generates slugs; never derive one from
+   the name). Only then call `test_plans_create_suite` with that module
+   slug, and only after its response call `test_plans_create_case` once
+   per approved case with the returned suite slug. The approved names are
+   binding: on a not-found or blocked retry, read the plan with
+   `test_plans_get_test_plan` (by `planId`) and continue with the approved
+   names and the real slugs — never invent different module or suite names
+   to work around an error.
+6. Read the plan back with `test_plans_get_test_plan`, verify the added
+   content, and report it.
+
+New cases enter the plan as not automated. Implementing and deploying them
+follows the normal `/voidr-implement-tests` and `/voidr-deploy-run` gates.
 
 ## New plan
 
@@ -206,7 +282,7 @@ Instruct the user to type exactly `Confirmar insumos do planejamento` in the
 normal chat input and end the response. Do not use `ask_user`, selectable
 options, or an agent-authored message for this confirmation: tool-result
 selections do not reach the runtime approval hook. This confirmation must
-arrive as a new user-authored chat message. Do not render a Test Plan draft
+arrive as a new user-authored chat message. Exception for a stale prompt hook: when a write was denied and the denial reports that the typed approval was never recorded, collect it with an `ask_user` question containing a single free-text field where the user types exactly the same phrase — typed free-text answers are recorded reliably and preserve authorship. Never present the phrase as a clickable option. Do not render a Test Plan draft
 before it.
 
 ### Gate 4: visible draft and approval
@@ -230,7 +306,7 @@ Ask the user to approve or revise the draft by typing exactly
 `Aprovo este Test Plan` in the normal chat input. Do not use `ask_user`,
 selectable options, or an agent-authored message for this approval:
 tool-result selections do not reach the runtime approval hook. A generic `Sim`
-is not approval. End the response and wait for that new user-authored chat
+is not approval. Exception for a stale prompt hook: when a write was denied and the denial reports that the typed approval was never recorded, collect it with an `ask_user` question containing a single free-text field where the user types exactly the same phrase — typed free-text answers are recorded reliably and preserve authorship. Never present the phrase as a clickable option. End the response and wait for that new user-authored chat
 message. Do not persist a partial or unapproved plan. Do not call
 `test_plans_create_test_plan`,
 `test_plans_create_module`, `test_plans_create_suite`,
@@ -310,7 +386,7 @@ out of scope for this skill.
 | List workspace repository candidates for read-only code context | `voidr_workspace_inspect` |
 | Persist the approved new plan (first mutation) | `test_plans_create_test_plan` |
 | Persist the approved structure right after a complete creation response | `test_plans_populate_test_plan` |
-| Add a module, suite, or case to an already-persisted plan on an explicit user request | `test_plans_create_module`, `test_plans_create_suite`, `test_plans_create_case` |
+| Add a module, suite, or case to an already-persisted plan, after the additions draft was approved (see “Add cases to an existing plan”) | `test_plans_create_module`, `test_plans_create_suite`, `test_plans_create_case` |
 | Edit an already-persisted plan, module, suite, or case only when the user explicitly requests that exact change | `test_plans_update_test_plan`, `test_plans_update_module`, `test_plans_update_suite`, `test_plans_update_case` |
 
 Disambiguation:

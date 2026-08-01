@@ -8,6 +8,26 @@ description: Implements an explicitly selected set of Voidr Test Plan cases in o
 Never call a tool that starts a Hive process. The Copilot agent writes and
 validates the Playwright code locally.
 
+## Non-negotiables
+
+Read this entire skill file once when it activates; never act from a
+partial read.
+
+1. The repository preparation gate runs before reading or editing any
+   spec — it is the only setup path.
+2. Never run Git, npm, npx, Playwright, or the Voidr CLI in the terminal.
+3. Never create or modify Test Plan content from this skill.
+4. Implement only the explicitly selected cases.
+5. Never read or print `.env` values.
+6. Never install, switch, or pin a Node runtime. When a tool reports an
+   unsupported Node version, report the pinned Node 22 requirement, ask
+   the user to activate it in their own terminal (nvm/volta), and retry
+   the tool once after they confirm — nothing else.
+7. Write inside the test repository only the files the selected cases
+   require: specs and the actions, helpers, or fixtures they import.
+   Never create analysis, exploration, summary, or scratch documents
+   there — those notes belong in the chat response.
+
 ## Preconditions
 
 Require all of:
@@ -110,6 +130,33 @@ must never be opened, summarized, copied into chat, or embedded in test code.
 Use only documented environment variable names and `{{env.VARIABLE_NAME}}`
 placeholders where platform content requires them.
 
+## Supporting documentation (optional, never blocking)
+
+Before writing the first spec, make one call to
+`file_embeddings_search_documents` with the selected `applicationId`, a
+`query` built from the case title, feature, and key flows oriented at test
+guidance (for example "guia de criação de testes <feature>", "padrões de
+automação", "seletores <fluxo>"), `limit: 5`, `minScore: 0.5`, and
+`includeContent: true`.
+
+Feed the implementation only with excerpts that look like test-creation
+guidance: test writing guides, automation standards, selector or locator
+maps, QA conventions, test data catalogs, flow walkthroughs written for
+testing. Discard everything else — product marketing, contracts, meeting
+notes, or unrelated specifications are not implementation context even
+when they score high. Use the accepted excerpts as read-only reference for
+selectors, flows, test data names, and business rules while implementing.
+
+This step is an optimization and must never block or delay the flow:
+
+- An empty result, a low-score result, or a tool error means "no
+  supporting documentation" — continue immediately with the normal
+  implementation path and do not mention a failure to the user.
+- At most one refined follow-up query; never loop searching.
+- Documentation never overrides the approved Arrange/Act/Assert or the
+  deployed runtime configuration; on conflict, the approved case and the
+  runtime win.
+
 ## Implement
 
 For each selected case:
@@ -209,6 +256,7 @@ out of scope for this skill.
 | --- | --- |
 | Read the approved plan and its literal case content | `test_plans_get_test_plan` |
 | Run the mandatory repository setup gate before touching any spec | `voidr_workspace_prepare_test_repository` |
+| Search indexed support documentation before implementing (optional, never blocking) | `file_embeddings_search_documents` |
 | Scaffold a selected case that is missing after initial preparation | `voidr_workspace_scaffold_test_cases` |
 | Validate locally and run the authenticated build | `voidr_smoke_build` |
 

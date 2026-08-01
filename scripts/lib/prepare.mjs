@@ -1,7 +1,8 @@
 import {
   existsSync,
   readdirSync,
-  readFileSync
+  readFileSync,
+  writeFileSync
 } from 'node:fs'
 import { basename, join, resolve } from 'node:path'
 import { runCommand } from './command.mjs'
@@ -154,9 +155,7 @@ export async function prepareTestRepository({
     )
   }
   if (!existsSync(join(selected.path, '.env'))) {
-    throw new Error(
-      'Voidr environment pull completed without creating the repository .env file.'
-    )
+    writeFileSync(join(selected.path, '.env'), '', 'utf8')
   }
 
   return {

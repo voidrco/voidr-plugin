@@ -1,6 +1,6 @@
 ---
 name: voidr-develop-tests
-description: Inicia e orquestra o desenvolvimento de testes na Voidr. Use SEMPRE quando o usuário disser "quero desenvolver testes na Voidr", "quero criar testes na Voidr", "automatizar testes na Voidr", "criar um Test Plan", "usar um Test Plan existente" ou pedir para implementar, publicar ou executar testes Playwright pela Voidr. Antes de qualquer tool, pergunta se o Test Plan é novo ou existente; depois exige seleção humana de aplicação e ambiente via MCP, usa o tipo WEB/API do produto, coleta feature e smoke local, apresenta draft e exige aprovação.
+description: Inicia e orquestra o desenvolvimento de testes na Voidr. Use SEMPRE quando o usuário disser "quero desenvolver testes na Voidr", "quero criar testes na Voidr", "automatizar testes na Voidr", "criar um Test Plan", "usar um Test Plan existente", "quero criar um novo teste", "criar um novo caso de teste" ou pedir para implementar, publicar ou executar testes Playwright pela Voidr. Criar um teste novo significa criar conteúdo novo na plataforma (caso novo em plano existente ou plano novo), nunca implementar casos que já existem. Antes de qualquer tool, pergunta se o Test Plan é novo ou existente; depois exige seleção humana de aplicação e ambiente via MCP, usa o tipo WEB/API do produto, coleta feature e smoke local, apresenta draft e exige aprovação.
 ---
 
 # Develop tests in Voidr
@@ -8,12 +8,41 @@ description: Inicia e orquestra o desenvolvimento de testes na Voidr. Use SEMPRE
 Treat this as a gated workflow. Never call a tool that starts a Hive process,
 including indirectly through a generic or batch tool.
 
+## Non-negotiables
+
+Read this entire skill file once when it activates, before the first
+question or tool call; never act from a partial read.
+
+1. The first response of a new workflow asks exactly one decision — new
+   versus existing Test Plan — unless the user's message already states
+   that choice unambiguously.
+2. Never ask the user to type an organization ID, application ID, Test
+   Plan ID, case slug, or repository path. Every choice is selected from a
+   platform listing rendered with `ask_user`.
+3. Never run Git, npm, npx, or the Voidr CLI in the terminal. Repository
+   discovery, setup, validation, publishing, and deploy happen only
+   through the bridge tools routed at the end of this file.
+4. Test Plan content is created or changed only inside `/voidr-test-plan`,
+   behind its typed approval gates. A request to create a new test or
+   case means new platform content (the “Add cases to an existing plan”
+   section, or a new plan) — never implementing cases that already exist,
+   and never a reason to steer the user toward the existing ones.
+5. The platform environment and the local smoke target are different
+   values; never substitute one for the other.
+6. Never delegate any part of this workflow to a subagent. Approval gates
+   are recorded per chat session, and a subagent session can never receive
+   the user's typed approval — its platform writes are always denied.
+
 Selection contract: every choice in this workflow — plan mode, application,
 environment, Test Plan, repository, planning inputs — must be rendered with
 the native `ask_user` selectable options whenever that control is available.
 Present free-text lists only when `ask_user` is genuinely unavailable, and say
 so. The only exceptions are the two runtime gates that require a typed chat
 message: `Confirmar insumos do planejamento` and `Aprovo este Test Plan`.
+The question UI rejects a question with a single option. When exactly one
+candidate exists, still confirm it with two options — `Usar <nome>` and
+`Cancelar` — never retry a one-option question and never skip the
+confirmation because the UI errored.
 
 Secrets contract: never reproduce credentials, emails, tokens, CPF/CNPJ, or
 other personal identifiers found in product code, documentation, or `.env`
@@ -43,6 +72,11 @@ selectable options:
 2. `Usar Test Plan existente`
 
 End the response after this question. Do not answer it on the user's behalf.
+The only exception: when the user's current message already states the
+choice unambiguously (for example “implementar testes de um Test Plan
+existente” or “criar um novo Test Plan”), do not re-ask an already-answered
+question — restate the detected mode in one line and continue directly to
+the authentication check.
 Do not include application, flow, or repository questions in that first
 question batch. Do not inspect `project.json`, scan repositories, or call a
 platform tool before the user answers. A local file is not evidence of current
@@ -220,7 +254,7 @@ For a new Test Plan, use this mandatory sequence:
    response. Do not use `ask_user`, selectable options, or an agent-authored
    message for this confirmation: tool-result selections do not reach the
    runtime approval hook. The confirmation must arrive as a new user-authored
-   chat message. Do not show a Test Plan draft yet. Show test data only as
+   chat message. Exception for a stale prompt hook: when a write was denied and the denial reports that the typed approval was never recorded, collect it with an `ask_user` question containing a single free-text field where the user types exactly the same phrase — typed free-text answers are recorded reliably and preserve authorship. Never present the phrase as a clickable option. Do not show a Test Plan draft yet. Show test data only as
    `{{env.VARIABLE_NAME}}`; never add example/sample/default values or literal
    emails, passwords, tokens, CPF/CNPJ, phone numbers, personal names, or URLs.
 7. Only after that exact confirmation, present a complete Test Plan draft
@@ -231,7 +265,7 @@ For a new Test Plan, use this mandatory sequence:
    response. Do not use `ask_user`, selectable options, or an agent-authored
    message for this approval: tool-result selections do not reach the runtime
    approval hook. A generic `Sim` is not approval. The approval must arrive as
-   a new user-authored chat message after the complete draft is visible.
+   a new user-authored chat message after the complete draft is visible. Exception for a stale prompt hook: when a write was denied and the denial reports that the typed approval was never recorded, collect it with an `ask_user` question containing a single free-text field where the user types exactly the same phrase — typed free-text answers are recorded reliably and preserve authorship. Never present the phrase as a clickable option.
 9. Only after explicit approval may the agent call
    `test_plans_create_test_plan` and `test_plans_populate_test_plan`.
    The Voidr MCP provisions and links a private GitHub repository as part of
@@ -269,6 +303,18 @@ For an existing Test Plan, follow `/voidr-test-plan` in select mode. Call
 `test_plans_list_test_plans` for the selected application, then use `ask_user`
 when available to present the returned plan names as selectable options. Keep
 the selected ID internally and never ask the user to type a `testPlanId`.
+When the user asks for a new case or scenario instead of implementing the
+pending ones, stay in `/voidr-test-plan` and follow its
+“Add cases to an existing plan” section — never push the user back to the
+existing cases and never convert the request into a new Test Plan.
+Intent contract: a request to "criar um teste", "criar um novo teste", or
+"criar um caso" means creating new platform content — a new case in an
+existing plan, or a new plan when none fits. It is never a request to
+implement cases that already exist. Carry that goal through the whole
+workflow, offer `Criar novos casos` as a selectable option in every
+case-selection question (marked recommended when creation was the original
+request), and only implement existing cases when the user explicitly
+chooses that.
 When the user already supplied an explicit Test Plan ID, read only that exact
 ID. If it is not available in the current Voidr environment, stop and ask for
 a new explicit selection. Never list plans as a fallback or silently replace
@@ -398,7 +444,10 @@ application when product repositories are added.
 - The preparation and smoke tools validate the Node.js runtime before running
   anything: Playwright 1.48 hangs on Node 23+. If they report an unsupported
   Node version, ask the user to activate the pinned Node 22 (volta/nvm) and
-  retry. Do not attempt to run Playwright on the unsupported version.
+  retry. Do not attempt to run Playwright on the unsupported version, and
+  never install, switch, or pin Node yourself — no `nvm install`,
+  `volta install`, or package-manager Node installs in the terminal; runtime
+  activation belongs to the user.
 
 ## 8. Continue through the gates
 

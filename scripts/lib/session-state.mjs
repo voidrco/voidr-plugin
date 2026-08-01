@@ -8,16 +8,24 @@ import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { dirname, resolve } from 'node:path'
 
-export function sessionStatePath(payload) {
-  const dataRoot =
+function stateDataRoot() {
+  return (
     process.env.COPILOT_PLUGIN_DATA ||
     process.env.VOIDR_PLUGIN_DATA ||
     resolve(tmpdir(), 'voidr-copilot-plugin-data')
+  )
+}
+
+export function sessionStatePath(payload) {
   const sessionId = String(
     payload?.sessionId || payload?.session_id || 'unknown-session'
   )
   const safeId = createHash('sha256').update(sessionId).digest('hex')
-  return resolve(dataRoot, 'sessions', `${safeId}.json`)
+  return resolve(stateDataRoot(), 'sessions', `${safeId}.json`)
+}
+
+export function latestPromptStatePath() {
+  return resolve(stateDataRoot(), 'sessions', 'latest-prompt-state.json')
 }
 
 export function readSessionState(payload) {
@@ -28,6 +36,39 @@ export function readSessionState(payload) {
   } catch {
     return {}
   }
+}
+
+const PROMPT_GATE_KEYS = [
+  'planWriteApproved',
+  'planWriteApprovedAt',
+  'planContextConfirmed',
+  'planContextConfirmedAt',
+  'selectedEnvironmentSlug',
+  'selectedEnvironmentAt',
+  'planMode',
+  'workflowActive'
+]
+
+export function readGateState(payload) {
+  const session = readSessionState(payload)
+  let prompt = {}
+  try {
+    prompt = JSON.parse(readFileSync(latestPromptStatePath(), 'utf8'))
+  } catch {
+    prompt = {}
+  }
+  const merged = { ...session }
+  for (const key of PROMPT_GATE_KEYS) {
+    if (merged[key] === undefined || merged[key] === null) {
+      if (prompt[key] !== undefined) merged[key] = prompt[key]
+    }
+  }
+  merged.promptHookAliveAt = Number.isFinite(prompt.lastPromptAt)
+    ? prompt.lastPromptAt
+    : Number.isFinite(session.lastPromptAt)
+      ? session.lastPromptAt
+      : null
+  return merged
 }
 
 export function updateSessionState(payload, update) {
@@ -43,7 +84,7 @@ export function updateSessionState(payload, update) {
 export function recordUserPromptState(payload) {
   const prompt = extractUserAuthoredPrompt(payload?.prompt)
   const timestamp = normalizeTimestamp(payload?.timestamp)
-  return updateSessionState(payload, current => {
+  const next = updateSessionState(payload, current => {
     if (
       current.lastPromptAt &&
       timestamp &&
@@ -53,7 +94,12 @@ export function recordUserPromptState(payload) {
     }
 
     const devFlowStarted = isDevTestFlowPrompt(prompt)
-    const workflowStarted = isVoidrTestingPrompt(prompt) || devFlowStarted
+    const planChoiceStated =
+      isNewPlanChoice(prompt) || isExistingPlanChoice(prompt)
+    const workflowStarted =
+      isVoidrTestingPrompt(prompt) ||
+      devFlowStarted ||
+      (planChoiceStated && current.workflowActive !== true)
     const connectStarted = isVoidrConnectPrompt(prompt)
     const smokeRemediationAuthorized = isSmokeRemediationPrompt(prompt)
     const planningInputsConfirmed =
@@ -133,6 +179,123 @@ export function recordUserPromptState(payload) {
       lastPromptAt: timestamp || Date.now()
     }
   })
+  try {
+    writeFileSync(
+      latestPromptStatePath(),
+      JSON.stringify(next, null, 2),
+      'utf8'
+    )
+  } catch {
+    return next
+  }
+  return next
+}
+
+export function recordAskUserSelections(payload, { toolName, toolResult }) {
+  if (!/ask.*question|ask_user/i.test(String(toolName || ''))) return null
+  const answers = collectAskUserAnswers(toolResult)
+  if (answers.length === 0) return null
+
+  return updateSessionState(payload, current => {
+    const next = { ...current }
+    let changed = false
+    for (const { header, text, typed } of answers) {
+      if (typed) {
+        if (isExplicitTestPlanApproval(text)) {
+          next.planWriteApproved = true
+          next.planWriteApprovedAt = Date.now()
+          changed = true
+        } else if (isPlanningInputsConfirmation(text)) {
+          next.planContextConfirmed = true
+          next.planContextConfirmedAt = Date.now()
+          changed = true
+        } else if (next.planMode === 'auto' && isDevTestsApproval(text)) {
+          next.planWriteApproved = true
+          next.planWriteApprovedAt = Date.now()
+          changed = true
+        }
+      }
+      if (isNewPlanChoice(text)) {
+        next.planMode = 'new'
+        next.workflowActive = true
+        next.planContextConfirmed = false
+        next.planContextConfirmedAt = null
+        changed = true
+      } else if (isExistingPlanChoice(text)) {
+        next.planMode = 'existing'
+        next.workflowActive = true
+        changed = true
+      }
+      if (
+        !next.selectedEnvironmentSlug &&
+        Number.isFinite(next.environmentSelectionRequestedAt) &&
+        /amb|env/i.test(String(header || ''))
+      ) {
+        const slug = extractEnvironmentSelection(text)
+        if (slug) {
+          next.selectedEnvironmentSlug = slug
+          next.selectedEnvironmentAt = Date.now()
+          changed = true
+        }
+      }
+    }
+    return changed ? next : current
+  })
+}
+
+function collectAskUserAnswers(toolResult) {
+  const parsed = parseAskUserPayload(toolResult)
+  const record = parsed?.answers
+  if (!record || typeof record !== 'object') return []
+  const answers = []
+  for (const [header, value] of Object.entries(record)) {
+    const selected = Array.isArray(value?.selected) ? value.selected : []
+    for (const text of selected) {
+      if (typeof text === 'string' && text.trim()) {
+        answers.push({ header, text, typed: false })
+      }
+    }
+    if (typeof value?.freeText === 'string' && value.freeText.trim()) {
+      answers.push({ header, text: value.freeText, typed: true })
+    }
+  }
+  return answers
+}
+
+function parseAskUserPayload(result) {
+  const candidates = []
+  const visit = value => {
+    if (value == null) return
+    if (typeof value === 'string') {
+      candidates.push(value)
+      return
+    }
+    if (Array.isArray(value)) {
+      value.forEach(visit)
+      return
+    }
+    if (typeof value === 'object') {
+      if (value.answers && typeof value.answers === 'object') {
+        candidates.push(value)
+        return
+      }
+      if (typeof value.text === 'string') candidates.push(value.text)
+      if (value.content) visit(value.content)
+      if (value.result) visit(value.result)
+      if (value.output) visit(value.output)
+    }
+  }
+  visit(result)
+  for (const candidate of candidates) {
+    if (candidate && typeof candidate === 'object') return candidate
+    try {
+      const parsed = JSON.parse(candidate)
+      if (parsed?.answers && typeof parsed.answers === 'object') return parsed
+    } catch {
+      continue
+    }
+  }
+  return null
 }
 
 export function extractUserAuthoredPrompt(value) {
@@ -222,13 +385,37 @@ function isVoidrConnectPrompt(prompt) {
   return /\/(?:copilot\s+)?voidr-connect\b/i.test(prompt)
 }
 
-function isNewPlanChoice(prompt) {
-  return /\bcriar\s+(?:um\s+)?novo\s+test plan\b/i.test(prompt)
+export function isNewPlanChoice(prompt) {
+  const text = normalizeText(prompt)
+  return /\bcriar\s+(?:um\s+)?novo\s+(?:test\s*plan|plano\s+de\s+testes?)\b/.test(
+    text
+  )
 }
 
-function isExistingPlanChoice(prompt) {
-  return /\b(?:usar|trabalhar\s+em)\s+(?:um\s+)?test plan\s+existente\b/i.test(
-    prompt
+export function isExistingPlanChoice(prompt) {
+  const text = normalizeText(prompt)
+  if (/^(?:quero\s+)?usar\s+(?:um\s+)?(?:ja\s+)?existente[.!]?$/.test(text.trim())) {
+    return true
+  }
+  const firstLine = String(text.split(/\r?\n/, 1)[0] || '').trim()
+  if (
+    /^(?:e|eh)?\s*(?:o\s+|um\s+)?(?:test\s*plan\s+|plano\s+(?:de\s+testes?\s+)?)?(?:ja\s+)?existente[.!]?$/.test(
+      firstLine
+    )
+  ) {
+    return true
+  }
+  const existingPlan = /\b(?:test\s*plan|plano\s+de\s+testes?)\s+existente\b/
+  if (!existingPlan.test(text)) return false
+  if (
+    /\b(?:nao|nem|sem)\b[^.!?]{0,40}(?:test\s*plan|plano\s+de\s+testes?)\s+existente\b/.test(
+      text
+    )
+  ) {
+    return false
+  }
+  return /\b(?:usar|trabalhar\s+em|implementar|escolher|selecionar|continuar|de\s+um|em\s+um|num|no)\b[^.!?]{0,60}(?:test\s*plan|plano\s+de\s+testes?)\s+existente\b|^(?:num|no|em\s+um)?\s*(?:test\s*plan|plano\s+de\s+testes?)\s+existente\b/.test(
+    text
   )
 }
 

@@ -874,7 +874,7 @@ test('restricts edit paths after a test repository is selected', () => {
   assert.equal(patchOutside.permissionDecision, 'deny')
 })
 
-test('blocks repository setup until a listed environment is explicitly selected', () => {
+test('blocks repository setup until environments are listed, then binds prepare to a typed selection', () => {
   const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
   const workspace = mkdtempSync(join(tmpdir(), 'voidr-workspace-'))
   const testRepo = join(workspace, 'tests-e2e')
@@ -901,6 +901,18 @@ test('blocks repository setup until a listed environment is explicitly selected'
     dataRoot
   )
 
+  let output = runHook(
+    {
+      sessionId,
+      cwd: workspace,
+      toolName: 'voidr-voidr_workspace_select_test_repository',
+      toolArgs: { path: testRepo }
+    },
+    dataRoot
+  )
+  assert.equal(output.permissionDecision, 'deny')
+  assert.match(output.permissionDecisionReason, /confirm one with the user/i)
+
   assert.deepEqual(
     runHook(
       {
@@ -914,17 +926,18 @@ test('blocks repository setup until a listed environment is explicitly selected'
     {}
   )
 
-  let output = runHook(
-    {
-      sessionId,
-      cwd: workspace,
-      toolName: 'voidr-voidr_workspace_select_test_repository',
-      toolArgs: { path: testRepo }
-    },
-    dataRoot
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId,
+        cwd: workspace,
+        toolName: 'voidr-voidr_workspace_select_test_repository',
+        toolArgs: { path: testRepo, workspaceRoot: workspace }
+      },
+      dataRoot
+    ),
+    {}
   )
-  assert.equal(output.permissionDecision, 'deny')
-  assert.match(output.permissionDecisionReason, /explicitly select/i)
 
   submitPrompt(
     {
@@ -1321,3 +1334,190 @@ test('blocks unsafe literals and frontend-derived API origins in spec edits', ()
 function transcriptEntry(type, data) {
   return JSON.stringify({ type, data })
 }
+
+test('blocks Node runtime installs from the agent terminal during a workflow', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
+  const sessionId = 'runtime-install-gate'
+  const now = Date.now()
+
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now,
+      prompt: 'Quero desenvolver testes na Voidr',
+      transformedPrompt: 'Quero desenvolver testes na Voidr'
+    },
+    dataRoot
+  )
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 1,
+      prompt: 'Usar Test Plan existente',
+      transformedPrompt: 'Usar Test Plan existente'
+    },
+    dataRoot
+  )
+
+  for (const command of [
+    'nvm install 22',
+    'nvm use 22 && npm test',
+    'volta install node@22',
+    'sudo apt-get install -y nodejs',
+    'curl -fsSL https://nodejs.org/dist/v22.0.0/node-v22.0.0-linux-x64.tar.xz -o node.tar.xz'
+  ]) {
+    const output = runHook(
+      {
+        sessionId,
+        cwd: process.cwd(),
+        toolName: 'bash',
+        toolArgs: { command }
+      },
+      dataRoot
+    )
+    assert.equal(output.permissionDecision, 'deny', command)
+    assert.match(output.permissionDecisionReason, /Node 22/, command)
+  }
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId,
+        cwd: process.cwd(),
+        toolName: 'bash',
+        toolArgs: { command: 'git status --porcelain' }
+      },
+      dataRoot
+    ),
+    {}
+  )
+})
+
+test('blocks terminal git publishing during a workflow and points to the bridge tool', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
+  const sessionId = 'terminal-publish-gate'
+  const now = Date.now()
+
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now,
+      prompt: 'Quero desenvolver testes na Voidr',
+      transformedPrompt: 'Quero desenvolver testes na Voidr'
+    },
+    dataRoot
+  )
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 1,
+      prompt: 'Usar Test Plan existente',
+      transformedPrompt: 'Usar Test Plan existente'
+    },
+    dataRoot
+  )
+
+  for (const command of [
+    'cd /tmp/tests && git add . && git commit -m "feat: new test"',
+    'git push origin feat/new-tests',
+    'gh pr create --title "tests"'
+  ]) {
+    const output = runHook(
+      {
+        sessionId,
+        cwd: process.cwd(),
+        toolName: 'bash',
+        toolArgs: { command }
+      },
+      dataRoot
+    )
+    assert.equal(output.permissionDecision, 'deny', command)
+    assert.match(
+      output.permissionDecisionReason,
+      /voidr_workspace_publish_tests/,
+      command
+    )
+  }
+
+  for (const command of [
+    'git status --porcelain',
+    'git reset --soft HEAD~1',
+    'git log --oneline -5'
+  ]) {
+    assert.deepEqual(
+      runHook(
+        {
+          sessionId,
+          cwd: process.cwd(),
+          toolName: 'bash',
+          toolArgs: { command }
+        },
+        dataRoot
+      ),
+      {},
+      command
+    )
+  }
+})
+
+test('blocks editor reads and writes of .env files during a workflow', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
+  const sessionId = 'env-file-gate'
+  const now = Date.now()
+
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now,
+      prompt: 'Quero desenvolver testes na Voidr',
+      transformedPrompt: 'Quero desenvolver testes na Voidr'
+    },
+    dataRoot
+  )
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 1,
+      prompt: 'Usar Test Plan existente',
+      transformedPrompt: 'Usar Test Plan existente'
+    },
+    dataRoot
+  )
+
+  for (const request of [
+    {
+      toolName: 'read_file',
+      toolArgs: { filePath: '/tmp/tests/.env', startLine: 1, endLine: 30 }
+    },
+    {
+      toolName: 'create_file',
+      toolArgs: { filePath: '/tmp/tests/.env', content: '' }
+    },
+    {
+      toolName: 'read_file',
+      toolArgs: { filePath: '/tmp/tests/.env.local', startLine: 1, endLine: 5 }
+    }
+  ]) {
+    const output = runHook(
+      { sessionId, cwd: process.cwd(), ...request },
+      dataRoot
+    )
+    assert.equal(output.permissionDecision, 'deny', request.toolName)
+    assert.match(
+      output.permissionDecisionReason,
+      /opaque secret material|never read \.env files/,
+      request.toolArgs.filePath
+    )
+  }
+
+  const template = runHook(
+    {
+      sessionId,
+      cwd: process.cwd(),
+      toolName: 'create_file',
+      toolArgs: { filePath: '/tmp/tests/notes.md', content: 'ok' }
+    },
+    dataRoot
+  )
+  assert.notEqual(template.permissionDecisionReason?.includes('opaque secret material'), true)
+})

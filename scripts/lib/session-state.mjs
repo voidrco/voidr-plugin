@@ -337,7 +337,7 @@ export function isPlanningInputsConfirmation(prompt) {
   return /\bconfirmar\s+insumos\s+do\s+planejamento\b/i.test(prompt)
 }
 
-// Single approval gate of the dev-first /voidr-test flow. It must be the
+// Single approval gate of the dev-first /voidr-feature-test flow. It must be the
 // whole user message so ordinary sentences never count as approval.
 export function isDevTestsApproval(prompt) {
   const text = normalizeText(extractUserAuthoredPrompt(prompt)).trim()
@@ -346,7 +346,12 @@ export function isDevTestsApproval(prompt) {
 
 export function isDevTestFlowPrompt(prompt) {
   const text = normalizeText(prompt)
-  if (/\/(?:copilot\s+)?voidr-test\b(?!-plan)/.test(text)) return true
+  if (
+    /\/(?:copilot\s+)?voidr-feature-test\b/.test(text) ||
+    /\/(?:copilot\s+)?voidr-test\b(?!-plan)/.test(text)
+  ) {
+    return true
+  }
   const create =
     /\b(?:criar?|crie|gerar?|gere|escrever?|escreva|fazer|faca|montar?|monte)\b/
   const tests = /\btestes?\b/

@@ -1,4 +1,4 @@
-# Roteiro de teste — fluxo dev-first `/voidr-test` (0.2.19-local.25)
+# Roteiro de teste — fluxo dev-first `/voidr-feature-test` (0.2.19-local.25)
 
 Objetivo: validar na UI do Copilot a experiência "desenvolvi a feat → criar
 teste → rodar → analisar → corrigir" sem vocabulário de plataforma.
@@ -35,7 +35,7 @@ abra outro chat antes de investigar qualquer outra coisa.
 ## 2. Caminho feliz
 
 1. No chat novo, digite exatamente: `cria os testes da minha feature`.
-   - ✅ Deve carregar `/voidr-test` direto — **sem** perguntar "Test Plan novo
+   - ✅ Deve carregar `/voidr-feature-test` direto — **sem** perguntar "Test Plan novo
      ou existente".
    - ✅ Auth validada em silêncio (nenhuma pergunta se a credencial está ok).
 2. Card único de confirmação.

@@ -1,6 +1,6 @@
 ---
-name: voidr-test
-description: Fluxo dev-first para criar e rodar testes da feature que o desenvolvedor acabou de implementar. Use SEMPRE que um dev disser "cria os testes da minha feature", "gerar testes do meu código", "testar minha feature", "acabei a feat, quero os testes", "escreve os testes dessa funcionalidade" ou invocar /voidr-test. Infere a feature do branch e do diff, confirma tudo em um único card, mostra cenários em linguagem simples e exige apenas a mensagem "Criar testes" antes de qualquer escrita.
+name: voidr-feature-test
+description: Fluxo dev-first para criar e rodar testes da feature que o desenvolvedor acabou de implementar. Use SEMPRE que um dev disser "cria os testes da minha feature", "gerar testes do meu código", "testar minha feature", "acabei a feat, quero os testes", "escreve os testes dessa funcionalidade" ou invocar /voidr-feature-test. Infere a feature do branch e do diff, confirma tudo em um único card, mostra cenários em linguagem simples e exige apenas a mensagem "Criar testes" antes de qualquer escrita.
 ---
 
 # Test my feature (developer-first flow)

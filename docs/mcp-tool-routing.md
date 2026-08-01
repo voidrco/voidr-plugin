@@ -27,20 +27,20 @@ Routing invariants:
 
 | Tool | Owner skills | Purpose |
 | --- | --- | --- |
-| `applications_list_applications` | `voidr-develop-tests`, `voidr-test-plan`, `voidr-test`, `voidr-failure-analysis` | Build application choices exclusively from the platform. |
+| `applications_list_applications` | `voidr-develop-tests`, `voidr-test-plan`, `voidr-feature-test`, `voidr-failure-analysis` | Build application choices exclusively from the platform. |
 | `applications_get_application` | `voidr-develop-tests`, `voidr-test-plan` | Fallback only when the list response omits `type` for the selected ID. |
-| `applications_list_environments` | `voidr-develop-tests`, `voidr-test-plan`, `voidr-test` | Environment choices for the selected application. |
+| `applications_list_environments` | `voidr-develop-tests`, `voidr-test-plan`, `voidr-feature-test` | Environment choices for the selected application. |
 
 ## Test Plans
 
 | Tool | Owner skills | Purpose |
 | --- | --- | --- |
-| `test_plans_list_test_plans` | `voidr-develop-tests`, `voidr-test-plan`, `voidr-test` | User selection of an existing plan. Never an error fallback. |
-| `test_plans_get_test_plan` | `voidr-test-plan`, `voidr-implement-tests`, `voidr-deploy-run`, `voidr-test` | Read one explicitly selected plan; verify persisted content and real slugs. |
+| `test_plans_list_test_plans` | `voidr-develop-tests`, `voidr-test-plan`, `voidr-feature-test` | User selection of an existing plan. Never an error fallback. |
+| `test_plans_get_test_plan` | `voidr-test-plan`, `voidr-implement-tests`, `voidr-deploy-run`, `voidr-feature-test` | Read one explicitly selected plan; verify persisted content and real slugs. |
 | `test_plans_get_test_counts` | `voidr-deploy-run` | Post-deploy synchronization verification only. |
-| `test_plans_create_test_plan` | `voidr-test-plan`, `voidr-test` | First mutation of an approved new plan; must return the linked `repository`. |
-| `test_plans_populate_test_plan` | `voidr-test-plan`, `voidr-test` | Bulk write immediately after a complete creation response, same approved flow. |
-| `test_plans_create_module` / `test_plans_create_suite` / `test_plans_create_case` | `voidr-test-plan`, `voidr-test` | Incremental additions to an already-persisted plan. |
+| `test_plans_create_test_plan` | `voidr-test-plan`, `voidr-feature-test` | First mutation of an approved new plan; must return the linked `repository`. |
+| `test_plans_populate_test_plan` | `voidr-test-plan`, `voidr-feature-test` | Bulk write immediately after a complete creation response, same approved flow. |
+| `test_plans_create_module` / `test_plans_create_suite` / `test_plans_create_case` | `voidr-test-plan`, `voidr-feature-test` | Incremental additions to an already-persisted plan. |
 | `test_plans_update_test_plan` / `test_plans_update_module` / `test_plans_update_suite` / `test_plans_update_case` | `voidr-test-plan` | Edits explicitly requested by the user on persisted entities. Never error repair. |
 | `test_plans_get_case` | `voidr-failure-analysis` | Expected behavior of one case; read-back after a tag change. |
 | `test_plans_get_tag_history` | `voidr-failure-analysis` | Governance tag history. |
@@ -51,19 +51,19 @@ Routing invariants:
 | Tool | Owner skills | Purpose |
 | --- | --- | --- |
 | `voidr_workspace_inspect` | `voidr-develop-tests`, `voidr-test-plan` | List workspace checkouts: origin matching and read-only context candidates. |
-| `voidr_workspace_git_context` | `voidr-test` | Branch/diff feature inference for the developer-first flow only. |
+| `voidr_workspace_git_context` | `voidr-feature-test` | Branch/diff feature inference for the developer-first flow only. |
 | `voidr_workspace_bootstrap_test_repository` | `voidr-develop-tests` | Initialize the test-project skeleton in a confirmed empty destination, or in an origin-matching checkout that lacks test-project files. Never clones — cloning belongs to `voidr_workspace_prepare_test_repository`. Detects an existing checkout by origin and returns `reusedExistingCheckout`. |
 | `voidr_workspace_select_test_repository` | `voidr-develop-tests` | Register a user-selected existing repository when the plan has no linked repository. |
-| `voidr_workspace_prepare_test_repository` | `voidr-develop-tests`, `voidr-implement-tests`, `voidr-test` | The single mandatory setup gate: install, CLI auth, link, scaffold, env pull. |
+| `voidr_workspace_prepare_test_repository` | `voidr-develop-tests`, `voidr-implement-tests`, `voidr-feature-test` | The single mandatory setup gate: install, CLI auth, link, scaffold, env pull. |
 | `voidr_workspace_scaffold_test_cases` | `voidr-implement-tests` | Scaffold a case added after the preparation gate completed. |
-| `voidr_smoke_build` | `voidr-implement-tests`, `voidr-test` | Local validation and authenticated build, outside the agent shell. |
-| `voidr_workspace_publish_tests` | `voidr-test` | Branch, commit, and pull request through user credentials. |
+| `voidr_smoke_build` | `voidr-implement-tests`, `voidr-feature-test` | Local validation and authenticated build, outside the agent shell. |
+| `voidr_workspace_publish_tests` | `voidr-feature-test` | Branch, commit, and pull request through user credentials. |
 
 ## Release and executions
 
 | Tool | Owner skills | Purpose |
 | --- | --- | --- |
-| `voidr_release_inspect` | `voidr-deploy-run`, `voidr-test` | Rediscover repository, plan, and merged PR from the checkout. Never ask the user for these IDs. |
+| `voidr_release_inspect` | `voidr-deploy-run`, `voidr-feature-test` | Rediscover repository, plan, and merged PR from the checkout. Never ask the user for these IDs. |
 | `voidr_release_deploy_merged_pr` | `voidr-deploy-run` | Fast-forward the clean checkout and publish the immutable release. |
 | `executions_create_execution` | `voidr-create-execution`, `voidr-deploy-run` | The only tool that starts a platform execution, always behind a typed confirmation. |
 | `executions_get_execution` | `voidr-deploy-run` | Lifecycle status of the execution just created. |
@@ -89,7 +89,7 @@ store; they never report or change platform lifecycle state.
 
 | Tool | Owner skills | Purpose |
 | --- | --- | --- |
-| `file_embeddings_search_documents` | `voidr-implement-tests`, `voidr-test` | Optional, never-blocking semantic search over the application's indexed support documents before implementing specs (`applicationId` + test-guidance query, `limit: 5`, `minScore: 0.5`, `includeContent: true`). Only excerpts that look like test-creation guidance (guides, automation standards, selector maps, QA conventions) feed the implementation; anything else is discarded regardless of score. Empty results and errors mean "no documentation" and the flow continues unchanged. |
+| `file_embeddings_search_documents` | `voidr-implement-tests`, `voidr-feature-test` | Optional, never-blocking semantic search over the application's indexed support documents before implementing specs (`applicationId` + test-guidance query, `limit: 5`, `minScore: 0.5`, `includeContent: true`). Only excerpts that look like test-creation guidance (guides, automation standards, selector maps, QA conventions) feed the implementation; anything else is discarded regardless of score. Empty results and errors mean "no documentation" and the flow continues unchanged. |
 
 The indexing and deletion counterparts of this family are deliberately not
 exposed by the bridge, and the platform's knowledge tools for customer

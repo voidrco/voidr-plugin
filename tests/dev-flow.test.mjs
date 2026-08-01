@@ -40,7 +40,7 @@ test('recognizes developer test-my-feature intent without Voidr vocabulary', () 
     'gerar testes para a funcionalidade que acabei',
     'quero testar minha feature nova',
     'escreve os testes dessa feature de checkout',
-    '/voidr-test',
+    '/voidr-feature-test',
     'Create tests for my feature',
     'write tests for the feature I just implemented',
     'generate tests for this branch'
@@ -67,11 +67,11 @@ test('the single dev approval must be the whole message', () => {
   assert.equal(isDevTestsApproval('sim'), false)
 })
 
-test('routes developer intent to /voidr-test and keeps the classic route', () => {
+test('routes developer intent to /voidr-feature-test and keeps the classic route', () => {
   const dev = routeVoidrPrompt({
     prompt: 'cria os testes da minha feature de login'
   })
-  assert.match(dev.modifiedTransformedPrompt, /\/voidr-test skill/)
+  assert.match(dev.modifiedTransformedPrompt, /\/voidr-feature-test skill/)
   assert.match(dev.modifiedTransformedPrompt, /Criar testes/)
 
   const classic = routeVoidrPrompt({

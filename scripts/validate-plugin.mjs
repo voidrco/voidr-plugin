@@ -492,7 +492,7 @@ assert(
   'Connect skill must stop cleanly when its MCP tools are unavailable.'
 )
 
-const devSkill = readFileSync(join(root, 'skills/voidr-test/SKILL.md'), 'utf8')
+const devSkill = readFileSync(join(root, 'skills/voidr-feature-test/SKILL.md'), 'utf8')
 assert(
   /Never expose platform vocabulary/i.test(devSkill) &&
     /Do not say Test Plan, module,\s+suite, case slug, scaffold/i.test(devSkill),

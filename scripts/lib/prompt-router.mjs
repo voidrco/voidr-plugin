@@ -29,7 +29,7 @@ export function routeVoidrPrompt(input) {
     return {
       modifiedTransformedPrompt: `${transformedPrompt}
 
-Use the /voidr-test skill for this request. Load that skill before inspecting
+Use the /voidr-feature-test skill for this request. Load that skill before inspecting
 files or calling any tool. It is the developer-first flow: infer the feature
 with the voidr_workspace_git_context tool (never cd or run git in the
 terminal — workspace paths with spaces break shell quoting), confirm

@@ -352,6 +352,15 @@ export function isDevTestFlowPrompt(prompt) {
   const tests = /\btestes?\b/
   const feature =
     /\b(?:feature|feat|funcionalidade|historia|story|branch|meu codigo|minha implementacao)\b/
+  if (
+    /\b(?:create|write|generate|make|add)\b/.test(text) &&
+    /\btests?\b/.test(text) &&
+    /\b(?:my|this)\s+(?:feature|branch|code|implementation)\b|\bfeature\s+i\s+(?:just\s+)?(?:built|implemented|finished|shipped)\b/.test(
+      text
+    )
+  ) {
+    return true
+  }
   return (
     (create.test(text) && tests.test(text) && feature.test(text)) ||
     /\btestar\b[\s\S]{0,40}\b(?:minha|essa|esta|a)\s+(?:feature|feat|funcionalidade)\b/.test(

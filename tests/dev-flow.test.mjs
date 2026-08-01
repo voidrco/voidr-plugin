@@ -40,7 +40,10 @@ test('recognizes developer test-my-feature intent without Voidr vocabulary', () 
     'gerar testes para a funcionalidade que acabei',
     'quero testar minha feature nova',
     'escreve os testes dessa feature de checkout',
-    '/voidr-test'
+    '/voidr-test',
+    'Create tests for my feature',
+    'write tests for the feature I just implemented',
+    'generate tests for this branch'
   ]) {
     assert.equal(isDevTestFlowPrompt(prompt), true, prompt)
   }
@@ -48,7 +51,9 @@ test('recognizes developer test-my-feature intent without Voidr vocabulary', () 
     'quero desenvolver testes na Voidr',
     'Criar testes',
     'roda o lint do projeto',
-    '/voidr-test-plan'
+    '/voidr-test-plan',
+    'Create a new module, suite, and test case in the Voidr Test Plan "smoke-teste"',
+    'List all Test Plans for the application "Itaú"'
   ]) {
     assert.equal(isDevTestFlowPrompt(prompt), false, prompt)
   }

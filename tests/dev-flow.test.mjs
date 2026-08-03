@@ -804,3 +804,108 @@ test('an ask_user answer authorizing the fix clears the post-smoke stop', () => 
     {}
   )
 })
+
+test('the dev approval survives choosing an existing plan in the same flow', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-dev-existing-'))
+  const sessionId = 'dev-flow-existing-plan'
+  const now = Date.now()
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now,
+      prompt: 'cria os testes da minha feature de valor minimo',
+      transformedPrompt: 'cria os testes da minha feature de valor minimo'
+    },
+    dataRoot
+  )
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 1,
+      prompt: 'Usar um test plan existente.',
+      transformedPrompt: 'Usar um test plan existente.'
+    },
+    dataRoot
+  )
+
+  const args = {
+    sessionId,
+    cwd: process.cwd(),
+    toolName: 'voidr-test_plans_create_case',
+    toolArgs: {
+      planId: '0123456789abcdef01234567',
+      moduleSlug: 'originacao',
+      suiteSlug: 'SIMUL',
+      name: 'Valor abaixo do minimo'
+    }
+  }
+  const blocked = runHook(args, dataRoot)
+  assert.equal(blocked.permissionDecision, 'deny')
+  // The denial must name the phrase this flow actually asks the developer for.
+  assert.match(blocked.permissionDecisionReason, /Criar testes/)
+  assert.doesNotMatch(
+    blocked.permissionDecisionReason,
+    /Aprovo este Test Plan/
+  )
+
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 2,
+      prompt: 'Criar testes',
+      transformedPrompt: 'Criar testes'
+    },
+    dataRoot
+  )
+  assert.deepEqual(runHook(args, dataRoot), {})
+})
+
+test('Criar testes never approves a write in the plan-first flow', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-plan-first-'))
+  const sessionId = 'plan-first-approval'
+  const now = Date.now()
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now,
+      prompt: 'Quero desenvolver testes na voidr',
+      transformedPrompt: 'Quero desenvolver testes na voidr'
+    },
+    dataRoot
+  )
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 1,
+      prompt: 'Usar um test plan existente.',
+      transformedPrompt: 'Usar um test plan existente.'
+    },
+    dataRoot
+  )
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 2,
+      prompt: 'Criar testes',
+      transformedPrompt: 'Criar testes'
+    },
+    dataRoot
+  )
+
+  const blocked = runHook(
+    {
+      sessionId,
+      cwd: process.cwd(),
+      toolName: 'voidr-test_plans_create_case',
+      toolArgs: {
+        planId: '0123456789abcdef01234567',
+        moduleSlug: 'originacao',
+        suiteSlug: 'SIMUL',
+        name: 'Caso qualquer'
+      }
+    },
+    dataRoot
+  )
+  assert.equal(blocked.permissionDecision, 'deny')
+  assert.match(blocked.permissionDecisionReason, /Aprovo este Test Plan/)
+})

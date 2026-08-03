@@ -46,6 +46,7 @@ const PROMPT_GATE_KEYS = [
   'selectedEnvironmentSlug',
   'selectedEnvironmentAt',
   'planMode',
+  'devFlowActive',
   'workflowActive',
   'smokeRemediationAt'
 ]
@@ -114,6 +115,17 @@ export function recordUserPromptState(payload) {
     if (devFlowStarted) planMode = 'auto'
     if (isNewPlanChoice(prompt)) planMode = 'new'
     if (isExistingPlanChoice(prompt)) planMode = 'existing'
+    // planMode is the plan route (auto/new/existing) and gets overwritten when
+    // the developer picks an existing plan. Which skill is running is tracked
+    // separately, so the dev-first flow keeps a single typed gate on every
+    // route instead of falling back to the plan-first approval phrase.
+    const devFlowActive = devFlowStarted
+      ? true
+      : isVoidrTestingPrompt(prompt)
+        ? false
+        : current.devFlowActive === true
+    const devApprovalArmed =
+      isDevTestsApproval(prompt) && (planMode === 'auto' || devFlowActive)
     const promptTestPlanId = extractExplicitTestPlanId(prompt)
     const selectedTestPlanId =
       planMode === 'new'
@@ -157,6 +169,7 @@ export function recordUserPromptState(payload) {
           ? timestamp || Date.now()
           : current.smokeRemediationAt || null,
       planMode,
+      devFlowActive,
       selectedTestPlanId,
       selectedTestPlanAt: promptTestPlanId
         ? timestamp || Date.now()
@@ -174,11 +187,9 @@ export function recordUserPromptState(payload) {
           ? timestamp || Date.now()
           : current.planContextConfirmedAt || null,
       planWriteApproved:
-        isExplicitTestPlanApproval(prompt) ||
-        (planMode === 'auto' && isDevTestsApproval(prompt)),
+        isExplicitTestPlanApproval(prompt) || devApprovalArmed,
       planWriteApprovedAt:
-        isExplicitTestPlanApproval(prompt) ||
-        (planMode === 'auto' && isDevTestsApproval(prompt))
+        isExplicitTestPlanApproval(prompt) || devApprovalArmed
           ? timestamp || Date.now()
           : null,
       lastPromptAt: timestamp || Date.now()
@@ -216,9 +227,12 @@ export function recordAskUserSelections(payload, { toolName, toolResult }) {
           changed = true
         } else if (
           isDevTestsApproval(text) &&
-          (next.planMode === 'auto' || !next.planMode)
+          (next.planMode === 'auto' ||
+            !next.planMode ||
+            next.devFlowActive === true)
         ) {
-          next.planMode = 'auto'
+          if (next.planMode !== 'existing') next.planMode = 'auto'
+          next.devFlowActive = true
           next.workflowActive = true
           next.planWriteApproved = true
           next.planWriteApprovedAt = Date.now()

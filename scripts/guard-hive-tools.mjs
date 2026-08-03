@@ -810,7 +810,7 @@ function enforceTestPlanWriteApproval(hookPayload, canonicalName) {
       : null
     const promptHookAge =
       promptAgeMinutes === null ? 'never' : `${promptAgeMinutes} minute(s) ago`
-    if (state.planMode === 'auto') {
+    if (state.planMode === 'auto' || state.devFlowActive === true) {
       deny(
         `Blocked by Voidr workflow: show the user the list of test scenarios for the feature and wait for a new user message saying exactly “Criar testes” before writing anything to the platform. Last user message seen by the prompt hook: ${promptHookAge}. If the user already typed it and it was not recorded (stale prompt hook), collect it with an ask_user question containing a single free-text field where the user types exactly “Criar testes”. Do not loop retries and do not delegate to a subagent.`
       )

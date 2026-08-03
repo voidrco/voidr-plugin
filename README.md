@@ -57,7 +57,34 @@ This build uses these production endpoints through the plugin MCP process:
   `https://api.voidr.co/v1/mcp`.
 
 Start Copilot from the workspace containing the relevant product and test
-repositories.
+repositories. Open the product repository itself as the workspace folder
+whenever possible: on a parent folder holding many checkouts, feature
+inference has to inspect repositories one call at a time, and the tool
+reports `repositoriesNotInspected` when the feature repository was not among
+the ones it covered.
+
+## Required VS Code setting: disable virtual tools
+
+In VS Code, Copilot Chat groups tools into "virtual tools" once the total
+tool count crosses `github.copilot.chat.virtualTools.threshold` (default and
+maximum `128`, counting every built-in tool, extension tool, and MCP server
+in the window). Past that threshold the model no longer sees the individual
+tools: it sees groups it must activate by name, and the ones it fails to
+activate are invisible. Observed effect on this plugin: only 26 of its 52
+tools reached the model, `file_embeddings_search_documents` and
+`voidr_smoke_build` among the missing, so documentation assimilation was
+skipped and the local smoke run fell back to a forbidden terminal command.
+
+The plugin cannot set this — it is a client-side user setting. Add it to
+`settings.json`:
+
+```json
+"github.copilot.chat.virtualTools.threshold": 0
+```
+
+Zero disables grouping entirely, so every allowlisted tool stays visible.
+The alternative is keeping the window's total tool count under the
+threshold by disabling unrelated MCP servers and extension tools.
 
 ## Developer-first flow (recommended for feature developers)
 

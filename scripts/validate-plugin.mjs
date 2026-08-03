@@ -547,8 +547,15 @@ assert(
 )
 assert(
   /Infer the feature|current branch name/i.test(devSkill) &&
-    /default planning evidence/i.test(devSkill),
-  'Dev skill must infer the feature from the Git branch and diff.'
+    /changedHunksVsDefault/.test(devSkill) &&
+    /repositoryPath/.test(devSkill),
+  'Dev skill must infer the feature from the Git branch and diff hunks, and re-scope by repositoryPath.'
+)
+assert(
+  /The diff is the scope/i.test(devSkill) &&
+    /drop every one the change does not affect/i.test(devSkill) &&
+    /never put it in the\s+checklist/i.test(devSkill),
+  'Dev skill must scope scenarios to the diff and drop untouched rules.'
 )
 assert(
   /One smoke run per user message/i.test(devSkill) &&

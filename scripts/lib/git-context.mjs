@@ -28,11 +28,19 @@ export async function collectGitContext({
     }
   }
 
+  const inspected = targets.slice(0, maxRepositories)
+  const skipped = targets.slice(maxRepositories)
   const repositories = []
-  for (const path of targets.slice(0, maxRepositories)) {
+  for (const path of inspected) {
     repositories.push(await describeRepository({ path, run }))
   }
-  return { workspaceRoot: root, repositories }
+  if (!skipped.length) return { workspaceRoot: root, repositories }
+  return {
+    workspaceRoot: root,
+    repositories,
+    repositoriesNotInspected: skipped,
+    note: `The workspace has more repositories than this tool inspects at once (${maxRepositories}). ${skipped.length} were not inspected and are listed in repositoriesNotInspected. If the feature repository is among them, call this tool again with repositoryPath set to its path.`
+  }
 }
 
 async function describeRepository({ path, run }) {
@@ -55,6 +63,7 @@ async function describeRepository({ path, run }) {
 
   let changedFilesVsDefault = []
   let commitsAheadOfDefault = null
+  let changedHunksVsDefault = null
   if (defaultBranch && defaultBranch !== currentBranch) {
     changedFilesVsDefault = splitLines(
       await git(['diff', '--name-only', `${defaultBranch}...HEAD`])
@@ -65,6 +74,11 @@ async function describeRepository({ path, run }) {
       `${defaultBranch}..HEAD`
     ])
     commitsAheadOfDefault = ahead === null ? null : Number(ahead)
+    changedHunksVsDefault = await collectChangedHunks(
+      git,
+      defaultBranch,
+      changedFilesVsDefault
+    )
   }
 
   return {
@@ -74,10 +88,47 @@ async function describeRepository({ path, run }) {
     dirty,
     commitsAheadOfDefault,
     changedFilesVsDefault,
+    changedHunksVsDefault,
     recentCommits,
     onFeatureBranch: Boolean(
       currentBranch && defaultBranch && currentBranch !== defaultBranch
     )
+  }
+}
+
+const MAX_DIFF_CHARACTERS = 12_000
+const MAX_DIFF_FILES = 20
+
+// The changed hunks are the feature. Returning them here is what keeps the
+// scenario derivation anchored to the actual change instead of to whatever
+// arbitrary line window of the product code happens to get read.
+async function collectChangedHunks(git, defaultBranch, files) {
+  if (!files.length) return null
+  const raw = await git([
+    'diff',
+    '--unified=2',
+    '--no-color',
+    `${defaultBranch}...HEAD`,
+    '--',
+    ...files.slice(0, MAX_DIFF_FILES)
+  ])
+  if (!raw) return null
+  const omittedFiles = Math.max(0, files.length - MAX_DIFF_FILES)
+  if (raw.length <= MAX_DIFF_CHARACTERS) {
+    return {
+      diff: raw,
+      truncated: false,
+      ...(omittedFiles
+        ? {
+            note: `${omittedFiles} changed file(s) beyond the first ${MAX_DIFF_FILES} are not in this diff; they are listed in changedFilesVsDefault.`
+          }
+        : {})
+    }
+  }
+  return {
+    diff: raw.slice(0, MAX_DIFF_CHARACTERS),
+    truncated: true,
+    note: `Diff truncated at ${MAX_DIFF_CHARACTERS} characters${omittedFiles ? ` and limited to the first ${MAX_DIFF_FILES} changed files` : ''}. Read the remaining changed files listed in changedFilesVsDefault to see the rest of the change.`
   }
 }
 

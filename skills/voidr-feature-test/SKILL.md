@@ -26,6 +26,13 @@ partial read.
    scenarios require: specs and the actions, helpers, or fixtures they
    import. Never create analysis, exploration, summary, or scratch
    documents there — those notes belong in the chat response.
+7. The diff is the scope. Never propose, approve, or implement a
+   scenario whose behavior the returned diff does not change, and never
+   derive scenarios before `voidr_workspace_git_context` returned the
+   changed files and hunks of the feature repository. Testing the
+   application at large, or a neighboring rule the diff leaves
+   untouched, is a failure of this flow even when the resulting test
+   passes.
 
 This flow exists for a developer who just finished a feature and wants tests
 for it, without learning the Voidr platform. The mental model is:
@@ -66,14 +73,31 @@ When the flow starts:
    before any other tool.
 2. Infer the feature with `voidr_workspace_git_context`, passing
    `workspaceRoot` (the absolute path of the open VS Code workspace folder).
+   This call is mandatory and has no substitute: without it there is no
+   diff, and without a diff there is no feature. Never `cd` or run `git` in
+   the terminal for discovery — workspace paths with spaces break shell
+   quoting and the sandbox may deny reads; the tool takes the path as data.
    It returns, per repository: current branch, default branch, commits
-   ahead, changed files versus the default branch, and recent commits. The
-   repository whose `onFeatureBranch` is true and whose changed files match
-   the developer's request is the feature. Never `cd` or run `git` in the
-   terminal for discovery — workspace paths with spaces break shell quoting
-   and the sandbox may deny reads; the tool takes the path as data. Read the
-   changed files' contents (read-only) as the default planning evidence — do
-   not ask the user which inputs to use.
+   ahead, changed files versus the default branch, the changed hunks
+   (`changedHunksVsDefault.diff`), and recent commits. The repository whose
+   `onFeatureBranch` is true and whose changed files match the developer's
+   request is the feature.
+
+   When the result reports `repositoriesNotInspected`, or no returned
+   repository matches the developer's request, call the tool again with
+   `repositoryPath` set to the feature repository's path instead of guessing
+   from the repositories that came back. A workspace opened on a parent
+   folder of many checkouts routinely leaves the feature repository out of
+   the first result.
+
+   Then read the change itself, in this order: the returned diff hunks
+   first, then the changed files around those hunks (read-only) for the
+   surrounding logic. Never read a fixed line window of a changed file and
+   assume it contains the change — locate the changed symbols from the diff.
+   Never substitute the repository's README, existing documentation, or
+   untouched code for the diff: those describe the application as it already
+   was, not what this feature changed. Do not ask the user which inputs to
+   use.
 3. Call `applications_list_applications`. If exactly one application exists,
    select it automatically. Otherwise ask with `ask_user` using the returned
    names. Use the returned `type` (WEB/API) silently. If the list is empty,
@@ -91,9 +115,11 @@ When the flow starts:
 
 ## 2. One confirmation card
 
-Show a single `ask_user` card summarizing everything inferred:
+Show a single `ask_user` card summarizing everything inferred. The feature
+line describes what the diff changed, in the developer's own terms — never
+the application or the module at large:
 
-> Criar testes para **<feature em linguagem humana>** na aplicação
+> Criar testes para **<a mudança, em linguagem humana>** na aplicação
 > **<app>** (<type>), validando contra **<ambiente> — <applicationUrl>**?
 
 Options: `Continuar` and `Ajustar algo`. On `Ajustar algo`, ask what to
@@ -124,17 +150,33 @@ already confirmed.
    outdated. Empty results or errors mean "no indexed documentation" and the
    flow continues from the diff. Never fall back to `knowledge_*`, which is a
    different data source.
-2. Analyze the feature diff together with that functional map and derive the
-   test scenarios: happy path, preconditions, relevant state transitions,
-   documented business rules, the main error paths visible in code, and
-   user-visible outcomes. Stay inside the confirmed feature. Never create an
-   expected behavior from documentation when the code contradicts it; use the
+2. Derive the scenarios from the diff hunks, using the functional map only to
+   explain the behavior the diff changed. Every scenario must trace to a
+   specific changed line or symbol: the new or altered behavior on its happy
+   path, its boundary values, and the error paths the change introduces. The
+   preconditions needed to reach the changed behavior are setup steps inside
+   those scenarios, never scenarios of their own.
+
+   Before presenting the checklist, verify each candidate scenario against
+   the diff and drop every one the change does not affect. A rule that
+   already existed and that the diff does not touch is out of scope even
+   when it lives in the same screen, endpoint, or file — mention at most one
+   line offering it as a separate follow-up, and never put it in the
+   checklist. If the diff changes a limit, a threshold, or a validation,
+   the scenarios are about that new limit and its boundary, not about the
+   neighboring limits that were already there.
+
+   The functional map and any other documentation can never add a scenario
+   the diff does not support; they only describe rules, terminology, and
+   expected outcomes for the changed behavior. Never create an expected
+   behavior from documentation when the code contradicts it; use the
    code/runtime behavior and surface the documentation mismatch as a warning
    or follow-up, citing the source document and page/chunk.
-3. Present the scenarios as a short plain-language checklist, for example:
-   - ✓ login com MFA válido redireciona para o dashboard
-   - ✓ código MFA errado exibe mensagem de erro
-   - ✓ terceira falha bloqueia a conta
+3. Present the scenarios as a short plain-language checklist, for example,
+   for a diff that introduced a minimum amount on a form:
+   - ✓ valor no mínimo exato é aceito e gera a oferta
+   - ✓ valor um centavo abaixo do mínimo é recusado com a mensagem nova
+   - ✓ recusa por valor mínimo não avança para a etapa seguinte
    Show test data only as `{{env.VARIABLE_NAME}}` placeholders.
 4. End the response instructing the user to reply exactly `Criar testes` in a
    normal chat message to approve, or to describe any scenario to add or

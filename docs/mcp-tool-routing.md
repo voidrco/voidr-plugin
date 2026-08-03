@@ -51,7 +51,7 @@ Routing invariants:
 | Tool | Owner skills | Purpose |
 | --- | --- | --- |
 | `voidr_workspace_inspect` | `voidr-develop-tests`, `voidr-test-plan` | List workspace checkouts: origin matching and read-only context candidates. |
-| `voidr_workspace_git_context` | `voidr-feature-test` | Branch/diff feature inference for the developer-first flow only. |
+| `voidr_workspace_git_context` | `voidr-feature-test` | Branch/diff feature inference for the developer-first flow only. Returns the changed hunks so scenarios stay scoped to the change, and reports `repositoriesNotInspected` when the workspace holds more repositories than one call covers (re-call with `repositoryPath`). |
 | `voidr_workspace_bootstrap_test_repository` | `voidr-develop-tests` | Initialize the test-project skeleton in a confirmed empty destination, or in an origin-matching checkout that lacks test-project files. Never clones — cloning belongs to `voidr_workspace_prepare_test_repository`. Detects an existing checkout by origin and returns `reusedExistingCheckout`. |
 | `voidr_workspace_select_test_repository` | `voidr-develop-tests` | Register a user-selected existing repository when the plan has no linked repository. |
 | `voidr_workspace_prepare_test_repository` | `voidr-develop-tests`, `voidr-implement-tests`, `voidr-feature-test` | The single mandatory setup gate: install, CLI auth, link, scaffold, env pull. |

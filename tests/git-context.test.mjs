@@ -63,6 +63,46 @@ test('describes feature branches without touching the shell path quoting', async
   assert.equal(idle.currentBranch, 'main')
 })
 
+test('returns the changed hunks so scenarios can be scoped to the change', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-git-hunks-'))
+  const path = join(workspace, 'demo-produto')
+  mkdirSync(path)
+  git(path, 'init', '-b', 'main')
+  writeFileSync(join(path, 'regras.js'), 'export const limiteMaximo = 900\n')
+  git(path, 'add', '-A')
+  git(path, 'commit', '-m', 'chore: base')
+  git(path, 'checkout', '-b', 'feat/valor-minimo')
+  writeFileSync(
+    join(path, 'regras.js'),
+    'export const limiteMaximo = 900\nexport const valorMinimo = 5000\n'
+  )
+  git(path, 'add', '-A')
+  git(path, 'commit', '-m', 'feat: exige valor minimo')
+
+  const context = await collectGitContext({
+    workspaceRoot: workspace,
+    repositoryPath: path
+  })
+  const hunks = context.repositories[0].changedHunksVsDefault
+  assert.equal(hunks.truncated, false)
+  assert.match(hunks.diff, /\+export const valorMinimo = 5000/)
+  assert.doesNotMatch(hunks.diff, /^\+.*limiteMaximo/m)
+})
+
+test('reports the repositories a single call could not inspect', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-git-cap-'))
+  createFeatureRepository(workspace, 'demo-a')
+  createFeatureRepository(workspace, 'demo-b')
+
+  const context = await collectGitContext({
+    workspaceRoot: workspace,
+    maxRepositories: 1
+  })
+  assert.equal(context.repositories.length, 1)
+  assert.equal(context.repositoriesNotInspected.length, 1)
+  assert.match(context.note, /repositoryPath/)
+})
+
 test('inspects a single repository when repositoryPath is given', async () => {
   const workspace = mkdtempSync(join(tmpdir(), 'voidr-git-context-'))
   createFeatureRepository(workspace, 'demo-produto')

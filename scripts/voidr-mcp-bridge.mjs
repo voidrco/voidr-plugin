@@ -258,7 +258,7 @@ const localTools = [
   {
     name: 'voidr_workspace_git_context',
     description:
-      'Read-only Git discovery for the workspace repositories: current branch, default branch, dirty state, commits ahead, changed files versus the default branch, and recent commits. Use this to infer the developer feature — never cd or run git in the terminal, where paths with spaces break quoting and the sandbox may deny access. Pass workspaceRoot with the absolute path of the open VS Code workspace folder; optionally pass repositoryPath to inspect a single repository.',
+      'Read-only Git discovery for the workspace repositories: current branch, default branch, dirty state, commits ahead, changed files versus the default branch, the changed hunks themselves (changedHunksVsDefault.diff), and recent commits. Use this to infer the developer feature and to scope test scenarios to what actually changed — never cd or run git in the terminal, where paths with spaces break quoting and the sandbox may deny access. Pass workspaceRoot with the absolute path of the open VS Code workspace folder; optionally pass repositoryPath to inspect a single repository. When the response reports repositoriesNotInspected, the workspace has more repositories than one call covers: call again with repositoryPath for the feature repository.',
     inputSchema: {
       type: 'object',
       properties: {

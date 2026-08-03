@@ -45,6 +45,9 @@ const provisionedTestPlans = new Set()
 let negotiatedProtocol = '2024-11-05'
 let selectedTestPlanId = null
 let planCreationFailed = false
+// Plans the platform created and then failed to finish. Confirmed by reading
+// them back, so a retry is known to duplicate rather than repair.
+const orphanedTestPlans = new Map() // planId -> { planId, name, hasRepository }
 let lastFailedCreateArgs = null
 // Structure slugs actually returned by the platform this session. They are
 // the only identifiers the model may reference when adding cases to modules
@@ -500,6 +503,12 @@ async function callTool(params) {
   }
 
   if (name === 'test_plans_create_test_plan') {
+    // The creation is not atomic on the platform: the plan can commit while
+    // repository provisioning fails. Retrying then duplicates it, so a
+    // confirmed orphan blocks every retry, identical or not.
+    if (orphanedTestPlans.size) {
+      throw new Error(orphanedTestPlanMessage())
+    }
     // A provisioning failure is never fixed by mutating parameters. After a
     // failure, only an identical retry (same args) may reach the platform.
     if (planCreationFailed && lastFailedCreateArgs) {
@@ -521,6 +530,11 @@ async function callTool(params) {
     } catch (error) {
       planCreationFailed = true
       lastFailedCreateArgs = stableStringify(args)
+      const orphan = await findOrphanedTestPlan(error, args)
+      if (orphan) {
+        orphanedTestPlans.set(orphan.planId, orphan)
+        throw new Error(`${error?.message || error} ${orphanedTestPlanMessage()}`)
+      }
       throw error
     }
     return result
@@ -829,6 +843,9 @@ function resetStructureTracking() {
   countsReadAt = null
   executionNeedsDeploy = false
   lastFailedCreateArgs = null
+  // An orphan belongs to the organization that was selected when it was
+  // created, so switching organizations or re-authenticating clears it.
+  orphanedTestPlans.clear()
 }
 
 // Every platform identifier used in a mutating or preparing call must have
@@ -1005,6 +1022,51 @@ function bridgeTestPlanId(args) {
     if (typeof value === 'string' && value.trim()) return value.trim()
   }
   return ''
+}
+
+// A creation failure that names a plan id may have left that plan behind. The
+// only way to know is to read it, and knowing changes the recovery: a retry
+// would duplicate instead of fix.
+async function findOrphanedTestPlan(error, args) {
+  const planId = String(error?.message || error || '')
+    .match(/\b[a-f0-9]{24}\b/i)?.[0]
+    ?.toLowerCase()
+  if (!planId) return null
+  let existing
+  try {
+    // Read directly, without the dispatch gates: this is the bridge verifying
+    // its own failure, not a model-driven call, and it must not select the
+    // orphan as this session's plan.
+    existing = remoteResultData(
+      await remote.callTool('test_plans_get_test_plan', { planId })
+    )
+  } catch {
+    return null
+  }
+  const plan = existing?.data && !Array.isArray(existing.data) ? existing.data : existing
+  const foundId = String(plan?._id || plan?.id || '').toLowerCase()
+  if (foundId !== planId) return null
+  const applicationId = String(args?.applicationId || '').trim().toLowerCase()
+  const planApplicationId = String(plan?.applicationId || '').toLowerCase()
+  if (applicationId && planApplicationId && applicationId !== planApplicationId) {
+    return null
+  }
+  return {
+    planId,
+    name: plan?.name || null,
+    hasRepository: Boolean(
+      plan?.gitProviderConfig?.repositoryUrl || plan?.repository?.url
+    )
+  }
+}
+
+function orphanedTestPlanMessage() {
+  const [orphan] = [...orphanedTestPlans.values()]
+  const named = orphan?.name ? ` named “${orphan.name}”` : ''
+  const repositoryState = orphan?.hasRepository
+    ? 'It does have a linked repository, so read it with test_plans_get_test_plan and continue from it instead of creating anything.'
+    : 'It has no linked repository, so it cannot be prepared or executed and no case should be written into it.'
+  return `Blocked by Voidr workflow: the platform already created Test Plan ${orphan?.planId}${named} for this application and then failed before finishing it, so the creation is not atomic and the plan persisted. Retrying — identical or not — would create a duplicate, never fix this one. ${repositoryState} Show the user the exact platform error and this plan ID, and offer only two options: have the plan removed or finished on the Voidr platform before any new attempt, or cancel. Never create another plan in this session.`
 }
 
 function validateProvisionedTestPlan(result) {

@@ -1404,3 +1404,134 @@ test('document search never forwards an unprojected payload and clamps its argum
   )
   assert.equal(withheld.content[0].text.length < 600, true)
 })
+
+test('a plan created without provisioning blocks every retry instead of duplicating', async t => {
+  const orphanId = '6a70b0fcf2fc9085f680ea1e'
+  const calls = []
+  const server = createServer(async (request, response) => {
+    const message = JSON.parse(await readBody(request))
+    response.setHeader('content-type', 'application/json')
+    response.setHeader('mcp-session-id', 'synthetic-session')
+    if (message.method === 'notifications/initialized') {
+      response.writeHead(202)
+      response.end()
+      return
+    }
+    if (message.method === 'initialize') {
+      sendResult(response, message.id, {
+        protocolVersion: '2024-11-05',
+        capabilities: { tools: {} },
+        serverInfo: { name: 'mock', version: '1' }
+      })
+      return
+    }
+    if (message.method === 'tools/call') {
+      const { name, arguments: args } = message.params
+      calls.push(name)
+      if (name === 'applications_list_applications') {
+        const data = { data: [{ _id: '6a510c7b9bc772cdbee9d197', name: 'Blip Desk Demo' }] }
+        sendResult(response, message.id, {
+          structuredContent: { data },
+          content: [{ type: 'text', text: JSON.stringify(data) }]
+        })
+        return
+      }
+      if (name === 'test_plans_create_test_plan') {
+        // The platform commits the plan and then fails looking it back up.
+        response.end(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: message.id,
+            error: {
+              code: -32000,
+              message: `Error executing test_plans_create_test_plan: TestPlan with identifier '${orphanId}' not found`
+            }
+          })
+        )
+        return
+      }
+      if (name === 'test_plans_get_test_plan') {
+        const plan = {
+          _entity: 'test_plan',
+          _id: args.planId,
+          applicationId: '6a510c7b9bc772cdbee9d197',
+          name: 'Login Desk',
+          status: 'DRAFT',
+          modules: []
+        }
+        sendResult(response, message.id, {
+          structuredContent: { data: plan },
+          content: [{ type: 'text', text: JSON.stringify({ data: plan }) }]
+        })
+        return
+      }
+    }
+    sendResult(response, message.id, {})
+  })
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+  t.after(() => server.close())
+
+  const temp = mkdtempSync(join(tmpdir(), 'voidr-bridge-orphan-'))
+  const storePath = join(temp, 'service-accounts.json')
+  writeFileSync(
+    storePath,
+    JSON.stringify({
+      activeOrgId: 'org-orphan',
+      accounts: {
+        'org-orphan': {
+          clientId: 'sa_orphan_e2e',
+          clientSecret: 'synthetic-orphan-secret',
+          scopes: ['read', 'write']
+        }
+      }
+    })
+  )
+  const child = spawn(process.execPath, [bridgePath], {
+    cwd: temp,
+    env: {
+      ...process.env,
+      VOIDR_SERVICE_ACCOUNTS_PATH: storePath,
+      VOIDR_MCP_URL: `http://127.0.0.1:${server.address().port}/mcp`
+    },
+    stdio: ['pipe', 'pipe', 'pipe']
+  })
+  t.after(() => child.kill())
+  const client = jsonRpcClient(child)
+  await client.request('initialize', {
+    protocolVersion: '2024-11-05',
+    capabilities: {},
+    clientInfo: { name: 'e2e', version: '1' }
+  })
+
+  await client.request('tools/call', {
+    name: 'applications_list_applications',
+    arguments: {}
+  })
+
+  const args = {
+    name: 'Login Desk',
+    applicationId: '6a510c7b9bc772cdbee9d197',
+    status: 'DRAFT'
+  }
+  const failed = await client.requestRaw('tools/call', {
+    name: 'test_plans_create_test_plan',
+    arguments: args
+  })
+  assert.match(failed.error.message, /not found/i)
+  assert.match(failed.error.message, new RegExp(orphanId))
+  assert.match(failed.error.message, /already created Test Plan/i)
+  assert.match(failed.error.message, /would create a duplicate/i)
+  assert.match(failed.error.message, /no linked repository/i)
+
+  // The identical retry is normally allowed; a confirmed orphan revokes that.
+  const retried = await client.requestRaw('tools/call', {
+    name: 'test_plans_create_test_plan',
+    arguments: args
+  })
+  assert.match(retried.error.message, /already created Test Plan/i)
+  assert.equal(
+    calls.filter(name => name === 'test_plans_create_test_plan').length,
+    1,
+    'the retry must never reach the platform'
+  )
+})

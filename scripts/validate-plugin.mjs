@@ -493,6 +493,48 @@ assert(
 )
 
 const devSkill = readFileSync(join(root, 'skills/voidr-feature-test/SKILL.md'), 'utf8')
+for (const [skillName, skillText] of [
+  ['voidr-develop-tests', entrySkill],
+  ['voidr-test-plan', testPlanSkill],
+  ['voidr-feature-test', devSkill],
+  ['voidr-implement-tests', implementationSkill]
+]) {
+  assert(
+    /file_embeddings_search_documents/i.test(skillText) &&
+      /applicationId[\s\S]*?limit: 5[\s\S]*?minScore: 0\.5[\s\S]*?includeContent: true/i.test(
+        skillText
+      ) &&
+      /results\[\]\.chunks\[\]\.contentPreview/i.test(skillText) &&
+      /deduplicate[\s\S]*?fileId[\s\S]*?chunkIndex/i.test(skillText) &&
+      /code[\s\S]*?runtime[\s\S]*?authoritative/i.test(skillText) &&
+      /documentation[\s\S]*?supporting\s+evidence[\s\S]*?stale/i.test(skillText) &&
+      /Never\s+fall\s+back\s+to\s+`knowledge_\*`/i.test(skillText),
+    `${skillName} must retrieve app-scoped document chunks without treating documentation as authoritative or crossing into the knowledge base.`
+  )
+}
+assert(
+  /Assimilate indexed application documentation before deriving scenarios/i.test(
+    devSkill
+  ) &&
+    ['actors', 'permissions', 'preconditions', 'user flow'].every(term =>
+      new RegExp(term, 'i').test(devSkill)
+    ) &&
+    ['business rules', 'states', 'transitions', 'expected outcomes'].every(
+      term => new RegExp(term, 'i').test(devSkill)
+    ) &&
+    ['errors', 'alternatives', 'fallbacks', 'edge cases'].every(term =>
+      new RegExp(term, 'i').test(devSkill)
+    ),
+  'Dev skill must assimilate functional documentation before scenario design.'
+)
+assert(
+  /Application documentation assimilation/i.test(implementationSkill) &&
+    /user manuals[\s\S]*?product and operations guides[\s\S]*?business-rule references/i.test(
+      implementationSkill
+    ) &&
+    /Documentation cannot add an unselected case/i.test(implementationSkill),
+  'Implementation skill must use product documentation without expanding approved scope.'
+)
 assert(
   /Never expose platform vocabulary/i.test(devSkill) &&
     /Do not say Test Plan, module,\s+suite, case slug, scaffold/i.test(devSkill),

@@ -270,10 +270,17 @@ document, follow code/runtime and record the document mismatch. If no code or
 runtime evidence is available, mark document-derived behavior as provisional
 and expose material assumptions before approval. Never fall back to
 `knowledge_*`; customer conversations and internal CS knowledge are a
-different data source. If indexed evidence is empty or insufficient, then ask
-the user to attach or paste documentation or provide an exact accessible path
-or URL. Read that content before deriving scenarios and cite the document
-section, requirement, or source location used.
+different data source. When indexed evidence only partially covers the
+feature, or other selected sources remain, continue without waiting: derive
+what the evidence supports, record every gap as an explicit assumption or
+open question in the draft, and mention in the `Resumo dos insumos do
+planejamento` that the user may attach or paste additional documentation or
+provide an exact accessible path or URL. Only when the search returns no
+usable evidence at all and documentation is the only selected source, ask the
+user to attach, paste, or point to the documentation — the flow has no other
+authorized input. Never silently switch to a source the user did not select.
+Read any user-provided content before deriving scenarios from it and cite the
+document section, requirement, or source location used.
 
 For additions to an existing plan, use the same indexed-document process when
 documentation is an authorized source. Documentation may add evidence and

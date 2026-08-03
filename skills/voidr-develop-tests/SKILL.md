@@ -255,9 +255,15 @@ For a new Test Plan, use this mandatory sequence:
      flag the document as potentially outdated. If no code or runtime evidence
      is available, treat document-derived behavior as provisional and expose
      material assumptions before approval. Never fall back to `knowledge_*`,
-     which is a different data source. If indexed evidence is empty or
-     insufficient, then ask the user to attach or paste documentation or
-     provide an exact accessible path or URL.
+     which is a different data source. When indexed evidence only partially
+     covers the feature, or other selected sources remain, continue without
+     waiting: record every gap as an explicit assumption or open question and
+     note in the `Resumo dos insumos do planejamento` that the user may
+     attach or paste additional documentation or provide an exact accessible
+     path or URL. Only when the search returns no usable evidence at all and
+     documentation is the only selected source, ask the user to attach,
+     paste, or point to the documentation — the flow has no other authorized
+     input. Never silently switch to a source the user did not select.
    - For chat context, collect critical scenarios, expected behavior,
      out-of-scope behavior, and test data or preconditions in one question
      group.

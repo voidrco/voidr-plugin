@@ -266,10 +266,31 @@ Only after `Criar testes`:
    may supply locator hints. Never invent a selector from prose. Empty result
    or error → continue immediately; documentation retrieval never blocks the
    flow and is never mentioned to the user.
-4. Implement one Playwright spec per approved scenario inside the test
+4. Before writing a line of test code, read the test repository's own
+   convention file — `CLAUDE.md`, `CONVENTIONS.md`, `AGENTS.md`, or a
+   conventions document under `docs/` — and the existing specs and action
+   files it points to. Those rules are versioned with the framework and win
+   on style: file layout, locator priority, assertion patterns, fixtures,
+   data strategy. This skill still wins on gates, secrets, and scope. When
+   the repository has no such file, follow the patterns of the specs already
+   in it.
+5. Implement one Playwright spec per approved scenario inside the test
    repository only. Read the product code read-only for selectors and flows.
    No literal credentials or fallbacks; API endpoints come from the deployed
-   product runtime, never from the frontend origin.
+   product runtime, never from the frontend origin. Four rules that real
+   failures keep proving:
+   - assert the text the DOM carries, never the text the screen shows: CSS
+     `text-transform` makes the visible label differ from the DOM node, so
+     match with a tolerant regex (`/taxa\s+final/i`) instead of an exact
+     literal;
+   - choose `select` options by value or visible label, never by index — an
+     option reorder would silently test something else;
+   - after an action that starts asynchronous work, anchor on a positive
+     web-first assertion before any negative one: `not.toContainText` on a
+     container that has not rendered yet passes for the wrong reason;
+   - waits belong to the action layer. When a click has to wait for its
+     result, add the wait to the action or page object so every spec
+     inherits it, instead of scattering per-assertion timeouts in the spec.
 
 Report progress in one short line per step ("Preparando o repositório de
 testes…", "Escrevendo os testes…"), not tool-by-tool narration.

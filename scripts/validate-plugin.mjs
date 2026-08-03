@@ -519,6 +519,23 @@ for (const skillName of [
   )
 }
 
+// The framework's own convention file is the source of truth for test style,
+// and the four rules below each come from a failure observed in a real run.
+for (const [skillName, skillText] of [
+  ['voidr-feature-test', devSkill.replace(/\s+/g, ' ')],
+  ['voidr-implement-tests', implementationSkill.replace(/\s+/g, ' ')]
+]) {
+  assert(
+    /read the test repository's own convention file/i.test(skillText) &&
+      /win on style/i.test(skillText) &&
+      /assert the text the DOM carries/i.test(skillText) &&
+      /never by index/i.test(skillText) &&
+      /positive web-first assertion before any negative one/i.test(skillText) &&
+      /waits belong to the action layer/i.test(skillText),
+    `${skillName} must defer to the repository conventions and carry the Playwright rules that failures proved.`
+  )
+}
+
 for (const [skillName, skillText] of [
   ['voidr-develop-tests', entrySkill],
   ['voidr-test-plan', testPlanSkill],

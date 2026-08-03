@@ -193,16 +193,37 @@ This step is an optimization and must never block or delay the flow:
 
 For each selected case:
 
-1. Inspect the product code and existing test patterns read-only.
-2. Implement the smallest independent Playwright test matching the approved
+1. Before writing a line of test code, read the test repository's own
+   convention file — `CLAUDE.md`, `CONVENTIONS.md`, `AGENTS.md`, or a
+   conventions document under `docs/` — and the existing specs and action
+   files it points to. Those rules are versioned with the framework and win
+   on style: file layout, locator priority, assertion patterns, fixtures,
+   data strategy. This skill still wins on gates, secrets, and scope. When
+   the repository has no such file, follow the patterns of the specs already
+   in it.
+2. Inspect the product code and existing test patterns read-only.
+3. Implement the smallest independent Playwright test matching the approved
    Arrange/Act/Assert steps.
-3. Use environment placeholders for credentials and sensitive test data.
+4. Use environment placeholders for credentials and sensitive test data.
    Never add a literal fallback to `process.env.*`, even when product source or
    a Test Plan includes a demo value. If a required variable is absent after
    `voidr env pull`, stop and name only the missing variable.
-4. Prefer stable semantic locators and deterministic waits.
-5. Do not expand into unselected cases.
-6. Remove `test.skip` only when the case has a real assertion and can run.
+5. Prefer stable semantic locators and deterministic waits. Four rules that
+   real failures keep proving:
+   - assert the text the DOM carries, never the text the screen shows: CSS
+     `text-transform` makes the visible label differ from the DOM node, so
+     match with a tolerant regex (`/taxa\s+final/i`) instead of an exact
+     literal;
+   - choose `select` options by value or visible label, never by index — an
+     option reorder would silently test something else;
+   - after an action that starts asynchronous work, anchor on a positive
+     web-first assertion before any negative one: `not.toContainText` on a
+     container that has not rendered yet passes for the wrong reason;
+   - waits belong to the action layer. When a click has to wait for its
+     result, add the wait to the action or page object so every spec inherits
+     it, instead of scattering per-assertion timeouts in the spec.
+6. Do not expand into unselected cases.
+7. Remove `test.skip` only when the case has a real assertion and can run.
 
 Write only inside the selected test repository.
 

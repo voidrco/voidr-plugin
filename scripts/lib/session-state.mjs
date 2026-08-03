@@ -46,6 +46,7 @@ const PROMPT_GATE_KEYS = [
   'selectedEnvironmentSlug',
   'selectedEnvironmentAt',
   'planMode',
+  'devFlowActive',
   'workflowActive',
   'smokeRemediationAt'
 ]
@@ -114,6 +115,22 @@ export function recordUserPromptState(payload) {
     if (devFlowStarted) planMode = 'auto'
     if (isNewPlanChoice(prompt)) planMode = 'new'
     if (isExistingPlanChoice(prompt)) planMode = 'existing'
+    // planMode is the plan route (auto/new/existing) and gets overwritten when
+    // the developer picks an existing plan. Which skill is running is tracked
+    // separately, so the dev-first flow keeps a single typed gate on every
+    // route instead of falling back to the plan-first approval phrase.
+    const devFlowActive = devFlowStarted
+      ? true
+      : isVoidrTestingPrompt(prompt)
+        ? false
+        : current.devFlowActive === true
+    const devApprovalArmed = armsDevTestsApproval(prompt, {
+      planMode,
+      devFlowActive,
+      // The prompt hook just wrote this state, so an absent planMode really
+      // means "no dev-first evidence" and must not arm the approval.
+      emptyStateCounts: false
+    })
     const promptTestPlanId = extractExplicitTestPlanId(prompt)
     const selectedTestPlanId =
       planMode === 'new'
@@ -157,6 +174,7 @@ export function recordUserPromptState(payload) {
           ? timestamp || Date.now()
           : current.smokeRemediationAt || null,
       planMode,
+      devFlowActive,
       selectedTestPlanId,
       selectedTestPlanAt: promptTestPlanId
         ? timestamp || Date.now()
@@ -174,11 +192,9 @@ export function recordUserPromptState(payload) {
           ? timestamp || Date.now()
           : current.planContextConfirmedAt || null,
       planWriteApproved:
-        isExplicitTestPlanApproval(prompt) ||
-        (planMode === 'auto' && isDevTestsApproval(prompt)),
+        isExplicitTestPlanApproval(prompt) || devApprovalArmed,
       planWriteApprovedAt:
-        isExplicitTestPlanApproval(prompt) ||
-        (planMode === 'auto' && isDevTestsApproval(prompt))
+        isExplicitTestPlanApproval(prompt) || devApprovalArmed
           ? timestamp || Date.now()
           : null,
       lastPromptAt: timestamp || Date.now()
@@ -215,10 +231,16 @@ export function recordAskUserSelections(payload, { toolName, toolResult }) {
           next.planContextConfirmedAt = Date.now()
           changed = true
         } else if (
-          isDevTestsApproval(text) &&
-          (next.planMode === 'auto' || !next.planMode)
+          armsDevTestsApproval(text, {
+            planMode: next.planMode,
+            devFlowActive: next.devFlowActive === true,
+            // This is the fallback for a dead prompt hook, where no routing
+            // state was ever recorded, so an empty state is expected here.
+            emptyStateCounts: true
+          })
         ) {
-          next.planMode = 'auto'
+          if (next.planMode !== 'existing') next.planMode = 'auto'
+          next.devFlowActive = true
           next.workflowActive = true
           next.planWriteApproved = true
           next.planWriteApprovedAt = Date.now()
@@ -448,10 +470,32 @@ export function isExistingPlanChoice(prompt) {
   )
 }
 
+// One rule for the “Criar testes” gate, shared by the prompt hook and the
+// ask_user fallback so the recognizer and the flow-awareness can never drift
+// apart. The two callers differ only in what an empty state means.
+function armsDevTestsApproval(text, { planMode, devFlowActive, emptyStateCounts }) {
+  if (!isDevTestsApproval(text)) return false
+  if (planMode === 'auto' || devFlowActive) return true
+  return emptyStateCounts && !planMode
+}
+
 export function isSmokeRemediationPrompt(prompt) {
   const text = normalizeText(prompt)
+  // Right after a smoke run the context is unambiguous, so an explicit
+  // remediation, rerun, or investigation verb authorizes the work on its own.
+  // "corrige e roda de novo" is the phrase the denial itself suggests and it
+  // carries no noun.
+  const remediationVerb =
+    /\b(?:corri[gj]\w*|consert\w*|arrum\w*|investig\w*|diagnostic\w*|retent\w*|reexecut\w*|fix\w*|debug\w*|rerun)\b/.test(
+      text
+    ) ||
+    /\b(?:rod\w*|execut\w*|test\w*|tent\w*)\s+(?:novamente|de novo|outra vez)\b/.test(
+      text
+    )
+  if (remediationVerb) return true
+  // Generic change verbs stay ambiguous, so they still need the subject.
   return (
-    /\b(?:corri[gj]\w*|consert\w*|arrum\w*|ajust\w*|mud\w*|alter\w*|troc\w*|melhor\w*|refator\w*|investig\w*|diagnostic\w*|retent\w*|reexecut\w*|rod\w*\s+novamente|fix\w*|debug\w*|rerun)\b/.test(
+    /\b(?:ajust\w*|mud\w*|alter\w*|troc\w*|melhor\w*|refator\w*)\b/.test(
       text
     ) &&
     /\b(?:smoke|teste|testes|tests?|falha|falhas|failures?|erro|erros|errors?|specs?)\b/.test(text)

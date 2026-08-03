@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -803,4 +803,252 @@ test('an ask_user answer authorizing the fix clears the post-smoke stop', () => 
     ),
     {}
   )
+})
+
+test('the dev approval survives choosing an existing plan in the same flow', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-dev-existing-'))
+  const sessionId = 'dev-flow-existing-plan'
+  const now = Date.now()
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now,
+      prompt: 'cria os testes da minha feature de valor minimo',
+      transformedPrompt: 'cria os testes da minha feature de valor minimo'
+    },
+    dataRoot
+  )
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 1,
+      prompt: 'Usar um test plan existente.',
+      transformedPrompt: 'Usar um test plan existente.'
+    },
+    dataRoot
+  )
+
+  const args = {
+    sessionId,
+    cwd: process.cwd(),
+    toolName: 'voidr-test_plans_create_case',
+    toolArgs: {
+      planId: '0123456789abcdef01234567',
+      moduleSlug: 'originacao',
+      suiteSlug: 'SIMUL',
+      name: 'Valor abaixo do minimo'
+    }
+  }
+  const blocked = runHook(args, dataRoot)
+  assert.equal(blocked.permissionDecision, 'deny')
+  // The denial must name the phrase this flow actually asks the developer for.
+  assert.match(blocked.permissionDecisionReason, /Criar testes/)
+  assert.doesNotMatch(
+    blocked.permissionDecisionReason,
+    /Aprovo este Test Plan/
+  )
+
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 2,
+      prompt: 'Criar testes',
+      transformedPrompt: 'Criar testes'
+    },
+    dataRoot
+  )
+  assert.deepEqual(runHook(args, dataRoot), {})
+})
+
+test('Criar testes never approves a write in the plan-first flow', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-plan-first-'))
+  const sessionId = 'plan-first-approval'
+  const now = Date.now()
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now,
+      prompt: 'Quero desenvolver testes na voidr',
+      transformedPrompt: 'Quero desenvolver testes na voidr'
+    },
+    dataRoot
+  )
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 1,
+      prompt: 'Usar um test plan existente.',
+      transformedPrompt: 'Usar um test plan existente.'
+    },
+    dataRoot
+  )
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 2,
+      prompt: 'Criar testes',
+      transformedPrompt: 'Criar testes'
+    },
+    dataRoot
+  )
+
+  const blocked = runHook(
+    {
+      sessionId,
+      cwd: process.cwd(),
+      toolName: 'voidr-test_plans_create_case',
+      toolArgs: {
+        planId: '0123456789abcdef01234567',
+        moduleSlug: 'originacao',
+        suiteSlug: 'SIMUL',
+        name: 'Caso qualquer'
+      }
+    },
+    dataRoot
+  )
+  assert.equal(blocked.permissionDecision, 'deny')
+  assert.match(blocked.permissionDecisionReason, /Aprovo este Test Plan/)
+})
+
+test('the dev flow verifies the linked repository before writing cases', () => {
+  const skill = readFileSync(
+    join(root, 'skills/voidr-feature-test/SKILL.md'),
+    'utf8'
+  )
+  const verification = skill.indexOf('gitProviderConfig.repositoryUrl')
+  const firstWrite = skill.indexOf('test_plans_create_module')
+  assert.ok(verification > 0, 'the repository check must exist')
+  assert.ok(
+    verification < firstWrite,
+    'the repository check must come before the first structure write'
+  )
+  assert.match(skill, /before writing anything/i)
+  assert.match(skill, /cases created in it are stranded/i)
+})
+
+test('the post-smoke stop never blocks the question that unlocks it', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-post-smoke-ask-'))
+  const sessionId = 'post-smoke-ask'
+  runHook(
+    {
+      sessionId,
+      cwd: process.cwd(),
+      toolName: 'voidr-voidr_smoke_build',
+      toolArgs: { repositoryPath: process.cwd() }
+    },
+    dataRoot
+  )
+
+  // Reading a file is correctly stopped until the user authorizes the fix.
+  const blocked = runHook(
+    {
+      sessionId,
+      cwd: process.cwd(),
+      toolName: 'read_file',
+      toolArgs: { filePath: join(process.cwd(), 'package.json') }
+    },
+    dataRoot
+  )
+  assert.equal(blocked.permissionDecision, 'deny')
+
+  // The editor names its question tool askQuestions, and blocking it left the
+  // flow with no way to collect the authorization.
+  for (const toolName of ['vscode_askQuestions', 'ask_user', 'manage_todo_list']) {
+    assert.deepEqual(
+      runHook({ sessionId, cwd: process.cwd(), toolName, toolArgs: {} }, dataRoot),
+      {},
+      toolName
+    )
+  }
+})
+
+test('a bare remediation verb authorizes the post-smoke fix', async () => {
+  const { isSmokeRemediationPrompt } = await import(
+    '../scripts/lib/session-state.mjs'
+  )
+  for (const prompt of [
+    'corrige e roda de novo',
+    'Corrije e roda de novo',
+    'Pode corrigir o valor-01',
+    'arruma isso',
+    'investiga a falha',
+    'roda de novo',
+    'tenta outra vez',
+    'ajusta o teste do valor minimo'
+  ]) {
+    assert.equal(isSmokeRemediationPrompt(prompt), true, prompt)
+  }
+  for (const prompt of [
+    'ajusta o cenario 2',
+    'Criar testes',
+    'Aprovo este Test Plan',
+    'obrigado, ficou otimo'
+  ]) {
+    assert.equal(isSmokeRemediationPrompt(prompt), false, prompt)
+  }
+})
+
+test('the post-smoke denial teaches the fallback when the prompt hook is behind', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-post-smoke-stale-'))
+  const sessionId = 'post-smoke-stale-hook'
+  runHook(
+    {
+      sessionId,
+      cwd: process.cwd(),
+      toolName: 'voidr-voidr_smoke_build',
+      toolArgs: { repositoryPath: process.cwd() }
+    },
+    dataRoot
+  )
+
+  // No prompt hook write at all: a typed chat authorization can never arrive.
+  const blocked = runHook(
+    {
+      sessionId,
+      cwd: process.cwd(),
+      toolName: 'read_file',
+      toolArgs: { filePath: join(process.cwd(), 'package.json') }
+    },
+    dataRoot
+  )
+  assert.equal(blocked.permissionDecision, 'deny')
+  assert.match(blocked.permissionDecisionReason, /single free-text field/)
+  assert.match(blocked.permissionDecisionReason, /clicked option never counts/i)
+  assert.match(blocked.permissionDecisionReason, /window reload/i)
+})
+
+test('a fresh prompt hook keeps the post-smoke denial free of the fallback', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-post-smoke-fresh-'))
+  const sessionId = 'post-smoke-fresh-hook'
+  const now = Date.now()
+  runHook(
+    {
+      sessionId,
+      cwd: process.cwd(),
+      toolName: 'voidr-voidr_smoke_build',
+      toolArgs: { repositoryPath: process.cwd() }
+    },
+    dataRoot
+  )
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 60_000,
+      prompt: 'obrigado, depois vejo',
+      transformedPrompt: 'obrigado, depois vejo'
+    },
+    dataRoot
+  )
+
+  const blocked = runHook(
+    {
+      sessionId,
+      cwd: process.cwd(),
+      toolName: 'read_file',
+      toolArgs: { filePath: join(process.cwd(), 'package.json') }
+    },
+    dataRoot
+  )
+  assert.equal(blocked.permissionDecision, 'deny')
+  assert.doesNotMatch(blocked.permissionDecisionReason, /single free-text field/)
 })

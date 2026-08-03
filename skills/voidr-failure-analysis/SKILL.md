@@ -8,6 +8,14 @@ description: Analyzes a failed Voidr Playwright execution or test using ClickHou
 Never call a tool that starts a Hive process. Do not trigger self-healing,
 automation generation, video generation, or another agent workflow.
 
+A routed tool missing from your available tools is grouped, not absent: past
+a tool-count threshold the editor collapses tool sets into groups the model
+has to expand first. Find the activation entry whose summary lists that tool
+and call it with the exact name you were given — never invent an activation
+name, never report the tool as unavailable, and never fall back to a terminal
+command or a manual step. If no activation entry lists it, say exactly which
+tool is unreachable and stop.
+
 ## Authentication
 
 Call `voidr_auth_status` before any remote tool.

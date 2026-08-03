@@ -45,6 +45,9 @@ const provisionedTestPlans = new Set()
 let negotiatedProtocol = '2024-11-05'
 let selectedTestPlanId = null
 let planCreationFailed = false
+// Plans the platform created and then failed to finish. Confirmed by reading
+// them back, so a retry is known to duplicate rather than repair.
+const orphanedTestPlans = new Map() // planId -> { planId, name, hasRepository }
 let lastFailedCreateArgs = null
 // Structure slugs actually returned by the platform this session. They are
 // the only identifiers the model may reference when adding cases to modules
@@ -258,7 +261,7 @@ const localTools = [
   {
     name: 'voidr_workspace_git_context',
     description:
-      'Read-only Git discovery for the workspace repositories: current branch, default branch, dirty state, commits ahead, changed files versus the default branch, and recent commits. Use this to infer the developer feature — never cd or run git in the terminal, where paths with spaces break quoting and the sandbox may deny access. Pass workspaceRoot with the absolute path of the open VS Code workspace folder; optionally pass repositoryPath to inspect a single repository.',
+      'Read-only Git discovery for the workspace repositories: current branch, default branch, dirty state, commits ahead, changed files versus the default branch, the changed hunks themselves (changedHunksVsDefault.diff), and recent commits. Use this to infer the developer feature and to scope test scenarios to what actually changed — never cd or run git in the terminal, where paths with spaces break quoting and the sandbox may deny access. Pass workspaceRoot with the absolute path of the open VS Code workspace folder; optionally pass repositoryPath to inspect a single repository. When the response reports repositoriesNotInspected, the workspace has more repositories than one call covers: call again with repositoryPath for the feature repository.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -456,6 +459,12 @@ async function callTool(params) {
     return slimTestPlanListing(result)
   }
 
+  if (name === 'file_embeddings_search_documents') {
+    const normalized = normalizeDocumentSearchArgs(args)
+    const result = await remote.callTool(name, normalized.args)
+    return slimDocumentSearchResult(result, normalized.notes)
+  }
+
   if (name === 'executions_create_execution') {
     if (!planReadAt || !countsReadAt) {
       throw new Error(
@@ -494,6 +503,12 @@ async function callTool(params) {
   }
 
   if (name === 'test_plans_create_test_plan') {
+    // The creation is not atomic on the platform: the plan can commit while
+    // repository provisioning fails. Retrying then duplicates it, so a
+    // confirmed orphan blocks every retry, identical or not.
+    if (orphanedTestPlans.size) {
+      throw new Error(orphanedTestPlanMessage())
+    }
     // A provisioning failure is never fixed by mutating parameters. After a
     // failure, only an identical retry (same args) may reach the platform.
     if (planCreationFailed && lastFailedCreateArgs) {
@@ -515,6 +530,11 @@ async function callTool(params) {
     } catch (error) {
       planCreationFailed = true
       lastFailedCreateArgs = stableStringify(args)
+      const orphan = await findOrphanedTestPlan(error, args)
+      if (orphan) {
+        orphanedTestPlans.set(orphan.planId, orphan)
+        throw new Error(`${error?.message || error} ${orphanedTestPlanMessage()}`)
+      }
       throw error
     }
     return result
@@ -584,12 +604,25 @@ async function callStructureTool(name, args) {
 
 function slimStructureResult(name, planId, args, result) {
   const data = remoteResultData(result)
+  const plan = planDocument(data)
+  // Creation often answers with the whole updated plan instead of the created
+  // entity. Reading the top level then reports the plan's own name and no
+  // slug, which sends the model hunting for identifiers the response already
+  // carried. Locate the created entity inside the plan instead.
+  const created = findCreatedStructureEntity(name, args, plan)
   const entity =
-    data?.data && typeof data.data === 'object' && !Array.isArray(data.data)
-      ? data.data
-      : data
-  const slug = structureSlug(data, args)
-  if (!slug && !entity) return result
+    created ||
+    (plan
+      ? null
+      : data?.data && typeof data.data === 'object' && !Array.isArray(data.data)
+        ? data.data
+        : data)
+  const slug = created
+    ? structureSlug(created, args)
+    : plan
+      ? ''
+      : structureSlug(data, args)
+  if (!slug && !entity && !plan) return result
   const slim = {
     created: name.replace('test_plans_create_', ''),
     name: entity?.name ?? args?.name ?? null,
@@ -602,6 +635,52 @@ function slimStructureResult(name, planId, args, result) {
     content: [{ type: 'text', text: JSON.stringify(slim) }],
     structuredContent: slim
   }
+}
+
+function planDocument(data) {
+  const doc =
+    data?.data && typeof data.data === 'object' && !Array.isArray(data.data)
+      ? data.data
+      : data
+  return doc && Array.isArray(doc.modules) ? doc : null
+}
+
+function findCreatedStructureEntity(toolName, args, plan) {
+  if (!plan) return null
+  const wanted = String(args?.name || '')
+    .trim()
+    .toLowerCase()
+  if (!wanted) return null
+  const byName = list =>
+    (Array.isArray(list) ? list : []).find(
+      item =>
+        String(item?.name || '')
+          .trim()
+          .toLowerCase() === wanted
+    ) || null
+  const bySlug = (list, slug) => {
+    const wantedSlug = String(slug || '')
+      .trim()
+      .toLowerCase()
+    if (!wantedSlug) return null
+    return (
+      (Array.isArray(list) ? list : []).find(
+        item =>
+          String(item?.slug || '')
+            .trim()
+            .toLowerCase() === wantedSlug
+      ) || null
+    )
+  }
+
+  if (toolName === 'test_plans_create_module') return byName(plan.modules)
+  const parentModule = bySlug(plan.modules, args?.moduleSlug)
+  if (!parentModule) return null
+  if (toolName === 'test_plans_create_suite') return byName(parentModule.suites)
+  const parentSuite = bySlug(parentModule.suites, args?.suiteSlug)
+  if (!parentSuite) return null
+  if (toolName === 'test_plans_create_case') return byName(parentSuite.cases)
+  return null
 }
 
 function enforceKnownStructureRefs(name, planId, args) {
@@ -764,6 +843,9 @@ function resetStructureTracking() {
   countsReadAt = null
   executionNeedsDeploy = false
   lastFailedCreateArgs = null
+  // An orphan belongs to the organization that was selected when it was
+  // created, so switching organizations or re-authenticating clears it.
+  orphanedTestPlans.clear()
 }
 
 // Every platform identifier used in a mutating or preparing call must have
@@ -942,6 +1024,51 @@ function bridgeTestPlanId(args) {
   return ''
 }
 
+// A creation failure that names a plan id may have left that plan behind. The
+// only way to know is to read it, and knowing changes the recovery: a retry
+// would duplicate instead of fix.
+async function findOrphanedTestPlan(error, args) {
+  const planId = String(error?.message || error || '')
+    .match(/\b[a-f0-9]{24}\b/i)?.[0]
+    ?.toLowerCase()
+  if (!planId) return null
+  let existing
+  try {
+    // Read directly, without the dispatch gates: this is the bridge verifying
+    // its own failure, not a model-driven call, and it must not select the
+    // orphan as this session's plan.
+    existing = remoteResultData(
+      await remote.callTool('test_plans_get_test_plan', { planId })
+    )
+  } catch {
+    return null
+  }
+  const plan = existing?.data && !Array.isArray(existing.data) ? existing.data : existing
+  const foundId = String(plan?._id || plan?.id || '').toLowerCase()
+  if (foundId !== planId) return null
+  const applicationId = String(args?.applicationId || '').trim().toLowerCase()
+  const planApplicationId = String(plan?.applicationId || '').toLowerCase()
+  if (applicationId && planApplicationId && applicationId !== planApplicationId) {
+    return null
+  }
+  return {
+    planId,
+    name: plan?.name || null,
+    hasRepository: Boolean(
+      plan?.gitProviderConfig?.repositoryUrl || plan?.repository?.url
+    )
+  }
+}
+
+function orphanedTestPlanMessage() {
+  const [orphan] = [...orphanedTestPlans.values()]
+  const named = orphan?.name ? ` named “${orphan.name}”` : ''
+  const repositoryState = orphan?.hasRepository
+    ? 'It does have a linked repository, so read it with test_plans_get_test_plan and continue from it instead of creating anything.'
+    : 'It has no linked repository, so it cannot be prepared or executed and no case should be written into it.'
+  return `Blocked by Voidr workflow: the platform already created Test Plan ${orphan?.planId}${named} for this application and then failed before finishing it, so the creation is not atomic and the plan persisted. Retrying — identical or not — would create a duplicate, never fix this one. ${repositoryState} Show the user the exact platform error and this plan ID, and offer only two options: have the plan removed or finished on the Voidr platform before any new attempt, or cancel. Never create another plan in this session.`
+}
+
 function validateProvisionedTestPlan(result) {
   if (result?.isError) {
     const platformError = structureResultText(result).slice(-400).trim()
@@ -1014,6 +1141,184 @@ function slimTestPlanListing(result) {
   return {
     content: [{ type: 'text', text: JSON.stringify(slim) }],
     structuredContent: slim
+  }
+}
+
+const DOCUMENT_PREVIEW_MAX_LENGTH = 2000
+const DOCUMENT_SEARCH_PREVIEW_BUDGET = 24000
+
+function slimDocumentSearchResult(result, argumentNotes = []) {
+  // Errors carry the platform's own message and must reach the caller intact.
+  if (!result || result.isError) return result
+  const payload = documentSearchPayload(result)
+  // Never fall back to the raw response on an unexpected shape: that is the
+  // one path where full document bodies and signed download URLs would reach
+  // the model. Withhold the payload and say so instead.
+  if (!payload) {
+    return documentSearchEnvelope(
+      {
+        results: [],
+        total: null
+      },
+      [
+        ...argumentNotes,
+        'The platform returned a document search response in an unrecognized shape, so it was withheld instead of forwarded unprojected. Continue as if no documentation was indexed and report this mismatch.'
+      ]
+    )
+  }
+
+  const files = []
+  const chunkRefs = []
+  const seenChunks = new Set()
+  let skippedFiles = 0
+  for (const file of payload.results) {
+    if (!file || typeof file !== 'object') {
+      skippedFiles += 1
+      continue
+    }
+    const slimFile = {
+      fileId: file.fileId,
+      fileName: file.fileName,
+      bestScore: file.bestScore,
+      chunks: []
+    }
+    for (const chunk of Array.isArray(file.chunks) ? file.chunks : []) {
+      if (!chunk || typeof chunk !== 'object') continue
+      const key = `${file.fileId}|${chunk.chunkIndex}`
+      if (seenChunks.has(key)) continue
+      seenChunks.add(key)
+      let contentPreview =
+        typeof chunk.contentPreview === 'string' ? chunk.contentPreview : ''
+      if (contentPreview.length > DOCUMENT_PREVIEW_MAX_LENGTH) {
+        // The ellipsis counts against the declared maximum.
+        contentPreview = `${contentPreview.slice(0, DOCUMENT_PREVIEW_MAX_LENGTH - 1)}…`
+      }
+      const slimChunk = {
+        chunkIndex: chunk.chunkIndex,
+        pageNumber: chunk.pageNumber,
+        score: chunk.score,
+        contentPreview
+      }
+      slimFile.chunks.push(slimChunk)
+      chunkRefs.push({ file: slimFile, chunk: slimChunk })
+    }
+    files.push(slimFile)
+  }
+
+  let previewLength = chunkRefs.reduce(
+    (sum, ref) => sum + ref.chunk.contentPreview.length,
+    0
+  )
+  let omitted = 0
+  const byScoreAscending = [...chunkRefs].sort(
+    (a, b) => (a.chunk.score ?? 0) - (b.chunk.score ?? 0)
+  )
+  for (const ref of byScoreAscending) {
+    if (previewLength <= DOCUMENT_SEARCH_PREVIEW_BUDGET) break
+    previewLength -= ref.chunk.contentPreview.length
+    ref.file.chunks = ref.file.chunks.filter(chunk => chunk !== ref.chunk)
+    omitted += 1
+  }
+
+  return documentSearchEnvelope(
+    {
+      results: files,
+      total: typeof payload.total === 'number' ? payload.total : null
+    },
+    [
+      ...argumentNotes,
+      'Slim document search result: fileId, fileName, pageNumber, chunkIndex, and score are the provenance fields.',
+      ...(omitted
+        ? [`${omitted} lowest-score chunk(s) omitted to keep the response small.`]
+        : []),
+      ...(skippedFiles
+        ? [
+            `${skippedFiles} malformed result entry(ies) were dropped instead of forwarded unprojected.`
+          ]
+        : [])
+    ]
+  )
+}
+
+function documentSearchEnvelope(body, notes) {
+  const slim = { ...body, note: notes.filter(Boolean).join(' ') }
+  return {
+    content: [{ type: 'text', text: JSON.stringify(slim) }],
+    structuredContent: slim
+  }
+}
+
+function documentSearchPayload(result) {
+  if (Array.isArray(result?.structuredContent?.results)) {
+    return result.structuredContent
+  }
+  const data = remoteResultData(result)
+  if (Array.isArray(data?.results)) return data
+  return null
+}
+
+const DOCUMENT_SEARCH_MAX_LIMIT = 5
+const DOCUMENT_SEARCH_MIN_SCORE = 0.5
+
+// The skills document one exact call shape. Forward only that shape, so a
+// missing scope or an out-of-contract argument cannot widen the search past
+// the size and content mode the flows were reviewed against.
+function normalizeDocumentSearchArgs(args) {
+  const applicationId = String(args?.applicationId || '').trim()
+  if (!/^[a-f0-9]{24}$/i.test(applicationId)) {
+    throw new Error(
+      'Blocked by Voidr workflow: file_embeddings_search_documents requires the selected applicationId exactly as the platform returned it. Select the application with applications_list_applications first, then search only that application’s documents.'
+    )
+  }
+  const query = String(args?.query || '').trim()
+  if (!query) {
+    throw new Error(
+      'Blocked by Voidr workflow: file_embeddings_search_documents requires a query built from the feature and scenarios. Never search with an empty query.'
+    )
+  }
+
+  const notes = []
+  const requestedLimit = Number(args?.limit)
+  let limit = DOCUMENT_SEARCH_MAX_LIMIT
+  if (Number.isFinite(requestedLimit) && requestedLimit >= 1) {
+    limit = Math.min(Math.floor(requestedLimit), DOCUMENT_SEARCH_MAX_LIMIT)
+  }
+  if (Number.isFinite(requestedLimit) && limit !== Math.floor(requestedLimit)) {
+    notes.push(
+      `limit ${Math.floor(requestedLimit)} was reduced to ${limit}, the documented maximum.`
+    )
+  }
+
+  const requestedMinScore = Number(args?.minScore)
+  let minScore = DOCUMENT_SEARCH_MIN_SCORE
+  if (Number.isFinite(requestedMinScore)) {
+    minScore = Math.min(Math.max(requestedMinScore, DOCUMENT_SEARCH_MIN_SCORE), 1)
+    if (minScore !== requestedMinScore) {
+      notes.push(
+        `minScore ${requestedMinScore} was raised to ${minScore}, the documented floor.`
+      )
+    }
+  }
+
+  if (args?.includeContent === false) {
+    notes.push('includeContent was forced to true; the flows read chunk previews.')
+  }
+
+  const forwarded = new Set([
+    'applicationId',
+    'query',
+    'limit',
+    'minScore',
+    'includeContent'
+  ])
+  const dropped = Object.keys(args || {}).filter(key => !forwarded.has(key))
+  if (dropped.length) {
+    notes.push(`Unsupported argument(s) dropped: ${dropped.join(', ')}.`)
+  }
+
+  return {
+    args: { applicationId, query, limit, minScore, includeContent: true },
+    notes
   }
 }
 

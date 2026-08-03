@@ -51,7 +51,7 @@ Routing invariants:
 | Tool | Owner skills | Purpose |
 | --- | --- | --- |
 | `voidr_workspace_inspect` | `voidr-develop-tests`, `voidr-test-plan` | List workspace checkouts: origin matching and read-only context candidates. |
-| `voidr_workspace_git_context` | `voidr-feature-test` | Branch/diff feature inference for the developer-first flow only. |
+| `voidr_workspace_git_context` | `voidr-feature-test` | Branch/diff feature inference for the developer-first flow only. Returns the changed hunks so scenarios stay scoped to the change, and reports `repositoriesNotInspected` when the workspace holds more repositories than one call covers (re-call with `repositoryPath`). |
 | `voidr_workspace_bootstrap_test_repository` | `voidr-develop-tests` | Initialize the test-project skeleton in a confirmed empty destination, or in an origin-matching checkout that lacks test-project files. Never clones — cloning belongs to `voidr_workspace_prepare_test_repository`. Detects an existing checkout by origin and returns `reusedExistingCheckout`. |
 | `voidr_workspace_select_test_repository` | `voidr-develop-tests` | Register a user-selected existing repository when the plan has no linked repository. |
 | `voidr_workspace_prepare_test_repository` | `voidr-develop-tests`, `voidr-implement-tests`, `voidr-feature-test` | The single mandatory setup gate: install, CLI auth, link, scaffold, env pull. |
@@ -89,12 +89,13 @@ store; they never report or change platform lifecycle state.
 
 | Tool | Owner skills | Purpose |
 | --- | --- | --- |
-| `file_embeddings_search_documents` | `voidr-implement-tests`, `voidr-feature-test` | Optional, never-blocking semantic search over the application's indexed support documents before implementing specs (`applicationId` + test-guidance query, `limit: 5`, `minScore: 0.5`, `includeContent: true`). Only excerpts that look like test-creation guidance (guides, automation standards, selector maps, QA conventions) feed the implementation; anything else is discarded regardless of score. Empty results and errors mean "no documentation" and the flow continues unchanged. |
+| `file_embeddings_search_documents` | `voidr-develop-tests`, `voidr-test-plan`, `voidr-feature-test`, `voidr-implement-tests` | Read-only, never-blocking assimilation of indexed application documents. Planning uses up to three feature-scoped perspectives: actors/preconditions/user flow; rules/states/outcomes; errors/alternatives/fallbacks. Implementation may also retrieve selectors and QA guidance, plus at most one refined follow-up query per selected case whose flows, rules, or automation guidance the shared baseline does not cover. Every call is scoped by `applicationId` with `limit: 5`, `minScore: 0.5`, and `includeContent: true`; consumers read `results[].chunks[].contentPreview`, deduplicate by `fileId` + `chunkIndex`, and preserve file/page provenance. User manuals, product/operations guides, business rules, walkthroughs, and QA docs are valid; marketing, contracts, meetings, and unrelated content are rejected. Product code and observed runtime behavior are authoritative; documentation is supporting evidence that may be stale. Conflicts follow code/runtime and are reported as documentation drift. Empty results and errors continue without blocking. |
 
 The indexing and deletion counterparts of this family are deliberately not
 exposed by the bridge, and the platform's knowledge tools for customer
 conversations are a different base — application support documents come only
-from this search tool.
+from this search tool. Never fall back to `knowledge_*` for missing application
+documentation.
 
 ## Defects and issue trackers
 

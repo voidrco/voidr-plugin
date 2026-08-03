@@ -505,6 +505,91 @@ assert(
 )
 
 const devSkill = readFileSync(join(root, 'skills/voidr-feature-test/SKILL.md'), 'utf8')
+
+// A tool the editor collapsed into a virtual group must be expanded, never
+// treated as missing and never replaced by a terminal command.
+for (const skillName of [
+  'voidr-develop-tests',
+  'voidr-test-plan',
+  'voidr-feature-test',
+  'voidr-implement-tests',
+  'voidr-deploy-run',
+  'voidr-create-execution',
+  'voidr-failure-analysis'
+]) {
+  // Line wrapping differs per skill, so match on whitespace-normalized text.
+  const skillText = readFileSync(
+    join(root, `skills/${skillName}/SKILL.md`),
+    'utf8'
+  ).replace(/\s+/g, ' ')
+  assert(
+    /grouped, not absent/i.test(skillText) &&
+      /activation entry whose summary lists that tool/i.test(skillText) &&
+      /never invent an activation name/i.test(skillText) &&
+      /never fall back to a terminal command/i.test(skillText),
+    `${skillName} must expand a collapsed tool group instead of treating the tool as unavailable.`
+  )
+}
+
+// The framework's own convention file is the source of truth for test style,
+// and the four rules below each come from a failure observed in a real run.
+for (const [skillName, skillText] of [
+  ['voidr-feature-test', devSkill.replace(/\s+/g, ' ')],
+  ['voidr-implement-tests', implementationSkill.replace(/\s+/g, ' ')]
+]) {
+  assert(
+    /read the test repository's own convention file/i.test(skillText) &&
+      /win on style/i.test(skillText) &&
+      /assert the text the DOM carries/i.test(skillText) &&
+      /never by index/i.test(skillText) &&
+      /positive web-first assertion before any negative one/i.test(skillText) &&
+      /waits belong to the action layer/i.test(skillText),
+    `${skillName} must defer to the repository conventions and carry the Playwright rules that failures proved.`
+  )
+}
+
+for (const [skillName, skillText] of [
+  ['voidr-develop-tests', entrySkill],
+  ['voidr-test-plan', testPlanSkill],
+  ['voidr-feature-test', devSkill],
+  ['voidr-implement-tests', implementationSkill]
+]) {
+  assert(
+    /file_embeddings_search_documents/i.test(skillText) &&
+      /applicationId[\s\S]*?limit: 5[\s\S]*?minScore: 0\.5[\s\S]*?includeContent: true/i.test(
+        skillText
+      ) &&
+      /results\[\]\.chunks\[\]\.contentPreview/i.test(skillText) &&
+      /deduplicate[\s\S]*?fileId[\s\S]*?chunkIndex/i.test(skillText) &&
+      /code[\s\S]*?runtime[\s\S]*?authoritative/i.test(skillText) &&
+      /documentation[\s\S]*?supporting\s+evidence[\s\S]*?stale/i.test(skillText) &&
+      /Never\s+fall\s+back\s+to\s+`knowledge_\*`/i.test(skillText),
+    `${skillName} must retrieve app-scoped document chunks without treating documentation as authoritative or crossing into the knowledge base.`
+  )
+}
+assert(
+  /Assimilate indexed application documentation before deriving scenarios/i.test(
+    devSkill
+  ) &&
+    ['actors', 'permissions', 'preconditions', 'user flow'].every(term =>
+      new RegExp(term, 'i').test(devSkill)
+    ) &&
+    ['business rules', 'states', 'transitions', 'expected outcomes'].every(
+      term => new RegExp(term, 'i').test(devSkill)
+    ) &&
+    ['errors', 'alternatives', 'fallbacks', 'edge cases'].every(term =>
+      new RegExp(term, 'i').test(devSkill)
+    ),
+  'Dev skill must assimilate functional documentation before scenario design.'
+)
+assert(
+  /Application documentation assimilation/i.test(implementationSkill) &&
+    /user manuals[\s\S]*?product and operations guides[\s\S]*?business-rule references/i.test(
+      implementationSkill
+    ) &&
+    /Documentation cannot add an unselected case/i.test(implementationSkill),
+  'Implementation skill must use product documentation without expanding approved scope.'
+)
 assert(
   /Never expose platform vocabulary/i.test(devSkill) &&
     /Do not say Test Plan, module,\s+suite, case slug, scaffold/i.test(devSkill),
@@ -517,8 +602,15 @@ assert(
 )
 assert(
   /Infer the feature|current branch name/i.test(devSkill) &&
-    /default planning evidence/i.test(devSkill),
-  'Dev skill must infer the feature from the Git branch and diff.'
+    /changedHunksVsDefault/.test(devSkill) &&
+    /repositoryPath/.test(devSkill),
+  'Dev skill must infer the feature from the Git branch and diff hunks, and re-scope by repositoryPath.'
+)
+assert(
+  /The diff is the scope/i.test(devSkill) &&
+    /drop every one the change does not affect/i.test(devSkill) &&
+    /never put it in the\s+checklist/i.test(devSkill),
+  'Dev skill must scope scenarios to the diff and drop untouched rules.'
 )
 assert(
   /One smoke run per user message/i.test(devSkill) &&

@@ -1115,3 +1115,423 @@ async function readBody(request) {
   for await (const chunk of request) body += chunk
   return body
 }
+
+test('structure creation reports the created entity slug from a plan-shaped response', async t => {
+  const planId = '6a4431ebb7276d5f9781eaac'
+  // The platform answers create_suite/create_case with the whole updated plan,
+  // never with the created entity, which is what used to leak the plan's own
+  // name and a null slug into the slim response.
+  const plan = {
+    _entity: 'test_plan',
+    _id: planId,
+    name: 'Itaú Crédito Rural — Credit Simulation Journey Protection',
+    modules: [
+      {
+        _entity: 'module',
+        slug: 'valor-minimo-na-simulacao',
+        name: 'Valor Mínimo na Simulação',
+        suites: [
+          {
+            _entity: 'suite',
+            slug: 'VALID',
+            name: 'Validação do Piso de Valor',
+            cases: [
+              {
+                _entity: 'case',
+                slug: 'VALOR-01',
+                name: 'Valor no mínimo exato é aceito'
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+  const server = createServer(async (request, response) => {
+    const message = JSON.parse(await readBody(request))
+    response.setHeader('content-type', 'application/json')
+    response.setHeader('mcp-session-id', 'synthetic-session')
+    if (message.method === 'notifications/initialized') {
+      response.writeHead(202)
+      response.end()
+      return
+    }
+    if (message.method === 'initialize') {
+      sendResult(response, message.id, {
+        protocolVersion: '2024-11-05',
+        capabilities: { tools: {} },
+        serverInfo: { name: 'mock', version: '1' }
+      })
+      return
+    }
+    if (message.method === 'tools/call') {
+      sendResult(response, message.id, {
+        structuredContent: { data: plan },
+        content: [{ type: 'text', text: JSON.stringify({ data: plan }) }]
+      })
+      return
+    }
+    sendResult(response, message.id, {})
+  })
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+  t.after(() => server.close())
+
+  const temp = mkdtempSync(join(tmpdir(), 'voidr-bridge-slug-'))
+  const storePath = join(temp, 'service-accounts.json')
+  writeFileSync(
+    storePath,
+    JSON.stringify({
+      activeOrgId: 'org-slug',
+      accounts: {
+        'org-slug': {
+          clientId: 'sa_slug_e2e',
+          clientSecret: 'synthetic-slug-secret',
+          scopes: ['read', 'write']
+        }
+      }
+    })
+  )
+  const child = spawn(process.execPath, [bridgePath], {
+    cwd: temp,
+    env: {
+      ...process.env,
+      VOIDR_SERVICE_ACCOUNTS_PATH: storePath,
+      VOIDR_MCP_URL: `http://127.0.0.1:${server.address().port}/mcp`
+    },
+    stdio: ['pipe', 'pipe', 'pipe']
+  })
+  t.after(() => child.kill())
+  const client = jsonRpcClient(child)
+  await client.request('initialize', {
+    protocolVersion: '2024-11-05',
+    capabilities: {},
+    clientInfo: { name: 'e2e', version: '1' }
+  })
+
+  // Reading the plan first is what makes the platform-returned slugs known,
+  // as the provenance gate requires.
+  await client.request('tools/call', {
+    name: 'test_plans_get_test_plan',
+    arguments: { planId }
+  })
+
+  const suite = await client.request('tools/call', {
+    name: 'test_plans_create_suite',
+    arguments: {
+      planId,
+      moduleSlug: 'valor-minimo-na-simulacao',
+      name: 'Validação do Piso de Valor'
+    }
+  })
+  const suiteSlim = JSON.parse(suite.content[0].text)
+  assert.equal(suiteSlim.slug, 'valid')
+  assert.equal(suiteSlim.name, 'Validação do Piso de Valor')
+  assert.match(suiteSlim.note, /valid/)
+
+  const created = await client.request('tools/call', {
+    name: 'test_plans_create_case',
+    arguments: {
+      planId,
+      moduleSlug: 'valor-minimo-na-simulacao',
+      suiteSlug: 'VALID',
+      name: 'Valor no mínimo exato é aceito'
+    }
+  })
+  const caseSlim = JSON.parse(created.content[0].text)
+  assert.equal(caseSlim.slug, 'valor-01')
+  assert.equal(caseSlim.name, 'Valor no mínimo exato é aceito')
+  // The plan's own identity must never be reported as the created entity.
+  assert.notEqual(caseSlim.name, plan.name)
+  assert.equal(caseSlim.id, null)
+})
+
+test('document search never forwards an unprojected payload and clamps its arguments', async t => {
+  const received = []
+  let mode = 'valid'
+  const server = createServer(async (request, response) => {
+    const message = JSON.parse(await readBody(request))
+    response.setHeader('content-type', 'application/json')
+    response.setHeader('mcp-session-id', 'synthetic-session')
+    if (message.method === 'notifications/initialized') {
+      response.writeHead(202)
+      response.end()
+      return
+    }
+    if (message.method === 'initialize') {
+      sendResult(response, message.id, {
+        protocolVersion: '2024-11-05',
+        capabilities: { tools: {} },
+        serverInfo: { name: 'mock', version: '1' }
+      })
+      return
+    }
+    if (message.method === 'tools/call') {
+      received.push(message.params.arguments)
+      if (mode === 'unknown-shape') {
+        // A shape the projection does not understand, carrying exactly what
+        // must never reach the model unprojected.
+        const body = {
+          documents: [
+            {
+              downloadUrl: `https://signed.example.test/${'s'.repeat(900)}`,
+              fullText: 'x'.repeat(40_000)
+            }
+          ]
+        }
+        sendResult(response, message.id, {
+          structuredContent: body,
+          content: [{ type: 'text', text: JSON.stringify(body) }]
+        })
+        return
+      }
+      const body = {
+        results: [
+          null,
+          {
+            fileId: 'f1',
+            fileName: 'manual.pdf',
+            filePath: 'org/private/manual.pdf',
+            downloadUrl: `https://signed.example.test/${'s'.repeat(900)}`,
+            bestScore: 0.9,
+            chunks: [
+              {
+                chunkIndex: 1,
+                pageNumber: 2,
+                score: 0.9,
+                contentPreview: 'y'.repeat(5000)
+              }
+            ]
+          }
+        ],
+        total: 1
+      }
+      sendResult(response, message.id, {
+        structuredContent: body,
+        content: [{ type: 'text', text: JSON.stringify(body) }]
+      })
+      return
+    }
+    sendResult(response, message.id, {})
+  })
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+  t.after(() => server.close())
+
+  const temp = mkdtempSync(join(tmpdir(), 'voidr-bridge-docs-'))
+  const storePath = join(temp, 'service-accounts.json')
+  writeFileSync(
+    storePath,
+    JSON.stringify({
+      activeOrgId: 'org-docs',
+      accounts: {
+        'org-docs': {
+          clientId: 'sa_docs_e2e',
+          clientSecret: 'synthetic-docs-secret',
+          scopes: ['read', 'write']
+        }
+      }
+    })
+  )
+  const child = spawn(process.execPath, [bridgePath], {
+    cwd: temp,
+    env: {
+      ...process.env,
+      VOIDR_SERVICE_ACCOUNTS_PATH: storePath,
+      VOIDR_MCP_URL: `http://127.0.0.1:${server.address().port}/mcp`
+    },
+    stdio: ['pipe', 'pipe', 'pipe']
+  })
+  t.after(() => child.kill())
+  const client = jsonRpcClient(child)
+  await client.request('initialize', {
+    protocolVersion: '2024-11-05',
+    capabilities: {},
+    clientInfo: { name: 'e2e', version: '1' }
+  })
+
+  const missingScope = await client.requestRaw('tools/call', {
+    name: 'file_embeddings_search_documents',
+    arguments: { query: 'valor minimo' }
+  })
+  assert.match(missingScope.error.message, /requires the selected applicationId/i)
+  assert.equal(received.length, 0, 'an unscoped search must not reach the network')
+
+  const emptyQuery = await client.requestRaw('tools/call', {
+    name: 'file_embeddings_search_documents',
+    arguments: { applicationId: '6a442f9c0f618c7156c47a69', query: '  ' }
+  })
+  assert.match(emptyQuery.error.message, /requires a query/i)
+
+  const slimmed = await client.request('tools/call', {
+    name: 'file_embeddings_search_documents',
+    arguments: {
+      applicationId: '6a442f9c0f618c7156c47a69',
+      query: 'valor minimo',
+      limit: 25,
+      minScore: 0.1,
+      includeContent: false,
+      unsupported: true
+    }
+  })
+  assert.deepEqual(received[0], {
+    applicationId: '6a442f9c0f618c7156c47a69',
+    query: 'valor minimo',
+    limit: 5,
+    minScore: 0.5,
+    includeContent: true
+  })
+  const body = JSON.parse(slimmed.content[0].text)
+  assert.equal(body.results.length, 1, 'the malformed entry must be dropped')
+  assert.equal(body.results[0].chunks[0].contentPreview.length, 2000)
+  assert.equal(JSON.stringify(body).includes('signed.example.test'), false)
+  assert.match(body.note, /limit 25 was reduced to 5/)
+  assert.match(body.note, /minScore 0\.1 was raised to 0\.5/)
+  assert.match(body.note, /includeContent was forced to true/)
+  assert.match(body.note, /Unsupported argument\(s\) dropped: unsupported/)
+  assert.match(body.note, /malformed result entry/)
+
+  mode = 'unknown-shape'
+  const withheld = await client.request('tools/call', {
+    name: 'file_embeddings_search_documents',
+    arguments: { applicationId: '6a442f9c0f618c7156c47a69', query: 'outra' }
+  })
+  const withheldBody = JSON.parse(withheld.content[0].text)
+  assert.deepEqual(withheldBody.results, [])
+  assert.match(withheldBody.note, /unrecognized shape/i)
+  assert.equal(
+    JSON.stringify(withheldBody).includes('signed.example.test'),
+    false,
+    'an unknown shape must never leak signed URLs or full document bodies'
+  )
+  assert.equal(withheld.content[0].text.length < 600, true)
+})
+
+test('a plan created without provisioning blocks every retry instead of duplicating', async t => {
+  const orphanId = '6a70b0fcf2fc9085f680ea1e'
+  const calls = []
+  const server = createServer(async (request, response) => {
+    const message = JSON.parse(await readBody(request))
+    response.setHeader('content-type', 'application/json')
+    response.setHeader('mcp-session-id', 'synthetic-session')
+    if (message.method === 'notifications/initialized') {
+      response.writeHead(202)
+      response.end()
+      return
+    }
+    if (message.method === 'initialize') {
+      sendResult(response, message.id, {
+        protocolVersion: '2024-11-05',
+        capabilities: { tools: {} },
+        serverInfo: { name: 'mock', version: '1' }
+      })
+      return
+    }
+    if (message.method === 'tools/call') {
+      const { name, arguments: args } = message.params
+      calls.push(name)
+      if (name === 'applications_list_applications') {
+        const data = { data: [{ _id: '6a510c7b9bc772cdbee9d197', name: 'Blip Desk Demo' }] }
+        sendResult(response, message.id, {
+          structuredContent: { data },
+          content: [{ type: 'text', text: JSON.stringify(data) }]
+        })
+        return
+      }
+      if (name === 'test_plans_create_test_plan') {
+        // The platform commits the plan and then fails looking it back up.
+        response.end(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: message.id,
+            error: {
+              code: -32000,
+              message: `Error executing test_plans_create_test_plan: TestPlan with identifier '${orphanId}' not found`
+            }
+          })
+        )
+        return
+      }
+      if (name === 'test_plans_get_test_plan') {
+        const plan = {
+          _entity: 'test_plan',
+          _id: args.planId,
+          applicationId: '6a510c7b9bc772cdbee9d197',
+          name: 'Login Desk',
+          status: 'DRAFT',
+          modules: []
+        }
+        sendResult(response, message.id, {
+          structuredContent: { data: plan },
+          content: [{ type: 'text', text: JSON.stringify({ data: plan }) }]
+        })
+        return
+      }
+    }
+    sendResult(response, message.id, {})
+  })
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+  t.after(() => server.close())
+
+  const temp = mkdtempSync(join(tmpdir(), 'voidr-bridge-orphan-'))
+  const storePath = join(temp, 'service-accounts.json')
+  writeFileSync(
+    storePath,
+    JSON.stringify({
+      activeOrgId: 'org-orphan',
+      accounts: {
+        'org-orphan': {
+          clientId: 'sa_orphan_e2e',
+          clientSecret: 'synthetic-orphan-secret',
+          scopes: ['read', 'write']
+        }
+      }
+    })
+  )
+  const child = spawn(process.execPath, [bridgePath], {
+    cwd: temp,
+    env: {
+      ...process.env,
+      VOIDR_SERVICE_ACCOUNTS_PATH: storePath,
+      VOIDR_MCP_URL: `http://127.0.0.1:${server.address().port}/mcp`
+    },
+    stdio: ['pipe', 'pipe', 'pipe']
+  })
+  t.after(() => child.kill())
+  const client = jsonRpcClient(child)
+  await client.request('initialize', {
+    protocolVersion: '2024-11-05',
+    capabilities: {},
+    clientInfo: { name: 'e2e', version: '1' }
+  })
+
+  await client.request('tools/call', {
+    name: 'applications_list_applications',
+    arguments: {}
+  })
+
+  const args = {
+    name: 'Login Desk',
+    applicationId: '6a510c7b9bc772cdbee9d197',
+    status: 'DRAFT'
+  }
+  const failed = await client.requestRaw('tools/call', {
+    name: 'test_plans_create_test_plan',
+    arguments: args
+  })
+  assert.match(failed.error.message, /not found/i)
+  assert.match(failed.error.message, new RegExp(orphanId))
+  assert.match(failed.error.message, /already created Test Plan/i)
+  assert.match(failed.error.message, /would create a duplicate/i)
+  assert.match(failed.error.message, /no linked repository/i)
+
+  // The identical retry is normally allowed; a confirmed orphan revokes that.
+  const retried = await client.requestRaw('tools/call', {
+    name: 'test_plans_create_test_plan',
+    arguments: args
+  })
+  assert.match(retried.error.message, /already created Test Plan/i)
+  assert.equal(
+    calls.filter(name => name === 'test_plans_create_test_plan').length,
+    1,
+    'the retry must never reach the platform'
+  )
+})

@@ -987,3 +987,68 @@ test('a bare remediation verb authorizes the post-smoke fix', async () => {
     assert.equal(isSmokeRemediationPrompt(prompt), false, prompt)
   }
 })
+
+test('the post-smoke denial teaches the fallback when the prompt hook is behind', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-post-smoke-stale-'))
+  const sessionId = 'post-smoke-stale-hook'
+  runHook(
+    {
+      sessionId,
+      cwd: process.cwd(),
+      toolName: 'voidr-voidr_smoke_build',
+      toolArgs: { repositoryPath: process.cwd() }
+    },
+    dataRoot
+  )
+
+  // No prompt hook write at all: a typed chat authorization can never arrive.
+  const blocked = runHook(
+    {
+      sessionId,
+      cwd: process.cwd(),
+      toolName: 'read_file',
+      toolArgs: { filePath: join(process.cwd(), 'package.json') }
+    },
+    dataRoot
+  )
+  assert.equal(blocked.permissionDecision, 'deny')
+  assert.match(blocked.permissionDecisionReason, /single free-text field/)
+  assert.match(blocked.permissionDecisionReason, /clicked option never counts/i)
+  assert.match(blocked.permissionDecisionReason, /window reload/i)
+})
+
+test('a fresh prompt hook keeps the post-smoke denial free of the fallback', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-post-smoke-fresh-'))
+  const sessionId = 'post-smoke-fresh-hook'
+  const now = Date.now()
+  runHook(
+    {
+      sessionId,
+      cwd: process.cwd(),
+      toolName: 'voidr-voidr_smoke_build',
+      toolArgs: { repositoryPath: process.cwd() }
+    },
+    dataRoot
+  )
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 60_000,
+      prompt: 'obrigado, depois vejo',
+      transformedPrompt: 'obrigado, depois vejo'
+    },
+    dataRoot
+  )
+
+  const blocked = runHook(
+    {
+      sessionId,
+      cwd: process.cwd(),
+      toolName: 'read_file',
+      toolArgs: { filePath: join(process.cwd(), 'package.json') }
+    },
+    dataRoot
+  )
+  assert.equal(blocked.permissionDecision, 'deny')
+  assert.doesNotMatch(blocked.permissionDecisionReason, /single free-text field/)
+})

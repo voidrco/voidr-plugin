@@ -539,8 +539,18 @@ function enforcePostSmokeStop(hookPayload, rawName, canonicalName) {
   // tool itself must never be blocked — the editor names it askQuestions, not
   // ask_user, and matching only the latter deadlocked the flow.
   if (/ask.*question|ask_user|todo/i.test(rawName)) return
+  // A chat authorization only reaches this gate through the prompt hook. When
+  // that hook is behind the smoke run it can never unlock the stop, so the
+  // denial has to name the free-text fallback instead of telling the agent to
+  // keep waiting for a message the runtime will not record.
+  const hookBehindSmoke =
+    !Number.isFinite(state.promptHookAliveAt) ||
+    state.promptHookAliveAt < state.smokeAttemptedAt
+  const fallback = hookBehindSmoke
+    ? ' The prompt hook has not recorded a user message since this smoke run, so a typed chat authorization is not reaching the runtime: collect it with an ask_user question containing a single free-text field where the user types the authorization (for example “corrige e roda de novo”). A clicked option never counts. If the user already typed it in chat, say that the plugin needs a VS Code window reload to record typed messages again.'
+    : ''
   deny(
-    'Blocked by Voidr workflow: after voidr_smoke_build, stop and report its exact result. Do not inspect files, edit specs, retry smoke, or diagnose by guessing in the same turn. Wait for the user to authorize the investigation or correction in a new chat message or an ask_user answer (for example “corrige e roda de novo”) before continuing.'
+    `Blocked by Voidr workflow: after voidr_smoke_build, stop and report its exact result. Do not inspect files, edit specs, retry smoke, or diagnose by guessing in the same turn. Wait for the user to authorize the investigation or correction in a new chat message or an ask_user answer (for example “corrige e roda de novo”) before continuing.${fallback}`
   )
 }
 

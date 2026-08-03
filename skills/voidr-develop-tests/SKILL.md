@@ -32,6 +32,14 @@ question or tool call; never act from a partial read.
 6. Never delegate any part of this workflow to a subagent. Approval gates
    are recorded per chat session, and a subagent session can never receive
    the user's typed approval — its platform writes are always denied.
+7. A routed tool missing from your available tools is grouped, not absent:
+   past a tool-count threshold the editor collapses tool sets into groups
+   the model has to expand first. Find the activation entry whose summary
+   lists that tool and call it with the exact name you were given — never
+   invent an activation name, never report the tool as unavailable, and
+   never fall back to a terminal command or a manual step. If no
+   activation entry lists it, say exactly which tool is unreachable and
+   stop.
 
 Selection contract: every choice in this workflow — plan mode, application,
 environment, Test Plan, repository, planning inputs — must be rendered with

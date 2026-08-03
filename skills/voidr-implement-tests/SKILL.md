@@ -23,7 +23,15 @@ partial read.
    unsupported Node version, report the pinned Node 22 requirement, ask
    the user to activate it in their own terminal (nvm/volta), and retry
    the tool once after they confirm — nothing else.
-7. Write inside the test repository only the files the selected cases
+7. A routed tool missing from your available tools is grouped, not
+   absent: past a tool-count threshold the editor collapses tool sets
+   into groups the model has to expand first. Find the activation entry
+   whose summary lists that tool and call it with the exact name you
+   were given — never invent an activation name, never report the tool
+   as unavailable, and never fall back to a terminal command or a
+   manual step. If no activation entry lists it, say exactly which tool
+   is unreachable and stop.
+8. Write inside the test repository only the files the selected cases
    require: specs and the actions, helpers, or fixtures they import.
    Never create analysis, exploration, summary, or scratch documents
    there — those notes belong in the chat response.

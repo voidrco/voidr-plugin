@@ -26,7 +26,15 @@ partial read.
    scenarios require: specs and the actions, helpers, or fixtures they
    import. Never create analysis, exploration, summary, or scratch
    documents there — those notes belong in the chat response.
-7. The diff is the scope. Never propose, approve, or implement a
+7. A routed tool missing from your available tools is grouped, not
+   absent: past a tool-count threshold the editor collapses tool sets
+   into groups the model has to expand first. Find the activation entry
+   whose summary lists that tool and call it with the exact name you
+   were given — never invent an activation name, never report the tool
+   as unavailable, and never fall back to a terminal command or a
+   manual step. If no activation entry lists it, say exactly which tool
+   is unreachable and stop.
+8. The diff is the scope. Never propose, approve, or implement a
    scenario whose behavior the returned diff does not change, and never
    derive scenarios before `voidr_workspace_git_context` returned the
    changed files and hunks of the feature repository. Testing the

@@ -29,6 +29,14 @@ partial read.
 6. Never delegate drafting, approval, or any Test Plan mutation to a
    subagent. Gates are recorded per chat session; a subagent can never
    receive the user's typed approval and its writes are always denied.
+7. A routed tool missing from your available tools is grouped, not absent:
+   past a tool-count threshold the editor collapses tool sets into groups
+   the model has to expand first. Find the activation entry whose summary
+   lists that tool and call it with the exact name you were given — never
+   invent an activation name, never report the tool as unavailable, and
+   never fall back to a terminal command or a manual step. If no
+   activation entry lists it, say exactly which tool is unreachable and
+   stop.
 
 ## Authentication gate
 

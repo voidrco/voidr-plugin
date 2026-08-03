@@ -493,6 +493,32 @@ assert(
 )
 
 const devSkill = readFileSync(join(root, 'skills/voidr-feature-test/SKILL.md'), 'utf8')
+
+// A tool the editor collapsed into a virtual group must be expanded, never
+// treated as missing and never replaced by a terminal command.
+for (const skillName of [
+  'voidr-develop-tests',
+  'voidr-test-plan',
+  'voidr-feature-test',
+  'voidr-implement-tests',
+  'voidr-deploy-run',
+  'voidr-create-execution',
+  'voidr-failure-analysis'
+]) {
+  // Line wrapping differs per skill, so match on whitespace-normalized text.
+  const skillText = readFileSync(
+    join(root, `skills/${skillName}/SKILL.md`),
+    'utf8'
+  ).replace(/\s+/g, ' ')
+  assert(
+    /grouped, not absent/i.test(skillText) &&
+      /activation entry whose summary lists that tool/i.test(skillText) &&
+      /never invent an activation name/i.test(skillText) &&
+      /never fall back to a terminal command/i.test(skillText),
+    `${skillName} must expand a collapsed tool group instead of treating the tool as unavailable.`
+  )
+}
+
 for (const [skillName, skillText] of [
   ['voidr-develop-tests', entrySkill],
   ['voidr-test-plan', testPlanSkill],

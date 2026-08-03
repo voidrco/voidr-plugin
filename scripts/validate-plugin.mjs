@@ -25,8 +25,9 @@ assert(
   'plugin.json name must be kebab-case.'
 )
 assert(
-  /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(manifest.version || ''),
-  'plugin.json version must be semantic.'
+  /^\d+\.\d+\.\d+$/.test(manifest.version || ''),
+  'plugin.json version must be semantic without a prerelease suffix: a published ' +
+    'plugin must never advertise a local build (for example 0.2.22-local.3).'
 )
 assert(manifest.skills === 'skills/', 'plugin.json must load skills/.')
 assert(manifest.hooks === 'hooks.json', 'plugin.json must load hooks.json.')
@@ -47,6 +48,15 @@ assert(
 assert(
   marketplaceEntry?.source === './',
   'Marketplace source must resolve to this plugin root.'
+)
+const hardcodedVersionSites = findFiles(join(root, 'scripts'))
+  .filter(file => file.endsWith('.mjs'))
+  .filter(file => /version:\s*'\d+\.\d+\.\d+/.test(readFileSync(file, 'utf8')))
+  .map(relative)
+assert(
+  hardcodedVersionSites.length === 0,
+  'Scripts must report the version through pluginVersion() instead of a literal: ' +
+    `${hardcodedVersionSites.join(', ')}`
 )
 
 const server = mcp.mcpServers?.voidr

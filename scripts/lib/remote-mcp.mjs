@@ -1,5 +1,6 @@
 import { basicAuthorizationHeader } from './credentials.mjs'
 import { describeNetworkFailure } from './network-trust.mjs'
+import { pluginVersion } from './plugin-version.mjs'
 
 export class RemoteMcpClient {
   constructor({
@@ -28,7 +29,7 @@ export class RemoteMcpClient {
       capabilities: {},
       clientInfo: {
         name: 'voidr-copilot-plugin',
-        version: '0.2.22-local.3'
+        version: pluginVersion()
       }
     })
     await this.notify('notifications/initialized', {})

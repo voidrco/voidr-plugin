@@ -24,6 +24,7 @@ import { prepareTestRepository } from './lib/prepare.mjs'
 import { publishTests } from './lib/publish.mjs'
 import { inspectReleaseReadiness } from './lib/release-inspect.mjs'
 import { collectGitContext } from './lib/git-context.mjs'
+import { pluginVersion } from './lib/plugin-version.mjs'
 import {
   enrichToolResultWithExecutionLinks
 } from './lib/execution-links.mjs'
@@ -370,7 +371,7 @@ async function dispatch(method, params) {
         capabilities: { tools: { listChanged: true } },
         serverInfo: {
           name: 'voidr-safe-bridge',
-          version: '0.2.22-local.3'
+          version: pluginVersion()
         }
       }
     case 'ping':

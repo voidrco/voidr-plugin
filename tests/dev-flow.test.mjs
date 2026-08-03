@@ -925,3 +925,65 @@ test('the dev flow verifies the linked repository before writing cases', () => {
   assert.match(skill, /before writing anything/i)
   assert.match(skill, /cases created in it are stranded/i)
 })
+
+test('the post-smoke stop never blocks the question that unlocks it', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-post-smoke-ask-'))
+  const sessionId = 'post-smoke-ask'
+  runHook(
+    {
+      sessionId,
+      cwd: process.cwd(),
+      toolName: 'voidr-voidr_smoke_build',
+      toolArgs: { repositoryPath: process.cwd() }
+    },
+    dataRoot
+  )
+
+  // Reading a file is correctly stopped until the user authorizes the fix.
+  const blocked = runHook(
+    {
+      sessionId,
+      cwd: process.cwd(),
+      toolName: 'read_file',
+      toolArgs: { filePath: join(process.cwd(), 'package.json') }
+    },
+    dataRoot
+  )
+  assert.equal(blocked.permissionDecision, 'deny')
+
+  // The editor names its question tool askQuestions, and blocking it left the
+  // flow with no way to collect the authorization.
+  for (const toolName of ['vscode_askQuestions', 'ask_user', 'manage_todo_list']) {
+    assert.deepEqual(
+      runHook({ sessionId, cwd: process.cwd(), toolName, toolArgs: {} }, dataRoot),
+      {},
+      toolName
+    )
+  }
+})
+
+test('a bare remediation verb authorizes the post-smoke fix', async () => {
+  const { isSmokeRemediationPrompt } = await import(
+    '../scripts/lib/session-state.mjs'
+  )
+  for (const prompt of [
+    'corrige e roda de novo',
+    'Corrije e roda de novo',
+    'Pode corrigir o valor-01',
+    'arruma isso',
+    'investiga a falha',
+    'roda de novo',
+    'tenta outra vez',
+    'ajusta o teste do valor minimo'
+  ]) {
+    assert.equal(isSmokeRemediationPrompt(prompt), true, prompt)
+  }
+  for (const prompt of [
+    'ajusta o cenario 2',
+    'Criar testes',
+    'Aprovo este Test Plan',
+    'obrigado, ficou otimo'
+  ]) {
+    assert.equal(isSmokeRemediationPrompt(prompt), false, prompt)
+  }
+})

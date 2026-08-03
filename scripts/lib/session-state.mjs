@@ -464,8 +464,21 @@ export function isExistingPlanChoice(prompt) {
 
 export function isSmokeRemediationPrompt(prompt) {
   const text = normalizeText(prompt)
+  // Right after a smoke run the context is unambiguous, so an explicit
+  // remediation, rerun, or investigation verb authorizes the work on its own.
+  // "corrige e roda de novo" is the phrase the denial itself suggests and it
+  // carries no noun.
+  const remediationVerb =
+    /\b(?:corri[gj]\w*|consert\w*|arrum\w*|investig\w*|diagnostic\w*|retent\w*|reexecut\w*|fix\w*|debug\w*|rerun)\b/.test(
+      text
+    ) ||
+    /\b(?:rod\w*|execut\w*|test\w*|tent\w*)\s+(?:novamente|de novo|outra vez)\b/.test(
+      text
+    )
+  if (remediationVerb) return true
+  // Generic change verbs stay ambiguous, so they still need the subject.
   return (
-    /\b(?:corri[gj]\w*|consert\w*|arrum\w*|ajust\w*|mud\w*|alter\w*|troc\w*|melhor\w*|refator\w*|investig\w*|diagnostic\w*|retent\w*|reexecut\w*|rod\w*\s+novamente|fix\w*|debug\w*|rerun)\b/.test(
+    /\b(?:ajust\w*|mud\w*|alter\w*|troc\w*|melhor\w*|refator\w*)\b/.test(
       text
     ) &&
     /\b(?:smoke|teste|testes|tests?|falha|falhas|failures?|erro|erros|errors?|specs?)\b/.test(text)

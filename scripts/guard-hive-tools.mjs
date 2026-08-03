@@ -535,7 +535,10 @@ function enforcePostSmokeStop(hookPayload, rawName, canonicalName) {
   ) {
     return
   }
-  if (/(?:ask_user|askuserquestion|todo)/i.test(rawName)) return
+  // Asking the user is the documented way out of this stop, so the question
+  // tool itself must never be blocked — the editor names it askQuestions, not
+  // ask_user, and matching only the latter deadlocked the flow.
+  if (/ask.*question|ask_user|todo/i.test(rawName)) return
   deny(
     'Blocked by Voidr workflow: after voidr_smoke_build, stop and report its exact result. Do not inspect files, edit specs, retry smoke, or diagnose by guessing in the same turn. Wait for the user to authorize the investigation or correction in a new chat message or an ask_user answer (for example “corrige e roda de novo”) before continuing.'
   )
@@ -810,6 +813,8 @@ function enforceTestPlanWriteApproval(hookPayload, canonicalName) {
       : null
     const promptHookAge =
       promptAgeMinutes === null ? 'never' : `${promptAgeMinutes} minute(s) ago`
+    const stalePromptHook =
+      promptAgeMinutes === null || promptAgeMinutes > 5
     if (state.planMode === 'auto' || state.devFlowActive === true) {
       deny(
         `Blocked by Voidr workflow: show the user the list of test scenarios for the feature and wait for a new user message saying exactly “Criar testes” before writing anything to the platform. Last user message seen by the prompt hook: ${promptHookAge}. If the user already typed it and it was not recorded (stale prompt hook), collect it with an ask_user question containing a single free-text field where the user types exactly “Criar testes”. Do not loop retries and do not delegate to a subagent.`
@@ -824,8 +829,14 @@ function enforceTestPlanWriteApproval(hookPayload, canonicalName) {
     missing.push(
       `a fresh user-typed “Aprovo este Test Plan” approval is missing or expired (a generic “sim” is not approval; last user message seen by the prompt hook: ${promptHookAge})`
     )
+    // With no recorded state the guard cannot tell which flow is running, so
+    // it must not force the plan-first phrase on a developer who was told the
+    // dev-first flow only ever asks for “Criar testes”.
+    const flowHint = stalePromptHook
+      ? ' If you are running the developer-first flow (/voidr-feature-test), its phrase is “Criar testes”, not “Aprovo este Test Plan”: collect that one instead, in the same single free-text field.'
+      : ''
     deny(
-      `Blocked by Voidr workflow — missing: ${missing.join('; ')}. Test Plan writes require a visible draft followed by a new user message explicitly saying “Aprovo este Test Plan”. To add cases to an existing plan, follow the “Add cases to an existing plan” section of /voidr-test-plan: show the additions draft and wait for that exact approval message. Recovery: show (or refresh) the draft, ask the user to type that exact approval in a new chat message, then retry this call once. If the user already typed the approval and it was not recorded (stale prompt hook), collect it with an ask_user question containing a single free-text field where the user types exactly “Aprovo este Test Plan” — typed free-text answers are recorded reliably. Do not loop retries and do not delegate to a subagent.`
+      `Blocked by Voidr workflow — missing: ${missing.join('; ')}. Test Plan writes require a visible draft followed by a new user message explicitly saying “Aprovo este Test Plan”. To add cases to an existing plan, follow the “Add cases to an existing plan” section of /voidr-test-plan: show the additions draft and wait for that exact approval message. Recovery: show (or refresh) the draft, ask the user to type that exact approval in a new chat message, then retry this call once. If the user already typed the approval and it was not recorded (stale prompt hook), collect it with an ask_user question containing a single free-text field where the user types exactly “Aprovo este Test Plan” — typed free-text answers are recorded reliably.${flowHint} Do not loop retries and do not delegate to a subagent.`
     )
   }
 }

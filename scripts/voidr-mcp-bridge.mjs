@@ -457,8 +457,9 @@ async function callTool(params) {
   }
 
   if (name === 'file_embeddings_search_documents') {
-    const result = await remote.callTool(name, args)
-    return slimDocumentSearchResult(result)
+    const normalized = normalizeDocumentSearchArgs(args)
+    const result = await remote.callTool(name, normalized.args)
+    return slimDocumentSearchResult(result, normalized.notes)
   }
 
   if (name === 'executions_create_execution') {
@@ -1084,16 +1085,35 @@ function slimTestPlanListing(result) {
 const DOCUMENT_PREVIEW_MAX_LENGTH = 2000
 const DOCUMENT_SEARCH_PREVIEW_BUDGET = 24000
 
-function slimDocumentSearchResult(result) {
+function slimDocumentSearchResult(result, argumentNotes = []) {
+  // Errors carry the platform's own message and must reach the caller intact.
   if (!result || result.isError) return result
   const payload = documentSearchPayload(result)
-  if (!payload) return result
+  // Never fall back to the raw response on an unexpected shape: that is the
+  // one path where full document bodies and signed download URLs would reach
+  // the model. Withhold the payload and say so instead.
+  if (!payload) {
+    return documentSearchEnvelope(
+      {
+        results: [],
+        total: null
+      },
+      [
+        ...argumentNotes,
+        'The platform returned a document search response in an unrecognized shape, so it was withheld instead of forwarded unprojected. Continue as if no documentation was indexed and report this mismatch.'
+      ]
+    )
+  }
 
   const files = []
   const chunkRefs = []
   const seenChunks = new Set()
+  let skippedFiles = 0
   for (const file of payload.results) {
-    if (!file || typeof file !== 'object') return result
+    if (!file || typeof file !== 'object') {
+      skippedFiles += 1
+      continue
+    }
     const slimFile = {
       fileId: file.fileId,
       fileName: file.fileName,
@@ -1108,7 +1128,8 @@ function slimDocumentSearchResult(result) {
       let contentPreview =
         typeof chunk.contentPreview === 'string' ? chunk.contentPreview : ''
       if (contentPreview.length > DOCUMENT_PREVIEW_MAX_LENGTH) {
-        contentPreview = `${contentPreview.slice(0, DOCUMENT_PREVIEW_MAX_LENGTH)}…`
+        // The ellipsis counts against the declared maximum.
+        contentPreview = `${contentPreview.slice(0, DOCUMENT_PREVIEW_MAX_LENGTH - 1)}…`
       }
       const slimChunk = {
         chunkIndex: chunk.chunkIndex,
@@ -1137,15 +1158,28 @@ function slimDocumentSearchResult(result) {
     omitted += 1
   }
 
-  const slim = {
-    results: files,
-    total: payload.total,
-    note:
-      'Slim document search result: fileId, fileName, pageNumber, chunkIndex, and score are the provenance fields.' +
-      (omitted
-        ? ` ${omitted} lowest-score chunk(s) omitted to keep the response small.`
-        : '')
-  }
+  return documentSearchEnvelope(
+    {
+      results: files,
+      total: typeof payload.total === 'number' ? payload.total : null
+    },
+    [
+      ...argumentNotes,
+      'Slim document search result: fileId, fileName, pageNumber, chunkIndex, and score are the provenance fields.',
+      ...(omitted
+        ? [`${omitted} lowest-score chunk(s) omitted to keep the response small.`]
+        : []),
+      ...(skippedFiles
+        ? [
+            `${skippedFiles} malformed result entry(ies) were dropped instead of forwarded unprojected.`
+          ]
+        : [])
+    ]
+  )
+}
+
+function documentSearchEnvelope(body, notes) {
+  const slim = { ...body, note: notes.filter(Boolean).join(' ') }
   return {
     content: [{ type: 'text', text: JSON.stringify(slim) }],
     structuredContent: slim
@@ -1159,6 +1193,71 @@ function documentSearchPayload(result) {
   const data = remoteResultData(result)
   if (Array.isArray(data?.results)) return data
   return null
+}
+
+const DOCUMENT_SEARCH_MAX_LIMIT = 5
+const DOCUMENT_SEARCH_MIN_SCORE = 0.5
+
+// The skills document one exact call shape. Forward only that shape, so a
+// missing scope or an out-of-contract argument cannot widen the search past
+// the size and content mode the flows were reviewed against.
+function normalizeDocumentSearchArgs(args) {
+  const applicationId = String(args?.applicationId || '').trim()
+  if (!/^[a-f0-9]{24}$/i.test(applicationId)) {
+    throw new Error(
+      'Blocked by Voidr workflow: file_embeddings_search_documents requires the selected applicationId exactly as the platform returned it. Select the application with applications_list_applications first, then search only that application’s documents.'
+    )
+  }
+  const query = String(args?.query || '').trim()
+  if (!query) {
+    throw new Error(
+      'Blocked by Voidr workflow: file_embeddings_search_documents requires a query built from the feature and scenarios. Never search with an empty query.'
+    )
+  }
+
+  const notes = []
+  const requestedLimit = Number(args?.limit)
+  let limit = DOCUMENT_SEARCH_MAX_LIMIT
+  if (Number.isFinite(requestedLimit) && requestedLimit >= 1) {
+    limit = Math.min(Math.floor(requestedLimit), DOCUMENT_SEARCH_MAX_LIMIT)
+  }
+  if (Number.isFinite(requestedLimit) && limit !== Math.floor(requestedLimit)) {
+    notes.push(
+      `limit ${Math.floor(requestedLimit)} was reduced to ${limit}, the documented maximum.`
+    )
+  }
+
+  const requestedMinScore = Number(args?.minScore)
+  let minScore = DOCUMENT_SEARCH_MIN_SCORE
+  if (Number.isFinite(requestedMinScore)) {
+    minScore = Math.min(Math.max(requestedMinScore, DOCUMENT_SEARCH_MIN_SCORE), 1)
+    if (minScore !== requestedMinScore) {
+      notes.push(
+        `minScore ${requestedMinScore} was raised to ${minScore}, the documented floor.`
+      )
+    }
+  }
+
+  if (args?.includeContent === false) {
+    notes.push('includeContent was forced to true; the flows read chunk previews.')
+  }
+
+  const forwarded = new Set([
+    'applicationId',
+    'query',
+    'limit',
+    'minScore',
+    'includeContent'
+  ])
+  const dropped = Object.keys(args || {}).filter(key => !forwarded.has(key))
+  if (dropped.length) {
+    notes.push(`Unsupported argument(s) dropped: ${dropped.join(', ')}.`)
+  }
+
+  return {
+    args: { applicationId, query, limit, minScore, includeContent: true },
+    notes
+  }
 }
 
 function remoteResultData(result) {

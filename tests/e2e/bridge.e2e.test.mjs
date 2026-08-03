@@ -1244,3 +1244,163 @@ test('structure creation reports the created entity slug from a plan-shaped resp
   assert.notEqual(caseSlim.name, plan.name)
   assert.equal(caseSlim.id, null)
 })
+
+test('document search never forwards an unprojected payload and clamps its arguments', async t => {
+  const received = []
+  let mode = 'valid'
+  const server = createServer(async (request, response) => {
+    const message = JSON.parse(await readBody(request))
+    response.setHeader('content-type', 'application/json')
+    response.setHeader('mcp-session-id', 'synthetic-session')
+    if (message.method === 'notifications/initialized') {
+      response.writeHead(202)
+      response.end()
+      return
+    }
+    if (message.method === 'initialize') {
+      sendResult(response, message.id, {
+        protocolVersion: '2024-11-05',
+        capabilities: { tools: {} },
+        serverInfo: { name: 'mock', version: '1' }
+      })
+      return
+    }
+    if (message.method === 'tools/call') {
+      received.push(message.params.arguments)
+      if (mode === 'unknown-shape') {
+        // A shape the projection does not understand, carrying exactly what
+        // must never reach the model unprojected.
+        const body = {
+          documents: [
+            {
+              downloadUrl: `https://signed.example.test/${'s'.repeat(900)}`,
+              fullText: 'x'.repeat(40_000)
+            }
+          ]
+        }
+        sendResult(response, message.id, {
+          structuredContent: body,
+          content: [{ type: 'text', text: JSON.stringify(body) }]
+        })
+        return
+      }
+      const body = {
+        results: [
+          null,
+          {
+            fileId: 'f1',
+            fileName: 'manual.pdf',
+            filePath: 'org/private/manual.pdf',
+            downloadUrl: `https://signed.example.test/${'s'.repeat(900)}`,
+            bestScore: 0.9,
+            chunks: [
+              {
+                chunkIndex: 1,
+                pageNumber: 2,
+                score: 0.9,
+                contentPreview: 'y'.repeat(5000)
+              }
+            ]
+          }
+        ],
+        total: 1
+      }
+      sendResult(response, message.id, {
+        structuredContent: body,
+        content: [{ type: 'text', text: JSON.stringify(body) }]
+      })
+      return
+    }
+    sendResult(response, message.id, {})
+  })
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+  t.after(() => server.close())
+
+  const temp = mkdtempSync(join(tmpdir(), 'voidr-bridge-docs-'))
+  const storePath = join(temp, 'service-accounts.json')
+  writeFileSync(
+    storePath,
+    JSON.stringify({
+      activeOrgId: 'org-docs',
+      accounts: {
+        'org-docs': {
+          clientId: 'sa_docs_e2e',
+          clientSecret: 'synthetic-docs-secret',
+          scopes: ['read', 'write']
+        }
+      }
+    })
+  )
+  const child = spawn(process.execPath, [bridgePath], {
+    cwd: temp,
+    env: {
+      ...process.env,
+      VOIDR_SERVICE_ACCOUNTS_PATH: storePath,
+      VOIDR_MCP_URL: `http://127.0.0.1:${server.address().port}/mcp`
+    },
+    stdio: ['pipe', 'pipe', 'pipe']
+  })
+  t.after(() => child.kill())
+  const client = jsonRpcClient(child)
+  await client.request('initialize', {
+    protocolVersion: '2024-11-05',
+    capabilities: {},
+    clientInfo: { name: 'e2e', version: '1' }
+  })
+
+  const missingScope = await client.requestRaw('tools/call', {
+    name: 'file_embeddings_search_documents',
+    arguments: { query: 'valor minimo' }
+  })
+  assert.match(missingScope.error.message, /requires the selected applicationId/i)
+  assert.equal(received.length, 0, 'an unscoped search must not reach the network')
+
+  const emptyQuery = await client.requestRaw('tools/call', {
+    name: 'file_embeddings_search_documents',
+    arguments: { applicationId: '6a442f9c0f618c7156c47a69', query: '  ' }
+  })
+  assert.match(emptyQuery.error.message, /requires a query/i)
+
+  const slimmed = await client.request('tools/call', {
+    name: 'file_embeddings_search_documents',
+    arguments: {
+      applicationId: '6a442f9c0f618c7156c47a69',
+      query: 'valor minimo',
+      limit: 25,
+      minScore: 0.1,
+      includeContent: false,
+      unsupported: true
+    }
+  })
+  assert.deepEqual(received[0], {
+    applicationId: '6a442f9c0f618c7156c47a69',
+    query: 'valor minimo',
+    limit: 5,
+    minScore: 0.5,
+    includeContent: true
+  })
+  const body = JSON.parse(slimmed.content[0].text)
+  assert.equal(body.results.length, 1, 'the malformed entry must be dropped')
+  assert.equal(body.results[0].chunks[0].contentPreview.length, 2000)
+  assert.equal(JSON.stringify(body).includes('signed.example.test'), false)
+  assert.match(body.note, /limit 25 was reduced to 5/)
+  assert.match(body.note, /minScore 0\.1 was raised to 0\.5/)
+  assert.match(body.note, /includeContent was forced to true/)
+  assert.match(body.note, /Unsupported argument\(s\) dropped: unsupported/)
+  assert.match(body.note, /malformed result entry/)
+
+  mode = 'unknown-shape'
+  const withheld = await client.request('tools/call', {
+    name: 'file_embeddings_search_documents',
+    arguments: { applicationId: '6a442f9c0f618c7156c47a69', query: 'outra' }
+  })
+  const withheldBody = JSON.parse(withheld.content[0].text)
+  assert.deepEqual(withheldBody.results, [])
+  assert.match(withheldBody.note, /unrecognized shape/i)
+  assert.equal(
+    JSON.stringify(withheldBody).includes('signed.example.test'),
+    false,
+    'an unknown shape must never leak signed URLs or full document bodies'
+  )
+  assert.equal(withheld.content[0].text.length < 600, true)
+})

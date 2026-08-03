@@ -456,6 +456,11 @@ async function callTool(params) {
     return slimTestPlanListing(result)
   }
 
+  if (name === 'file_embeddings_search_documents') {
+    const result = await remote.callTool(name, args)
+    return slimDocumentSearchResult(result)
+  }
+
   if (name === 'executions_create_execution') {
     if (!planReadAt || !countsReadAt) {
       throw new Error(
@@ -1015,6 +1020,86 @@ function slimTestPlanListing(result) {
     content: [{ type: 'text', text: JSON.stringify(slim) }],
     structuredContent: slim
   }
+}
+
+const DOCUMENT_PREVIEW_MAX_LENGTH = 2000
+const DOCUMENT_SEARCH_PREVIEW_BUDGET = 24000
+
+function slimDocumentSearchResult(result) {
+  if (!result || result.isError) return result
+  const payload = documentSearchPayload(result)
+  if (!payload) return result
+
+  const files = []
+  const chunkRefs = []
+  const seenChunks = new Set()
+  for (const file of payload.results) {
+    if (!file || typeof file !== 'object') return result
+    const slimFile = {
+      fileId: file.fileId,
+      fileName: file.fileName,
+      bestScore: file.bestScore,
+      chunks: []
+    }
+    for (const chunk of Array.isArray(file.chunks) ? file.chunks : []) {
+      if (!chunk || typeof chunk !== 'object') continue
+      const key = `${file.fileId}|${chunk.chunkIndex}`
+      if (seenChunks.has(key)) continue
+      seenChunks.add(key)
+      let contentPreview =
+        typeof chunk.contentPreview === 'string' ? chunk.contentPreview : ''
+      if (contentPreview.length > DOCUMENT_PREVIEW_MAX_LENGTH) {
+        contentPreview = `${contentPreview.slice(0, DOCUMENT_PREVIEW_MAX_LENGTH)}…`
+      }
+      const slimChunk = {
+        chunkIndex: chunk.chunkIndex,
+        pageNumber: chunk.pageNumber,
+        score: chunk.score,
+        contentPreview
+      }
+      slimFile.chunks.push(slimChunk)
+      chunkRefs.push({ file: slimFile, chunk: slimChunk })
+    }
+    files.push(slimFile)
+  }
+
+  let previewLength = chunkRefs.reduce(
+    (sum, ref) => sum + ref.chunk.contentPreview.length,
+    0
+  )
+  let omitted = 0
+  const byScoreAscending = [...chunkRefs].sort(
+    (a, b) => (a.chunk.score ?? 0) - (b.chunk.score ?? 0)
+  )
+  for (const ref of byScoreAscending) {
+    if (previewLength <= DOCUMENT_SEARCH_PREVIEW_BUDGET) break
+    previewLength -= ref.chunk.contentPreview.length
+    ref.file.chunks = ref.file.chunks.filter(chunk => chunk !== ref.chunk)
+    omitted += 1
+  }
+
+  const slim = {
+    results: files,
+    total: payload.total,
+    note:
+      'Slim document search result: fileId, fileName, pageNumber, chunkIndex, and score are the provenance fields.' +
+      (omitted
+        ? ` ${omitted} lowest-score chunk(s) omitted to keep the response small.`
+        : '')
+  }
+  return {
+    content: [{ type: 'text', text: JSON.stringify(slim) }],
+    structuredContent: slim
+  }
+}
+
+function documentSearchPayload(result) {
+  if (Array.isArray(result?.structuredContent?.results)) {
+    return result.structuredContent
+  }
+  const data = remoteResultData(result)
+  if (Array.isArray(data?.results)) return data
+  return null
 }
 
 function remoteResultData(result) {

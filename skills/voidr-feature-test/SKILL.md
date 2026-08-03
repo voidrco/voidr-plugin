@@ -203,7 +203,18 @@ Only after `Criar testes`:
       adicionar os testes desta feature?"), listing the returned plan names
       plus the option `Criar um novo`; never pick one silently;
    4. when no plan exists — create one, as described below.
-   - When reusing a plan, add the feature as a new module with
+   - When reusing a plan, read it with `test_plans_get_test_plan` and confirm
+     `gitProviderConfig.repositoryUrl` is present **before writing anything**.
+     The listing tool never reports the repository link, so this read is the
+     only way to know, and a plan without one can be neither prepared nor
+     run: cases created in it are stranded on the platform. When the link is
+     missing, do not create the module, suite, or cases — say in plain
+     language that this set of tests has no repository attached yet, and
+     offer the remaining plans plus `Criar um novo`. If the user still wants
+     that plan, direct them to `/voidr-develop-tests`, which handles
+     repository selection; never pick or create a repository inside this
+     flow.
+   - With the repository confirmed, add the feature as a new module with
      `test_plans_create_module`, a suite with `test_plans_create_suite`, and
      one case per approved scenario with `test_plans_create_case`
      (Arrange/Act/Assert derived from the scenario, placeholders only).
@@ -218,11 +229,8 @@ Only after `Criar testes`:
      scenario names are binding: after any error, continue with those exact
      names and the real slugs — never create a module or suite with a
      different name to work around a failure.
-     For a reused plan, read it with `test_plans_get_test_plan` and use its
-     `gitProviderConfig.repositoryUrl` as the linked `repositoryUrl` for the
-     preparation step. If the reused plan has no linked repository, stop and
-     direct the user to `/voidr-develop-tests`, which handles repository
-     selection; never pick or create a repository inside this flow.
+     Carry the `gitProviderConfig.repositoryUrl` confirmed above as the
+     linked `repositoryUrl` for the preparation step.
    - If none exists, call `test_plans_create_test_plan` named after the
      application and `test_plans_populate_test_plan` with the approved
      scenarios. Capture the returned `repository` object.

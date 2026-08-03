@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -908,4 +908,20 @@ test('Criar testes never approves a write in the plan-first flow', () => {
   )
   assert.equal(blocked.permissionDecision, 'deny')
   assert.match(blocked.permissionDecisionReason, /Aprovo este Test Plan/)
+})
+
+test('the dev flow verifies the linked repository before writing cases', () => {
+  const skill = readFileSync(
+    join(root, 'skills/voidr-feature-test/SKILL.md'),
+    'utf8'
+  )
+  const verification = skill.indexOf('gitProviderConfig.repositoryUrl')
+  const firstWrite = skill.indexOf('test_plans_create_module')
+  assert.ok(verification > 0, 'the repository check must exist')
+  assert.ok(
+    verification < firstWrite,
+    'the repository check must come before the first structure write'
+  )
+  assert.match(skill, /before writing anything/i)
+  assert.match(skill, /cases created in it are stranded/i)
 })

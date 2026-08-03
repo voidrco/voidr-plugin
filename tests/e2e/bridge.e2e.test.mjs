@@ -1115,3 +1115,132 @@ async function readBody(request) {
   for await (const chunk of request) body += chunk
   return body
 }
+
+test('structure creation reports the created entity slug from a plan-shaped response', async t => {
+  const planId = '6a4431ebb7276d5f9781eaac'
+  // The platform answers create_suite/create_case with the whole updated plan,
+  // never with the created entity, which is what used to leak the plan's own
+  // name and a null slug into the slim response.
+  const plan = {
+    _entity: 'test_plan',
+    _id: planId,
+    name: 'Itaú Crédito Rural — Credit Simulation Journey Protection',
+    modules: [
+      {
+        _entity: 'module',
+        slug: 'valor-minimo-na-simulacao',
+        name: 'Valor Mínimo na Simulação',
+        suites: [
+          {
+            _entity: 'suite',
+            slug: 'VALID',
+            name: 'Validação do Piso de Valor',
+            cases: [
+              {
+                _entity: 'case',
+                slug: 'VALOR-01',
+                name: 'Valor no mínimo exato é aceito'
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+  const server = createServer(async (request, response) => {
+    const message = JSON.parse(await readBody(request))
+    response.setHeader('content-type', 'application/json')
+    response.setHeader('mcp-session-id', 'synthetic-session')
+    if (message.method === 'notifications/initialized') {
+      response.writeHead(202)
+      response.end()
+      return
+    }
+    if (message.method === 'initialize') {
+      sendResult(response, message.id, {
+        protocolVersion: '2024-11-05',
+        capabilities: { tools: {} },
+        serverInfo: { name: 'mock', version: '1' }
+      })
+      return
+    }
+    if (message.method === 'tools/call') {
+      sendResult(response, message.id, {
+        structuredContent: { data: plan },
+        content: [{ type: 'text', text: JSON.stringify({ data: plan }) }]
+      })
+      return
+    }
+    sendResult(response, message.id, {})
+  })
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+  t.after(() => server.close())
+
+  const temp = mkdtempSync(join(tmpdir(), 'voidr-bridge-slug-'))
+  const storePath = join(temp, 'service-accounts.json')
+  writeFileSync(
+    storePath,
+    JSON.stringify({
+      activeOrgId: 'org-slug',
+      accounts: {
+        'org-slug': {
+          clientId: 'sa_slug_e2e',
+          clientSecret: 'synthetic-slug-secret',
+          scopes: ['read', 'write']
+        }
+      }
+    })
+  )
+  const child = spawn(process.execPath, [bridgePath], {
+    cwd: temp,
+    env: {
+      ...process.env,
+      VOIDR_SERVICE_ACCOUNTS_PATH: storePath,
+      VOIDR_MCP_URL: `http://127.0.0.1:${server.address().port}/mcp`
+    },
+    stdio: ['pipe', 'pipe', 'pipe']
+  })
+  t.after(() => child.kill())
+  const client = jsonRpcClient(child)
+  await client.request('initialize', {
+    protocolVersion: '2024-11-05',
+    capabilities: {},
+    clientInfo: { name: 'e2e', version: '1' }
+  })
+
+  // Reading the plan first is what makes the platform-returned slugs known,
+  // as the provenance gate requires.
+  await client.request('tools/call', {
+    name: 'test_plans_get_test_plan',
+    arguments: { planId }
+  })
+
+  const suite = await client.request('tools/call', {
+    name: 'test_plans_create_suite',
+    arguments: {
+      planId,
+      moduleSlug: 'valor-minimo-na-simulacao',
+      name: 'Validação do Piso de Valor'
+    }
+  })
+  const suiteSlim = JSON.parse(suite.content[0].text)
+  assert.equal(suiteSlim.slug, 'valid')
+  assert.equal(suiteSlim.name, 'Validação do Piso de Valor')
+  assert.match(suiteSlim.note, /valid/)
+
+  const created = await client.request('tools/call', {
+    name: 'test_plans_create_case',
+    arguments: {
+      planId,
+      moduleSlug: 'valor-minimo-na-simulacao',
+      suiteSlug: 'VALID',
+      name: 'Valor no mínimo exato é aceito'
+    }
+  })
+  const caseSlim = JSON.parse(created.content[0].text)
+  assert.equal(caseSlim.slug, 'valor-01')
+  assert.equal(caseSlim.name, 'Valor no mínimo exato é aceito')
+  // The plan's own identity must never be reported as the created entity.
+  assert.notEqual(caseSlim.name, plan.name)
+  assert.equal(caseSlim.id, null)
+})

@@ -589,12 +589,25 @@ async function callStructureTool(name, args) {
 
 function slimStructureResult(name, planId, args, result) {
   const data = remoteResultData(result)
+  const plan = planDocument(data)
+  // Creation often answers with the whole updated plan instead of the created
+  // entity. Reading the top level then reports the plan's own name and no
+  // slug, which sends the model hunting for identifiers the response already
+  // carried. Locate the created entity inside the plan instead.
+  const created = findCreatedStructureEntity(name, args, plan)
   const entity =
-    data?.data && typeof data.data === 'object' && !Array.isArray(data.data)
-      ? data.data
-      : data
-  const slug = structureSlug(data, args)
-  if (!slug && !entity) return result
+    created ||
+    (plan
+      ? null
+      : data?.data && typeof data.data === 'object' && !Array.isArray(data.data)
+        ? data.data
+        : data)
+  const slug = created
+    ? structureSlug(created, args)
+    : plan
+      ? ''
+      : structureSlug(data, args)
+  if (!slug && !entity && !plan) return result
   const slim = {
     created: name.replace('test_plans_create_', ''),
     name: entity?.name ?? args?.name ?? null,
@@ -607,6 +620,52 @@ function slimStructureResult(name, planId, args, result) {
     content: [{ type: 'text', text: JSON.stringify(slim) }],
     structuredContent: slim
   }
+}
+
+function planDocument(data) {
+  const doc =
+    data?.data && typeof data.data === 'object' && !Array.isArray(data.data)
+      ? data.data
+      : data
+  return doc && Array.isArray(doc.modules) ? doc : null
+}
+
+function findCreatedStructureEntity(toolName, args, plan) {
+  if (!plan) return null
+  const wanted = String(args?.name || '')
+    .trim()
+    .toLowerCase()
+  if (!wanted) return null
+  const byName = list =>
+    (Array.isArray(list) ? list : []).find(
+      item =>
+        String(item?.name || '')
+          .trim()
+          .toLowerCase() === wanted
+    ) || null
+  const bySlug = (list, slug) => {
+    const wantedSlug = String(slug || '')
+      .trim()
+      .toLowerCase()
+    if (!wantedSlug) return null
+    return (
+      (Array.isArray(list) ? list : []).find(
+        item =>
+          String(item?.slug || '')
+            .trim()
+            .toLowerCase() === wantedSlug
+      ) || null
+    )
+  }
+
+  if (toolName === 'test_plans_create_module') return byName(plan.modules)
+  const parentModule = bySlug(plan.modules, args?.moduleSlug)
+  if (!parentModule) return null
+  if (toolName === 'test_plans_create_suite') return byName(parentModule.suites)
+  const parentSuite = bySlug(parentModule.suites, args?.suiteSlug)
+  if (!parentSuite) return null
+  if (toolName === 'test_plans_create_case') return byName(parentSuite.cases)
+  return null
 }
 
 function enforceKnownStructureRefs(name, planId, args) {

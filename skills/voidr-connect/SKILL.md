@@ -1,6 +1,6 @@
 ---
 name: voidr-connect
-description: Checks or securely connects Voidr through the official browser login, then creates a dedicated role-scoped Copilot Service Account without exposing credentials. Use when Voidr authentication is missing, revoked, read-only, or needs another organization.
+description: Checks or securely connects Voidr, reuses an existing local Service Account when switching organizations, or creates a dedicated role-scoped account through the official browser login without exposing credentials. Use when Voidr authentication is missing, revoked, read-only, or needs another organization.
 ---
 
 # Connect a Voidr Service Account
@@ -26,6 +26,9 @@ When this skill is invoked explicitly, follow this contract literally:
    session, stop and say that the Voidr MCP tools are unavailable and that the
    user must reload the plugin and start a new chat. Do not investigate through
    files or the terminal.
+8. Selecting an organization already returned in `serviceAccounts` takes
+   precedence over browser login. Never call `voidr_auth_login` merely because
+   the requested organization differs from the currently selected one.
 
 ## Connect
 
@@ -42,12 +45,16 @@ When this skill is invoked explicitly, follow this contract literally:
    a separate profile through `VOIDR_CREDENTIAL_PROFILE` (or an explicit
    `VOIDR_SERVICE_ACCOUNTS_PATH`); never assume the machine has no account
    without this status call.
-3. If `serviceAccountSelectionRequired` is true, follow the selection section
-   before deciding whether login is needed.
-4. If `authenticated` is false, tell the user that the official Voidr login
-   will open in the browser, then call `voidr_auth_login`. When
+3. Follow the selection section before deciding whether login is needed. This
+   applies whenever the user asks to switch organizations and whenever
+   `serviceAccountSelectionRequired` is true, including when the currently
+   selected account is invalid.
+4. Call `voidr_auth_login` only when the requested organization has no entry in
+   `serviceAccounts`, no local account exists, or the selected local credential
+   was rejected and must be replaced. Before calling it, tell the user that the
+   official Voidr login will open in the browser. When
    `localCredentialPresent` is true, explain only that the selected local
-   account was rejected or belongs to another organization; never expose it.
+   account was rejected; never expose it.
 5. The browser flow handles user login and explicit organization selection.
    Wait for the tool to finish; do not ask the user for a credential or JSON.
 6. On success, call `voidr_auth_status` again and confirm the organization,
@@ -61,11 +68,16 @@ their CLI child processes, so downstream skills must never run
 
 ## Select an existing local account
 
-- If `serviceAccountSelectionRequired` is true, ask which local Service Account
-  to use before judging the active one. Show account name when present,
-  organization name/ID, masked Client ID, and scopes. End the response.
+- If the user's request identifies exactly one organization name or ID returned
+  in `serviceAccounts`, call `voidr_auth_select_organization` for that entry
+  immediately; do not ask the user to choose it again.
+- Otherwise, if `serviceAccountSelectionRequired` is true, ask which local
+  Service Account to use before judging the active one. Show account name when
+  present, organization name/ID, masked Client ID, and scopes. End the response.
 - After the user chooses, call `voidr_auth_select_organization` with that
   entry's organization ID, then call `voidr_auth_status` again.
+- Never call `voidr_auth_login` to switch to an organization present in
+  `serviceAccounts`, even when another organization is currently active.
 - Never pass `default`, a workspace name, or any value that was not returned
   in `serviceAccounts` as `organizationId`.
 - If exactly one local Service Account exists, use it without asking.
@@ -75,8 +87,8 @@ their CLI child processes, so downstream skills must never run
 - A fresh account in the same organization will keep the user's role-derived
   scopes. For mutations in that organization, explain that a viewer must be
   promoted to editor or admin in Voidr. Run `voidr_auth_login` again only when
-  the user wants to connect a different organization or replace a rejected
-  credential.
+  the requested organization is absent from `serviceAccounts` or the user must
+  replace a rejected credential.
 
 ## Safety
 
@@ -96,7 +108,7 @@ This skill uses exactly three MCP tools:
 | --- | --- |
 | Check authentication, list local Service Accounts, validate the selected credential | `voidr_auth_status` |
 | Apply the user's choice among the accounts/organizations returned by `voidr_auth_status` | `voidr_auth_select_organization` |
-| Connect through the official browser login (missing, rejected, or different-organization credential) | `voidr_auth_login` |
+| Connect through the official browser login (no local account, requested organization absent locally, or rejected credential) | `voidr_auth_login` |
 
 Any other Voidr MCP tool is out of scope for this skill. Never call
 `applications_*`, `test_plans_*`, workspace, release, execution, `playwright_*`,

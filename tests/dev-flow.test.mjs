@@ -40,7 +40,10 @@ test('recognizes developer test-my-feature intent without Voidr vocabulary', () 
     'gerar testes para a funcionalidade que acabei',
     'quero testar minha feature nova',
     'escreve os testes dessa feature de checkout',
-    '/voidr-test'
+    '/voidr-feature-test',
+    'Create tests for my feature',
+    'write tests for the feature I just implemented',
+    'generate tests for this branch'
   ]) {
     assert.equal(isDevTestFlowPrompt(prompt), true, prompt)
   }
@@ -48,7 +51,9 @@ test('recognizes developer test-my-feature intent without Voidr vocabulary', () 
     'quero desenvolver testes na Voidr',
     'Criar testes',
     'roda o lint do projeto',
-    '/voidr-test-plan'
+    '/voidr-test-plan',
+    'Create a new module, suite, and test case in the Voidr Test Plan "smoke-teste"',
+    'List all Test Plans for the application "Itaú"'
   ]) {
     assert.equal(isDevTestFlowPrompt(prompt), false, prompt)
   }
@@ -62,11 +67,11 @@ test('the single dev approval must be the whole message', () => {
   assert.equal(isDevTestsApproval('sim'), false)
 })
 
-test('routes developer intent to /voidr-test and keeps the classic route', () => {
+test('routes developer intent to /voidr-feature-test and keeps the classic route', () => {
   const dev = routeVoidrPrompt({
     prompt: 'cria os testes da minha feature de login'
   })
-  assert.match(dev.modifiedTransformedPrompt, /\/voidr-test skill/)
+  assert.match(dev.modifiedTransformedPrompt, /\/voidr-feature-test skill/)
   assert.match(dev.modifiedTransformedPrompt, /Criar testes/)
 
   const classic = routeVoidrPrompt({
@@ -581,5 +586,221 @@ test('a clicked ask_user option never counts as the typed approval', () => {
   assert.match(
     denied.permissionDecisionReason,
     /last user message seen by the prompt hook: never/
+  )
+})
+
+test('a typed free-text Criar testes arms auto mode and unlocks writes in a cold session', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-dev-flow-'))
+  const sessionId = 'chat-freetext-criar-testes'
+  const postHook = join(root, 'scripts/post-tool-execution-links.mjs')
+
+  const askResult = spawnSync(process.execPath, [postHook], {
+    input: JSON.stringify({
+      sessionId,
+      toolName: 'vscode_askQuestions',
+      toolResult: [
+        JSON.stringify({
+          answers: {
+            approval: {
+              selected: [],
+              freeText: 'Criar testes',
+              skipped: false
+            }
+          }
+        })
+      ]
+    }),
+    encoding: 'utf8',
+    env: { ...process.env, COPILOT_PLUGIN_DATA: dataRoot }
+  })
+  assert.equal(askResult.status, 0, askResult.stderr)
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId,
+        cwd: process.cwd(),
+        toolName: 'voidr-test_plans_create_module',
+        toolArgs: { planId: '0123456789abcdef01234567', name: 'Feature X' }
+      },
+      dataRoot
+    ),
+    {}
+  )
+})
+
+test('a clicked Criar testes option never counts and the auto deny teaches the fallback', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-dev-flow-'))
+  const sessionId = 'chat-clicked-criar-testes'
+  const postHook = join(root, 'scripts/post-tool-execution-links.mjs')
+  const now = Date.now()
+
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now,
+      prompt: 'cria os testes da minha feature de login',
+      transformedPrompt: 'cria os testes da minha feature de login'
+    },
+    dataRoot
+  )
+
+  const askResult = spawnSync(process.execPath, [postHook], {
+    input: JSON.stringify({
+      sessionId,
+      toolName: 'vscode_askQuestions',
+      toolResult: [
+        JSON.stringify({
+          answers: {
+            approval: {
+              selected: ['Criar testes'],
+              freeText: null,
+              skipped: false
+            }
+          }
+        })
+      ]
+    }),
+    encoding: 'utf8',
+    env: { ...process.env, COPILOT_PLUGIN_DATA: dataRoot }
+  })
+  assert.equal(askResult.status, 0, askResult.stderr)
+
+  const denied = runHook(
+    {
+      sessionId,
+      cwd: process.cwd(),
+      toolName: 'voidr-test_plans_create_module',
+      toolArgs: { planId: '0123456789abcdef01234567', name: 'Login' }
+    },
+    dataRoot
+  )
+  assert.equal(denied.permissionDecision, 'deny')
+  assert.match(denied.permissionDecisionReason, /Criar testes/)
+  assert.match(denied.permissionDecisionReason, /free-text field/)
+  assert.match(
+    denied.permissionDecisionReason,
+    /last user message seen by the prompt hook/i
+  )
+})
+
+test('post-smoke remediation crosses hook session ids and ask_user answers', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-dev-flow-'))
+  const windowSession = 'window-smoke'
+  const chatSession = 'chat-smoke'
+  const postHook = join(root, 'scripts/post-tool-execution-links.mjs')
+  const now = Date.now()
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId: chatSession,
+        cwd: process.cwd(),
+        toolName: 'voidr-voidr_smoke_build',
+        toolArgs: {
+          repositoryPath: '/tmp/tests',
+          repositoryUrl: 'https://github.com/voidrco/tests',
+          testPlanId: '0123456789abcdef01234567',
+          specs: ['modules/a/a.spec.js'],
+          baseUrl: 'https://app.test'
+        }
+      },
+      dataRoot
+    ),
+    {}
+  )
+
+  const blocked = runHook(
+    {
+      sessionId: chatSession,
+      cwd: process.cwd(),
+      toolName: 'read_file',
+      toolArgs: { filePath: '/tmp/tests/modules/a/a.spec.js' }
+    },
+    dataRoot
+  )
+  assert.equal(blocked.permissionDecision, 'deny')
+  assert.match(blocked.permissionDecisionReason, /after voidr_smoke_build/)
+
+  submitPrompt(
+    {
+      sessionId: windowSession,
+      timestamp: now + 5000,
+      prompt: 'corrige o teste e roda de novo',
+      transformedPrompt: 'corrige o teste e roda de novo'
+    },
+    dataRoot
+  )
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId: chatSession,
+        cwd: process.cwd(),
+        toolName: 'read_file',
+        toolArgs: { filePath: '/tmp/tests/modules/a/a.spec.js' }
+      },
+      dataRoot
+    ),
+    {}
+  )
+})
+
+test('an ask_user answer authorizing the fix clears the post-smoke stop', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-dev-flow-'))
+  const sessionId = 'chat-smoke-ask'
+  const postHook = join(root, 'scripts/post-tool-execution-links.mjs')
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId,
+        cwd: process.cwd(),
+        toolName: 'voidr-voidr_smoke_build',
+        toolArgs: {
+          repositoryPath: '/tmp/tests',
+          repositoryUrl: 'https://github.com/voidrco/tests',
+          testPlanId: '0123456789abcdef01234567',
+          specs: ['modules/a/a.spec.js'],
+          baseUrl: 'https://app.test'
+        }
+      },
+      dataRoot
+    ),
+    {}
+  )
+
+  const askResult = spawnSync(process.execPath, [postHook], {
+    input: JSON.stringify({
+      sessionId,
+      toolName: 'vscode_askQuestions',
+      toolResult: [
+        JSON.stringify({
+          answers: {
+            next_step: {
+              selected: ['Corrigir o teste e rodar de novo'],
+              freeText: null,
+              skipped: false
+            }
+          }
+        })
+      ]
+    }),
+    encoding: 'utf8',
+    env: { ...process.env, COPILOT_PLUGIN_DATA: dataRoot }
+  })
+  assert.equal(askResult.status, 0, askResult.stderr)
+
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId,
+        cwd: process.cwd(),
+        toolName: 'read_file',
+        toolArgs: { filePath: '/tmp/tests/modules/a/a.spec.js' }
+      },
+      dataRoot
+    ),
+    {}
   )
 })

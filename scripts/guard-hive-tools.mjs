@@ -519,8 +519,14 @@ function enforceExplicitEnvironmentSelection(hookPayload, name, args) {
 }
 
 function enforcePostSmokeStop(hookPayload, rawName, canonicalName) {
-  const state = readSessionState(hookPayload)
+  const state = readGateState(hookPayload)
   if (!Number.isFinite(state.smokeAttemptedAt)) return
+  if (
+    Number.isFinite(state.smokeRemediationAt) &&
+    state.smokeRemediationAt > state.smokeAttemptedAt
+  ) {
+    return
+  }
   if (
     [
       'voidr_release_deploy_merged_pr',
@@ -531,7 +537,7 @@ function enforcePostSmokeStop(hookPayload, rawName, canonicalName) {
   }
   if (/(?:ask_user|askuserquestion|todo)/i.test(rawName)) return
   deny(
-    'Blocked by Voidr workflow: after voidr_smoke_build, stop and report its exact result. Do not inspect files, edit specs, retry smoke, or diagnose by guessing in the same turn. Wait for a new user message explicitly asking to investigate/correct the smoke failure before continuing.'
+    'Blocked by Voidr workflow: after voidr_smoke_build, stop and report its exact result. Do not inspect files, edit specs, retry smoke, or diagnose by guessing in the same turn. Wait for the user to authorize the investigation or correction in a new chat message or an ask_user answer (for example “corrige e roda de novo”) before continuing.'
   )
 }
 
@@ -799,9 +805,14 @@ function enforceTestPlanWriteApproval(hookPayload, canonicalName) {
     )
   }
   if (!approvalFresh) {
+    const promptAgeMinutes = Number.isFinite(state.promptHookAliveAt)
+      ? Math.round((Date.now() - state.promptHookAliveAt) / 60000)
+      : null
+    const promptHookAge =
+      promptAgeMinutes === null ? 'never' : `${promptAgeMinutes} minute(s) ago`
     if (state.planMode === 'auto') {
       deny(
-        'Blocked by Voidr workflow: show the user the list of test scenarios for the feature and wait for a new user message saying exactly “Criar testes” before writing anything to the platform.'
+        `Blocked by Voidr workflow: show the user the list of test scenarios for the feature and wait for a new user message saying exactly “Criar testes” before writing anything to the platform. Last user message seen by the prompt hook: ${promptHookAge}. If the user already typed it and it was not recorded (stale prompt hook), collect it with an ask_user question containing a single free-text field where the user types exactly “Criar testes”. Do not loop retries and do not delegate to a subagent.`
       )
     }
     const missing = []
@@ -810,13 +821,8 @@ function enforceTestPlanWriteApproval(hookPayload, canonicalName) {
         'this session has never received a user chat message — a subagent session can never hold the typed approval, so never delegate Test Plan writes to a subagent; if this is the main chat, the plugin prompt hook is not running (reinstall the plugin and reload the VS Code window)'
       )
     }
-    const promptAgeMinutes = Number.isFinite(state.promptHookAliveAt)
-      ? Math.round((Date.now() - state.promptHookAliveAt) / 60000)
-      : null
     missing.push(
-      `a fresh user-typed “Aprovo este Test Plan” approval is missing or expired (a generic “sim” is not approval; last user message seen by the prompt hook: ${
-        promptAgeMinutes === null ? 'never' : `${promptAgeMinutes} minute(s) ago`
-      })`
+      `a fresh user-typed “Aprovo este Test Plan” approval is missing or expired (a generic “sim” is not approval; last user message seen by the prompt hook: ${promptHookAge})`
     )
     deny(
       `Blocked by Voidr workflow — missing: ${missing.join('; ')}. Test Plan writes require a visible draft followed by a new user message explicitly saying “Aprovo este Test Plan”. To add cases to an existing plan, follow the “Add cases to an existing plan” section of /voidr-test-plan: show the additions draft and wait for that exact approval message. Recovery: show (or refresh) the draft, ask the user to type that exact approval in a new chat message, then retry this call once. If the user already typed the approval and it was not recorded (stale prompt hook), collect it with an ask_user question containing a single free-text field where the user types exactly “Aprovo este Test Plan” — typed free-text answers are recorded reliably. Do not loop retries and do not delegate to a subagent.`

@@ -65,7 +65,7 @@ After finishing a feature, say:
 
 > Cria os testes da minha feature.
 
-The `/voidr-test` skill infers the feature from the current branch and diff,
+The `/voidr-feature-test` skill infers the feature from the current branch and diff,
 auto-selects the application and environment when only one exists, confirms
 everything on a single card, and shows plain-language scenarios. The only
 phrase the developer ever types is `Criar testes`. Test Plans, scaffolding,

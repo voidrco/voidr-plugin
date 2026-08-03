@@ -1,6 +1,6 @@
 ---
-name: voidr-test
-description: Fluxo dev-first para criar e rodar testes da feature que o desenvolvedor acabou de implementar. Use SEMPRE que um dev disser "cria os testes da minha feature", "gerar testes do meu código", "testar minha feature", "acabei a feat, quero os testes", "escreve os testes dessa funcionalidade" ou invocar /voidr-test. Infere a feature do branch e do diff, confirma tudo em um único card, mostra cenários em linguagem simples e exige apenas a mensagem "Criar testes" antes de qualquer escrita.
+name: voidr-feature-test
+description: Fluxo dev-first para criar e rodar testes da feature que o desenvolvedor acabou de implementar. Use SEMPRE que um dev disser "cria os testes da minha feature", "gerar testes do meu código", "testar minha feature", "acabei a feat, quero os testes", "escreve os testes dessa funcionalidade" ou invocar /voidr-feature-test. Infere a feature do branch e do diff, confirma tudo em um único card, mostra cenários em linguagem simples e exige apenas a mensagem "Criar testes" antes de qualquer escrita.
 ---
 
 # Test my feature (developer-first flow)
@@ -22,6 +22,10 @@ partial read.
 5. Never delegate any part of this flow to a subagent: the typed
    `Criar testes` gate is recorded per chat session, and a subagent's
    platform writes are always denied.
+6. Write inside the test repository only the files the approved
+   scenarios require: specs and the actions, helpers, or fixtures they
+   import. Never create analysis, exploration, summary, or scratch
+   documents there — those notes belong in the chat response.
 
 This flow exists for a developer who just finished a feature and wants tests
 for it, without learning the Voidr platform. The mental model is:
@@ -142,7 +146,10 @@ Only after `Criar testes`:
      or re-case an identifier).
      On a not-found error, read the plan with `test_plans_get_test_plan` to
      get the real slugs; never retry the same identifier. The bridge blocks
-     invented slugs and not-found retries.
+     invented slugs and not-found retries. The approved module, suite, and
+     scenario names are binding: after any error, continue with those exact
+     names and the real slugs — never create a module or suite with a
+     different name to work around a failure.
      For a reused plan, read it with `test_plans_get_test_plan` and use its
      `gitProviderConfig.repositoryUrl` as the linked `repositoryUrl` for the
      preparation step. If the reused plan has no linked repository, stop and

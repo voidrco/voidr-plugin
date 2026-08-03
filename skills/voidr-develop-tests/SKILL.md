@@ -503,5 +503,5 @@ Route the remaining scenarios through skills, not direct tool calls:
 - Browser login (`voidr_auth_login`): only inside `/voidr-connect`.
 
 Never call `voidr_workspace_git_context` from this skill; branch/diff feature
-inference belongs to the `/voidr-test` developer-first flow. Never call
+inference belongs to the `/voidr-feature-test` developer-first flow. Never call
 `executions_list_executions` from any point of this workflow.

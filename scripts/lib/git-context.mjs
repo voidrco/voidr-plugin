@@ -126,10 +126,19 @@ async function collectChangedHunks(git, defaultBranch, files) {
     }
   }
   return {
-    diff: raw.slice(0, MAX_DIFF_CHARACTERS),
+    // Cut on a line boundary: half of a diff line reads as different code
+    // than the change actually made.
+    diff: truncateToWholeLines(raw, MAX_DIFF_CHARACTERS),
     truncated: true,
     note: `Diff truncated at ${MAX_DIFF_CHARACTERS} characters${omittedFiles ? ` and limited to the first ${MAX_DIFF_FILES} changed files` : ''}. Read the remaining changed files listed in changedFilesVsDefault to see the rest of the change.`
   }
+}
+
+function truncateToWholeLines(value, maxCharacters) {
+  const capped = value.slice(0, maxCharacters)
+  const lastBreak = capped.lastIndexOf('\n')
+  // A single line longer than the cap has no boundary to fall back to.
+  return lastBreak > 0 ? capped.slice(0, lastBreak + 1) : capped
 }
 
 async function resolveDefaultBranch(git) {

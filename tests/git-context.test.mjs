@@ -114,3 +114,32 @@ test('inspects a single repository when repositoryPath is given', async () => {
   assert.equal(context.repositories.length, 1)
   assert.equal(context.repositories[0].currentBranch, 'feat/recarga-creditos')
 })
+
+test('a truncated diff keeps only whole lines', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-git-trunc-'))
+  const path = join(workspace, 'demo-produto')
+  mkdirSync(path)
+  git(path, 'init', '-b', 'main')
+  const base = Array.from({ length: 400 }, (_, i) => `linha ${i} original`)
+  writeFileSync(join(path, 'grande.js'), `${base.join('\n')}\n`)
+  git(path, 'add', '-A')
+  git(path, 'commit', '-m', 'chore: base')
+  git(path, 'checkout', '-b', 'feat/muda-tudo')
+  writeFileSync(
+    join(path, 'grande.js'),
+    `${base.map((line, i) => `${line} alterada ${i}`).join('\n')}\n`
+  )
+  git(path, 'add', '-A')
+  git(path, 'commit', '-m', 'feat: altera todas as linhas')
+
+  const context = await collectGitContext({
+    workspaceRoot: workspace,
+    repositoryPath: path
+  })
+  const hunks = context.repositories[0].changedHunksVsDefault
+  assert.equal(hunks.truncated, true)
+  assert.ok(hunks.diff.length <= 12_000)
+  // Cutting mid-line would render a diff line as code the change never made.
+  assert.ok(hunks.diff.endsWith('\n'), 'the truncated diff must end on a line break')
+  assert.match(hunks.note, /truncated at 12000 characters/)
+})

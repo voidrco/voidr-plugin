@@ -91,12 +91,16 @@ When the flow starts:
    `onFeatureBranch` is true and whose changed files match the developer's
    request is the feature.
 
-   When the result reports `repositoriesNotInspected`, or no returned
-   repository matches the developer's request, call the tool again with
-   `repositoryPath` set to the feature repository's path instead of guessing
-   from the repositories that came back. A workspace opened on a parent
-   folder of many checkouts routinely leaves the feature repository out of
-   the first result.
+   When the result reports `repositoriesNotInspected` and none of the
+   inspected repositories matches the developer's request, call the tool
+   again with `repositoryPath` set to one of the exact paths that list
+   returned — a workspace opened on a parent folder of many checkouts
+   routinely leaves the feature repository out of the first result. Use only
+   paths the tool itself returned: never assemble or guess a repository path,
+   and never re-run the tool on a path that is not in that list. When every
+   repository was already inspected and none matches, the workspace has no
+   identifiable feature diff, so go to step 5 and ask instead of searching
+   further.
 
    Then read the change itself, in this order: the returned diff hunks
    first, then the changed files around those hunks (read-only) for the

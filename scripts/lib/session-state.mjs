@@ -124,8 +124,13 @@ export function recordUserPromptState(payload) {
       : isVoidrTestingPrompt(prompt)
         ? false
         : current.devFlowActive === true
-    const devApprovalArmed =
-      isDevTestsApproval(prompt) && (planMode === 'auto' || devFlowActive)
+    const devApprovalArmed = armsDevTestsApproval(prompt, {
+      planMode,
+      devFlowActive,
+      // The prompt hook just wrote this state, so an absent planMode really
+      // means "no dev-first evidence" and must not arm the approval.
+      emptyStateCounts: false
+    })
     const promptTestPlanId = extractExplicitTestPlanId(prompt)
     const selectedTestPlanId =
       planMode === 'new'
@@ -226,10 +231,13 @@ export function recordAskUserSelections(payload, { toolName, toolResult }) {
           next.planContextConfirmedAt = Date.now()
           changed = true
         } else if (
-          isDevTestsApproval(text) &&
-          (next.planMode === 'auto' ||
-            !next.planMode ||
-            next.devFlowActive === true)
+          armsDevTestsApproval(text, {
+            planMode: next.planMode,
+            devFlowActive: next.devFlowActive === true,
+            // This is the fallback for a dead prompt hook, where no routing
+            // state was ever recorded, so an empty state is expected here.
+            emptyStateCounts: true
+          })
         ) {
           if (next.planMode !== 'existing') next.planMode = 'auto'
           next.devFlowActive = true
@@ -460,6 +468,15 @@ export function isExistingPlanChoice(prompt) {
   return /\b(?:usar|trabalhar\s+em|implementar|escolher|selecionar|continuar|de\s+um|em\s+um|num|no)\b[^.!?]{0,60}(?:test\s*plan|plano\s+de\s+testes?)\s+existente\b|^(?:num|no|em\s+um)?\s*(?:test\s*plan|plano\s+de\s+testes?)\s+existente\b/.test(
     text
   )
+}
+
+// One rule for the “Criar testes” gate, shared by the prompt hook and the
+// ask_user fallback so the recognizer and the flow-awareness can never drift
+// apart. The two callers differ only in what an empty state means.
+function armsDevTestsApproval(text, { planMode, devFlowActive, emptyStateCounts }) {
+  if (!isDevTestsApproval(text)) return false
+  if (planMode === 'auto' || devFlowActive) return true
+  return emptyStateCounts && !planMode
 }
 
 export function isSmokeRemediationPrompt(prompt) {

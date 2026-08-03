@@ -441,13 +441,25 @@ assert(
   'Entry skill must stop and redirect missing authentication to /copilot voidr-connect.'
 )
 assert(
-  /If `serviceAccountSelectionRequired` is true, ask which local Service Account/i.test(
+  /if `serviceAccountSelectionRequired` is true, ask which local[\s\S]*?Service Account/i.test(
     connectSkill
   ),
   'Connect skill must ask which locally available Service Account to use.'
 )
 assert(
-  /If `authenticated` is false,[\s\S]*?call `voidr_auth_login`/i.test(
+  /request identifies exactly one organization name or ID returned[\s\S]*?call `voidr_auth_select_organization`[\s\S]*?do not ask the user to choose it again/i.test(
+    connectSkill
+  ) &&
+    /Never call `voidr_auth_login` to switch to an organization present in[\s\S]*?`serviceAccounts`/i.test(
+      connectSkill
+    ) &&
+    /requested organization is absent from `serviceAccounts`[\s\S]*?replace a rejected credential/i.test(
+      connectSkill
+    ),
+  'Connect skill must prefer an existing local account over browser login when switching organizations.'
+)
+assert(
+  /Call `voidr_auth_login` only when the requested organization has no entry in[\s\S]*?no local account exists[\s\S]*?selected local credential[\s\S]*?rejected/i.test(
     connectSkill
   ),
   'Connect skill must start the official browser login when authentication is unavailable.'

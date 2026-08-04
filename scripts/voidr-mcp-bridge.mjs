@@ -52,6 +52,13 @@ let creationIdempotency = null
 // Plans the platform created without a repository, confirmed by reading them
 // back. They accept planning writes and refuse everything that needs a
 // checkout until test_plans_provision_repository links one.
+//
+// The platform has since chosen the opposite recovery for a failed creation: it
+// rolls the new plan back, so "error" means nothing was created and this mode
+// normally stays idle — the read-back finds no plan and the error surfaces as
+// usual. It still earns its place for the two cases the rollback does not
+// cover: a plan from an earlier idempotent attempt (the platform only rolls
+// back what the current call created) and plans left behind before that change.
 const automationPendingPlans = new Map() // planId -> { planId, name, fingerprint, reason }
 let lastFailedCreateArgs = null
 // Structure slugs actually returned by the platform this session. They are

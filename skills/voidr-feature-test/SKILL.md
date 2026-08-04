@@ -251,10 +251,8 @@ Only after `Criar testes`:
      repository. Write the approved structure into it anyway — that work is
      kept — and then stop the flow there: skip preparation, implementation,
      smoke, and publishing, which have no checkout to run in. Do not create
-     another plan and do not retry the creation. Close by telling the developer,
-     in plain language, that the scenarios were recorded but the tests cannot
-     run yet because the test repository is missing, and that resuming needs
-     `test_plans_provision_repository` for that same plan.
+     another plan and do not retry the creation. Then report it as described
+     in “Reporting a missing test repository”.
    - If a creation call fails without a plan, stop, show the exact error, and
      offer retry or cancel. Never silently switch to another plan.
 2. Call `voidr_workspace_prepare_test_repository` once with the selected IDs,
@@ -307,6 +305,17 @@ Only after `Criar testes`:
 
 Report progress in one short line per step ("Preparando o repositório de
 testes…", "Escrevendo os testes…"), not tool-by-tool narration.
+
+## Reporting a missing test repository
+
+A plan without a linked repository is a partial delivery, so report it as one.
+Lead with the state, never with success: name what exists (the scenarios that
+were recorded) and say plainly that the tests cannot run yet because the test
+repository is missing. Offer the next step in the developer's words — "posso
+provisionar o repositório agora" — never a tool name. Include the platform's own
+failure text once, marked as detail for whoever operates the platform, and never
+advise changing an environment variable, a service configuration, or any
+infrastructure: none of that is something the developer can act on from here.
 
 ## 5. Run, analyze, fix
 

@@ -370,20 +370,22 @@ After approval:
 
 1. Call `test_plans_create_test_plan`.
 2. Use the returned ID, never a guessed or sentinel ID. Capture the returned
-   `repository` object. On the configured production backend, creation is successful only
-   when the server also provisions or reuses and links a private GitHub
-   repository. If `repository` is absent, stop and report the incomplete
-   server response; never compensate by inventing a repository URL. Do not
-   retry `create_test_plan` and do not call `populate_test_plan`: the server
-   rolls back newly created Test Plans and repositories when provisioning
-   fails, and the plugin bridge rejects population without a complete
-   repository-bearing creation response.
+   `repository` object. Creation normally also provisions or reuses and links a
+   private GitHub repository, and then `repository` carries its URL, owner,
+   name, and default branch. Never compensate by inventing a repository URL.
+
+   When the response instead reports `automationPending: true` with
+   `repository: null`, the plan exists and only its repository is missing. The
+   server does not roll the plan back, so do not retry `create_test_plan` and
+   do not create another plan: continue to step 3, persist the approved
+   structure, and report as described in “Reporting a missing test repository”.
 3. Call `test_plans_populate_test_plan` with the approved structure.
 4. Read it back with `test_plans_get_test_plan`.
 5. Compare the persisted modules, suites, and case slugs to the approved
-   draft. Also verify that the persisted
-   `gitProviderConfig.repositoryUrl` equals the `repository.url` returned by
-   `test_plans_create_test_plan`.
+   draft. When the creation returned a repository, also verify that the
+   persisted `gitProviderConfig.repositoryUrl` equals that `repository.url`;
+   skip only this repository comparison for a plan reported as
+   `automationPending`.
 6. Stop on any content or repository-link mismatch and report it. Do not
    silently add missing cases and do not continue to local repository setup.
 7. Return the creation result using this mandatory Markdown shape:
@@ -403,9 +405,33 @@ After approval:
    substitute a GitHub link.
 
 The skill has not completed successfully until this clickable repository link
-is visible to the user. If `repository.url`, owner, name, or default branch is
-missing, stop and report an incomplete MCP response instead of claiming the
-Test Plan was created successfully.
+is visible to the user, unless the plan was reported as `automationPending` —
+then the report below replaces this shape. If a repository was returned but
+`repository.url`, owner, name, or default branch is missing, stop and report an
+incomplete MCP response instead of claiming the Test Plan was created
+successfully.
+
+## Reporting a missing test repository
+
+A plan without a linked repository is a partial delivery, so report it as one
+instead of announcing success. Lead with the state: name what exists (the plan
+and its cases) and say plainly that the tests cannot run yet because the test
+repository is missing. Offer the next step in the user's words — "posso
+provisionar o repositório agora" — never a tool name. Include the platform's own
+failure text once, marked as detail for whoever operates the platform, and never
+advise changing an environment variable, a service configuration, or any
+infrastructure: none of that is something the user can act on from here.
+
+   ```md
+   Cenários registrados. Automação ainda pendente.
+
+   - Test Plan: <plan-name> (`<test-plan-id>`)
+   - Casos: <n> em <m> suites
+   - Repositório de testes: **não criado** — os testes ainda não podem rodar
+   - Próximo passo: me peça para provisionar o repositório
+
+   *Detalhe técnico para quem opera a plataforma: <exact platform error>.*
+   ```
 
 Never create an empty DRAFT to complete later. The approved draft must contain
 at least one case before the first mutation.

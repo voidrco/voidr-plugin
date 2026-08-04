@@ -346,8 +346,20 @@ test('bridge blocks Test Plan listing after a failed creation instead of a silen
         })
         return
       }
+      if (message.params.name === 'test_plans_get_test_plan') {
+        // Nothing was persisted, so the creation really failed.
+        response.end(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: message.id,
+            error: { code: -32000, message: 'TestPlan not found' }
+          })
+        )
+        return
+      }
       // Creation "succeeds" at the HTTP layer but omits the provisioned
-      // repository, which the bridge treats as a failed creation.
+      // repository, and no plan exists behind it, so the bridge treats it as a
+      // failed creation instead of planning-only mode.
       sendResult(response, message.id, {
         structuredContent: { data: { _id: '0123456789abcdef01234567' } },
         content: [
@@ -1524,9 +1536,10 @@ test('the same creation intent reuses one idempotency key across retries', async
   assert.equal(seenKeys[0], seenKeys[1], 'the retry must reuse the first key')
 })
 
-test('an orphaned plan lets the unchanged retry resume it and blocks a changed one', async t => {
-  const orphanId = '6a70b0fcf2fc9085f680ea1e'
+test('a plan created without a repository continues in planning-only mode', async t => {
+  const pendingId = '6a70b0fcf2fc9085f680ea1e'
   const calls = []
+  let provisioned = false
   const server = createServer(async (request, response) => {
     const message = JSON.parse(await readBody(request))
     response.setHeader('content-type', 'application/json')
@@ -1548,7 +1561,7 @@ test('an orphaned plan lets the unchanged retry resume it and blocks a changed o
       const { name, arguments: args } = message.params
       calls.push(name)
       if (name === 'applications_list_applications') {
-        const data = { data: [{ _id: '6a510c7b9bc772cdbee9d197', name: 'Blip Desk Demo' }] }
+        const data = { data: [{ _id: '6a510c7b9bc772cdbee9d197', name: 'App' }] }
         sendResult(response, message.id, {
           structuredContent: { data },
           content: [{ type: 'text', text: JSON.stringify(data) }]
@@ -1556,27 +1569,44 @@ test('an orphaned plan lets the unchanged retry resume it and blocks a changed o
         return
       }
       if (name === 'test_plans_create_test_plan') {
-        // The platform commits the plan and then fails looking it back up.
         response.end(
           JSON.stringify({
             jsonrpc: '2.0',
             id: message.id,
             error: {
               code: -32000,
-              message: `Error executing test_plans_create_test_plan: TestPlan with identifier '${orphanId}' not found`
+              message: `Test plan ${pendingId} was created, but repository provisioning failed: no GitHub connector`
             }
           })
         )
         return
       }
+      if (name === 'test_plans_provision_repository') {
+        provisioned = true
+        const data = {
+          testPlanId: args.planId,
+          repository: {
+            url: 'https://github.com/voidrco/voidr-tp-app',
+            owner: 'voidrco',
+            name: 'voidr-tp-app',
+            defaultBranch: 'main'
+          }
+        }
+        sendResult(response, message.id, {
+          structuredContent: { data },
+          content: [{ type: 'text', text: JSON.stringify(data) }]
+        })
+        return
+      }
       if (name === 'test_plans_get_test_plan') {
         const plan = {
-          _entity: 'test_plan',
           _id: args.planId,
           applicationId: '6a510c7b9bc772cdbee9d197',
-          name: 'Login Desk',
-          status: 'DRAFT',
-          modules: []
+          name: 'Plano sem repo',
+          modules: [],
+          ...(provisioned
+            ? { gitProviderConfig: { repositoryUrl: 'https://github.com/voidrco/voidr-tp-app' } }
+            : {})
         }
         sendResult(response, message.id, {
           structuredContent: { data: plan },
@@ -1584,22 +1614,27 @@ test('an orphaned plan lets the unchanged retry resume it and blocks a changed o
         })
         return
       }
+      sendResult(response, message.id, {
+        structuredContent: { data: { ok: true } },
+        content: [{ type: 'text', text: JSON.stringify({ data: { ok: true } }) }]
+      })
+      return
     }
     sendResult(response, message.id, {})
   })
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
   t.after(() => server.close())
 
-  const temp = mkdtempSync(join(tmpdir(), 'voidr-bridge-orphan-'))
+  const temp = mkdtempSync(join(tmpdir(), 'voidr-bridge-pending-'))
   const storePath = join(temp, 'service-accounts.json')
   writeFileSync(
     storePath,
     JSON.stringify({
-      activeOrgId: 'org-orphan',
+      activeOrgId: 'org-pending',
       accounts: {
-        'org-orphan': {
-          clientId: 'sa_orphan_e2e',
-          clientSecret: 'synthetic-orphan-secret',
+        'org-pending': {
+          clientId: 'sa_pending_e2e',
+          clientSecret: 'synthetic-pending-secret',
           scopes: ['read', 'write']
         }
       }
@@ -1621,50 +1656,62 @@ test('an orphaned plan lets the unchanged retry resume it and blocks a changed o
     capabilities: {},
     clientInfo: { name: 'e2e', version: '1' }
   })
-
   await client.request('tools/call', {
     name: 'applications_list_applications',
     arguments: {}
   })
 
-  const args = {
-    name: 'Login Desk',
-    applicationId: '6a510c7b9bc772cdbee9d197',
-    status: 'DRAFT'
+  // Creation "fails" on provisioning only, so the flow gets a usable plan.
+  const created = await client.request('tools/call', {
+    name: 'test_plans_create_test_plan',
+    arguments: { applicationId: '6a510c7b9bc772cdbee9d197', name: 'Plano sem repo' }
+  })
+  const body = JSON.parse(created.content[0].text)
+  assert.equal(body.planId, pendingId)
+  assert.equal(body.automationPending, true)
+  assert.equal(body.repository, null)
+  assert.match(body.note, /structure can be written now/i)
+  assert.match(body.note, /test_plans_provision_repository/)
+
+  // Planning writes are allowed on that plan.
+  await client.request('tools/call', {
+    name: 'test_plans_populate_test_plan',
+    arguments: { planId: pendingId, modules: [] }
+  })
+  assert.equal(calls.includes('test_plans_populate_test_plan'), true)
+
+  // Everything that needs a checkout is refused, naming the way out.
+  for (const tool of [
+    'voidr_smoke_build',
+    'voidr_workspace_publish_tests',
+    'executions_create_execution'
+  ]) {
+    const blocked = await client.requestRaw('tools/call', {
+      name: tool,
+      arguments: { testPlanId: pendingId, repositoryPath: temp }
+    })
+    assert.match(blocked.error.message, /without a linked repository/i, tool)
+    assert.match(blocked.error.message, /test_plans_provision_repository/, tool)
   }
-  const failed = await client.requestRaw('tools/call', {
-    name: 'test_plans_create_test_plan',
-    arguments: args
-  })
-  assert.match(failed.error.message, /not found/i)
-  assert.match(failed.error.message, new RegExp(orphanId))
-  assert.match(failed.error.message, /already created Test Plan/i)
-  assert.match(failed.error.message, /no linked repository/i)
 
-  // Unchanged arguments carry the same idempotency key, so the platform
-  // resumes the plan it already holds: this retry is the repair path and must
-  // reach the platform.
-  await client.requestRaw('tools/call', {
+  // A second creation is refused too: the pending plan is the one to finish.
+  const second = await client.requestRaw('tools/call', {
     name: 'test_plans_create_test_plan',
-    arguments: args
+    arguments: { applicationId: '6a510c7b9bc772cdbee9d197', name: 'Outro plano' }
   })
-  assert.equal(
-    calls.filter(name => name === 'test_plans_create_test_plan').length,
-    2,
-    'the unchanged retry must reach the platform to resume the plan'
-  )
+  assert.match(second.error.message, /Never create a second plan/i)
 
-  // Different arguments mint a new key, which would insert a second plan next
-  // to the one already left behind.
-  const changed = await client.requestRaw('tools/call', {
-    name: 'test_plans_create_test_plan',
-    arguments: { ...args, name: 'Outro nome' }
+  // Provisioning the existing plan lifts the block.
+  await client.request('tools/call', {
+    name: 'test_plans_provision_repository',
+    arguments: { planId: pendingId }
   })
-  assert.match(changed.error.message, /already created Test Plan/i)
-  assert.match(changed.error.message, /would insert a second plan/i)
-  assert.equal(
-    calls.filter(name => name === 'test_plans_create_test_plan').length,
-    2,
-    'the changed retry must never reach the platform'
+  const afterProvision = await client.requestRaw('tools/call', {
+    name: 'voidr_smoke_build',
+    arguments: { testPlanId: pendingId, repositoryPath: temp }
+  })
+  assert.doesNotMatch(
+    String(afterProvision.error?.message || ''),
+    /without a linked repository/i
   )
 })

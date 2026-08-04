@@ -429,6 +429,7 @@ out of scope for this skill.
 | List workspace repository candidates for read-only code context | `voidr_workspace_inspect` |
 | Assimilate indexed application documentation for planning or approved additions | `file_embeddings_search_documents` |
 | Persist the approved new plan (first mutation) | `test_plans_create_test_plan` |
+| Provision the repository of a plan that was created without one | `test_plans_provision_repository` |
 | Persist the approved structure right after a complete creation response | `test_plans_populate_test_plan` |
 | Add a module, suite, or case to an already-persisted plan, after the additions draft was approved (see “Add cases to an existing plan”) | `test_plans_create_module`, `test_plans_create_suite`, `test_plans_create_case` |
 | Edit an already-persisted plan, module, suite, or case only when the user explicitly requests that exact change | `test_plans_update_test_plan`, `test_plans_update_module`, `test_plans_update_suite`, `test_plans_update_case` |

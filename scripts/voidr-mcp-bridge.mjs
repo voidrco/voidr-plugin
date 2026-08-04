@@ -49,9 +49,10 @@ let planCreationFailed = false
 // { fingerprint, key } for the creation being attempted. The platform stores
 // the key on the plan, so resending it is what turns a retry into a resume.
 let creationIdempotency = null
-// Plans the platform created and then failed to finish. Confirmed by reading
-// them back, so a retry is known to duplicate rather than repair.
-const orphanedTestPlans = new Map() // planId -> { planId, name, hasRepository }
+// Plans the platform created without a repository, confirmed by reading them
+// back. They accept planning writes and refuse everything that needs a
+// checkout until test_plans_provision_repository links one.
+const automationPendingPlans = new Map() // planId -> { planId, name, fingerprint, reason }
 let lastFailedCreateArgs = null
 // Structure slugs actually returned by the platform this session. They are
 // the only identifiers the model may reference when adding cases to modules
@@ -429,6 +430,7 @@ async function callTool(params) {
   }
 
   enforcePlatformProvenance(name, args)
+  enforceRepositoryAvailability(name, args)
 
   if (localNames.has(name)) return callLocal(name, args)
   if (!safeRemote.has(name)) {
@@ -461,6 +463,18 @@ async function callTool(params) {
     }
     const result = await remote.callTool(name, args)
     return slimTestPlanListing(result)
+  }
+
+  if (name === 'test_plans_provision_repository') {
+    const result = await remote.callTool(name, args)
+    if (!result?.isError) {
+      // The repository exists now, so the plan leaves planning-only mode and
+      // the blocked tools become available again.
+      const planId = bridgeTestPlanId(args).toLowerCase()
+      if (planId) automationPendingPlans.delete(planId)
+      else automationPendingPlans.clear()
+    }
+    return result
   }
 
   if (name === 'file_embeddings_search_documents') {
@@ -518,16 +532,11 @@ async function callTool(params) {
         key: randomUUID()
       }
     }
-    // The creation is not atomic on the platform: the plan can commit while
-    // repository provisioning fails. An unchanged retry carries the same key,
-    // so the platform resumes that plan — that is the repair path and must go
-    // through. Changed arguments mint a new key, which would insert a second
-    // plan next to the one already left behind, so that is what gets blocked.
-    const resumableOrphan = [...orphanedTestPlans.values()].some(
-      orphan => orphan.fingerprint === creationFingerprint
-    )
-    if (orphanedTestPlans.size && !resumableOrphan) {
-      throw new Error(orphanedTestPlanMessage())
+    // A plan already accepted in planning-only mode must not be created twice:
+    // the flow continues from it, and its repository comes from
+    // test_plans_provision_repository, never from another creation.
+    if (automationPendingPlans.size) {
+      throw new Error(automationPendingMessage('create another Test Plan'))
     }
     // A provisioning failure is never fixed by mutating parameters. After a
     // failure, only an identical retry (same args) may reach the platform.
@@ -552,16 +561,27 @@ async function callTool(params) {
       lastFailedCreateArgs = null
       creationIdempotency = null
     } catch (error) {
+      // The plan can be persisted while only its repository fails, and the
+      // planning work is still worth keeping. When the plan is really there,
+      // the creation counts as done in planning-only mode: the flow continues,
+      // provisioning is never retried here, and the tools that need a
+      // repository are blocked until it exists.
+      const created = await findCreatedTestPlan(error, result, args)
+      if (created && !created.hasRepository) {
+        automationPendingPlans.set(created.planId, {
+          ...created,
+          fingerprint: creationFingerprint,
+          reason: String(error?.message || error)
+        })
+        provisionedTestPlans.add(created.planId)
+        selectedTestPlanId = created.planId
+        planCreationFailed = false
+        lastFailedCreateArgs = null
+        creationIdempotency = null
+        return automationPendingCreationResult(created)
+      }
       planCreationFailed = true
       lastFailedCreateArgs = creationFingerprint
-      const orphan = await findOrphanedTestPlan(error, args)
-      if (orphan) {
-        orphanedTestPlans.set(orphan.planId, {
-          ...orphan,
-          fingerprint: creationFingerprint
-        })
-        throw new Error(`${error?.message || error} ${orphanedTestPlanMessage()}`)
-      }
       throw error
     }
     return result
@@ -874,13 +894,35 @@ function resetStructureTracking() {
   // created, so switching organizations or re-authenticating clears it. The
   // pending creation key is scoped the same way: the platform matches it per
   // organization.
-  orphanedTestPlans.clear()
+  automationPendingPlans.clear()
   creationIdempotency = null
 }
 
 // Every platform identifier used in a mutating or preparing call must have
 // been returned by a platform read in this session. Guessing is blocked with
 // the exact read tool to call.
+// Every tool below needs a checkout that only exists once the plan has a
+// linked repository. Blocking them is what keeps planning-only mode honest
+// instead of letting the flow strand cases and fail deeper in.
+const REPOSITORY_DEPENDENT_TOOLS = new Set([
+  'voidr_workspace_prepare_test_repository',
+  'voidr_workspace_scaffold_test_cases',
+  'voidr_smoke_build',
+  'voidr_workspace_publish_tests',
+  'voidr_release_deploy_merged_pr',
+  'executions_create_execution'
+])
+
+function enforceRepositoryAvailability(name, args) {
+  if (!automationPendingPlans.size) return
+  if (!REPOSITORY_DEPENDENT_TOOLS.has(name)) return
+  const requested = bridgeTestPlanId(args).toLowerCase()
+  // No plan in the arguments still means this session's plan, which is the
+  // pending one.
+  if (requested && !automationPendingPlans.has(requested)) return
+  throw new Error(automationPendingMessage(name.replace(/_/g, ' ')))
+}
+
 function enforcePlatformProvenance(name, args) {
   if (name === 'test_plans_create_test_plan') {
     assertKnownApplication(String(args.applicationId || '').trim())
@@ -1054,19 +1096,20 @@ function bridgeTestPlanId(args) {
   return ''
 }
 
-// A creation failure that names a plan id may have left that plan behind. The
-// only way to know is to read it, and knowing changes the recovery: a retry
-// would duplicate instead of fix.
-async function findOrphanedTestPlan(error, args) {
-  const planId = String(error?.message || error || '')
-    .match(/\b[a-f0-9]{24}\b/i)?.[0]
-    ?.toLowerCase()
+// A creation that failed may still have persisted the plan. The id can come
+// from the platform error or from a response this bridge rejected for lacking
+// a repository, and only reading the plan settles whether it exists.
+async function findCreatedTestPlan(error, result, args) {
+  const planId = (
+    planIdFromCreationResult(result) ||
+    String(error?.message || error || '').match(/\b[a-f0-9]{24}\b/i)?.[0] ||
+    ''
+  ).toLowerCase()
   if (!planId) return null
   let existing
   try {
     // Read directly, without the dispatch gates: this is the bridge verifying
-    // its own failure, not a model-driven call, and it must not select the
-    // orphan as this session's plan.
+    // its own failure, not a model-driven call.
     existing = remoteResultData(
       await remote.callTool('test_plans_get_test_plan', { planId })
     )
@@ -1090,13 +1133,35 @@ async function findOrphanedTestPlan(error, args) {
   }
 }
 
-function orphanedTestPlanMessage() {
-  const [orphan] = [...orphanedTestPlans.values()]
-  const named = orphan?.name ? ` named “${orphan.name}”` : ''
-  const repositoryState = orphan?.hasRepository
-    ? 'It does have a linked repository, so read it with test_plans_get_test_plan and continue from it instead of creating anything.'
-    : 'It has no linked repository, so it cannot be prepared or executed and no case should be written into it.'
-  return `Blocked by Voidr workflow: the platform already created Test Plan ${orphan?.planId}${named} for this application and then failed before finishing it, so the creation is not atomic and the plan persisted. Retrying with the same name, status, and application resumes that plan and is allowed; the arguments you just sent are different, and that would insert a second plan next to the one already left behind. ${repositoryState} Show the user the exact platform error and this plan ID, and offer only two options: retry the creation unchanged so the platform finishes that plan, or cancel and have it removed on the Voidr platform.`
+function planIdFromCreationResult(result) {
+  const data = remoteResultData(result)
+  const plan = data?.data && !Array.isArray(data.data) ? data.data : data
+  const planId = String(plan?._id || plan?.id || '').toLowerCase()
+  return /^[a-f0-9]{24}$/.test(planId) ? planId : ''
+}
+
+// Planning-only mode: the plan exists and can receive structure, while every
+// tool that needs a checkout stays blocked until the repository is linked.
+function automationPendingCreationResult(created) {
+  const slim = {
+    created: 'test_plan',
+    planId: created.planId,
+    name: created.name,
+    repository: null,
+    automationPending: true,
+    provisioningError: created.reason || null,
+    note: `The Test Plan exists and its structure can be written now (populate_test_plan, create_module, create_suite, create_case), but the platform could not provision its repository, so there is no checkout: preparation, scaffold, smoke, publish, deploy, and executions are blocked for this plan. Do not create another plan and do not retry the creation. Tell the user the plan was created without automation, name this plan ID, and say the repository has to be provisioned later with test_plans_provision_repository before the tests can run.`
+  }
+  return {
+    content: [{ type: 'text', text: JSON.stringify(slim) }],
+    structuredContent: slim
+  }
+}
+
+function automationPendingMessage(attempt) {
+  const [pending] = [...automationPendingPlans.values()]
+  const named = pending?.name ? ` named “${pending.name}”` : ''
+  return `Blocked by Voidr workflow: Test Plan ${pending?.planId}${named} was created in this session without a linked repository, so it cannot ${attempt}. Provision it with test_plans_provision_repository first — that finishes this exact plan without creating another one — or tell the user the automation stays pending. Never create a second plan and never retry the creation.`
 }
 
 function validateProvisionedTestPlan(result) {

@@ -400,7 +400,7 @@ out of scope for this flow.
 | Read a reused plan's linked `repositoryUrl`, or the real slugs after a not-found error | `test_plans_get_test_plan` |
 | Add the feature to an existing plan | `test_plans_create_module`, `test_plans_create_suite`, `test_plans_create_case` |
 | Create and fill a new plan | `test_plans_create_test_plan`, then `test_plans_populate_test_plan` |
-| Provision the repository of a plan created without one, when the user asks to resume | `test_plans_provision_repository` |
+| Provision the repository of a plan this flow created without one, when the user asks to resume | `test_plans_provision_repository` |
 | Materialize and prepare the test repository | `voidr_workspace_prepare_test_repository` |
 | Assimilate indexed application documentation for scenario design and implementation (read-only, never blocking) | `file_embeddings_search_documents` |
 | Run the new specs locally | `voidr_smoke_build` |
@@ -416,6 +416,11 @@ Disambiguation:
   `voidr_workspace_select_test_repository` in this flow.
 - Never call `test_plans_update_*` tools here; this flow only adds new
   modules, suites, and cases.
+- `test_plans_provision_repository` applies only to a plan this flow just
+  created and that came back without a repository. A reused plan whose
+  `gitProviderConfig.repositoryUrl` is missing follows the reuse rule instead:
+  offer the other plans plus `Criar um novo`, and direct the user to
+  `/voidr-develop-tests` for repository selection.
 - Deploy and execution tools (`voidr_release_deploy_merged_pr`,
   `executions_create_execution`, `executions_get_execution`,
   `test_plans_get_test_counts`) run only inside `/voidr-deploy-run` and its

@@ -1536,6 +1536,131 @@ test('the same creation intent reuses one idempotency key across retries', async
   assert.equal(seenKeys[0], seenKeys[1], 'the retry must reuse the first key')
 })
 
+test('a creation blocked with other arguments keeps the failed intent key', async t => {
+  const seenKeys = []
+  const server = createServer(async (request, response) => {
+    const message = JSON.parse(await readBody(request))
+    response.setHeader('content-type', 'application/json')
+    response.setHeader('mcp-session-id', 'synthetic-session')
+    if (message.method === 'notifications/initialized') {
+      response.writeHead(202)
+      response.end()
+      return
+    }
+    if (message.method === 'initialize') {
+      sendResult(response, message.id, {
+        protocolVersion: '2024-11-05',
+        capabilities: { tools: {} },
+        serverInfo: { name: 'mock', version: '1' }
+      })
+      return
+    }
+    if (message.method === 'tools/call') {
+      const { name, arguments: args } = message.params
+      if (name === 'applications_list_applications') {
+        const data = { data: [{ _id: '6a510c7b9bc772cdbee9d197', name: 'App' }] }
+        sendResult(response, message.id, {
+          structuredContent: { data },
+          content: [{ type: 'text', text: JSON.stringify(data) }]
+        })
+        return
+      }
+      if (name === 'test_plans_create_test_plan') {
+        seenKeys.push(args.idempotencyKey)
+        // Every attempt fails without persisting anything, so the plan is never
+        // in planning-only mode and only the retry rule applies.
+        response.end(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: message.id,
+            error: { code: -32000, message: 'connector timeout' }
+          })
+        )
+        return
+      }
+      if (name === 'test_plans_get_test_plan') {
+        response.end(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: message.id,
+            error: { code: -32000, message: 'Test plan not found' }
+          })
+        )
+        return
+      }
+    }
+    sendResult(response, message.id, {})
+  })
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+  t.after(() => server.close())
+
+  const temp = mkdtempSync(join(tmpdir(), 'voidr-bridge-idem-blocked-'))
+  const storePath = join(temp, 'service-accounts.json')
+  writeFileSync(
+    storePath,
+    JSON.stringify({
+      activeOrgId: 'org-idem',
+      accounts: {
+        'org-idem': {
+          clientId: 'sa_idem_blocked_e2e',
+          clientSecret: 'synthetic-idem-secret',
+          scopes: ['read', 'write']
+        }
+      }
+    })
+  )
+  const child = spawn(process.execPath, [bridgePath], {
+    cwd: temp,
+    env: {
+      ...process.env,
+      VOIDR_SERVICE_ACCOUNTS_PATH: storePath,
+      VOIDR_MCP_URL: `http://127.0.0.1:${server.address().port}/mcp`
+    },
+    stdio: ['pipe', 'pipe', 'pipe']
+  })
+  t.after(() => child.kill())
+  const client = jsonRpcClient(child)
+  await client.request('initialize', {
+    protocolVersion: '2024-11-05',
+    capabilities: {},
+    clientInfo: { name: 'e2e', version: '1' }
+  })
+  await client.request('tools/call', {
+    name: 'applications_list_applications',
+    arguments: {}
+  })
+
+  const args = { applicationId: '6a510c7b9bc772cdbee9d197', name: 'Plano' }
+  const failed = await client.requestRaw('tools/call', {
+    name: 'test_plans_create_test_plan',
+    arguments: args
+  })
+  assert.match(failed.error.message, /connector timeout/)
+  assert.equal(seenKeys.length, 1)
+
+  // Changing the parameters after a failure is refused, and that refusal must
+  // not become a new intent.
+  const changed = await client.requestRaw('tools/call', {
+    name: 'test_plans_create_test_plan',
+    arguments: { ...args, name: 'Plano renomeado' }
+  })
+  assert.match(changed.error.message, /already failed in this session/i)
+  assert.equal(seenKeys.length, 1, 'the blocked call never reaches the platform')
+
+  // The unchanged retry still carries the key of the original attempt.
+  const retried = await client.requestRaw('tools/call', {
+    name: 'test_plans_create_test_plan',
+    arguments: args
+  })
+  assert.match(retried.error.message, /connector timeout/)
+  assert.equal(seenKeys.length, 2)
+  assert.equal(
+    seenKeys[0],
+    seenKeys[1],
+    'a blocked call with other arguments must not replace the key of the failed intent'
+  )
+})
+
 test('a plan created without a repository continues in planning-only mode', async t => {
   const pendingId = '6a70b0fcf2fc9085f680ea1e'
   const calls = []

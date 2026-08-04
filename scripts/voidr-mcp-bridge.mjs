@@ -474,12 +474,19 @@ async function callTool(params) {
 
   if (name === 'test_plans_provision_repository') {
     const result = await remote.callTool(name, args)
-    if (!result?.isError) {
-      // The repository exists now, so the plan leaves planning-only mode and
-      // the blocked tools become available again.
-      const planId = bridgeTestPlanId(args).toLowerCase()
+    // Only a response that actually links a repository lifts planning-only
+    // mode, and only for the plan it names. Without that evidence the blocks
+    // stay: a plan wrongly unblocked sends the flow to a checkout that does
+    // not exist, while a plan wrongly kept blocked is released by calling this
+    // idempotent tool again with the plan ID.
+    const data = result?.isError ? null : remoteResultData(result)
+    if (hasLinkedRepository(data?.repository)) {
+      const planId = String(
+        data?.testPlanId || data?._id || bridgeTestPlanId(args)
+      )
+        .trim()
+        .toLowerCase()
       if (planId) automationPendingPlans.delete(planId)
-      else automationPendingPlans.clear()
     }
     return result
   }
@@ -528,17 +535,7 @@ async function callTool(params) {
   }
 
   if (name === 'test_plans_create_test_plan') {
-    // The key identifies one creation intent, not one call: the platform
-    // matches it to decide whether to insert or to resume the plan it already
-    // holds, so a retry finishes the previous attempt instead of duplicating
-    // it. Reused while the arguments are identical, dropped once it succeeds.
     const creationFingerprint = stableStringify(args)
-    if (creationIdempotency?.fingerprint !== creationFingerprint) {
-      creationIdempotency = {
-        fingerprint: creationFingerprint,
-        key: randomUUID()
-      }
-    }
     // A plan already accepted in planning-only mode must not be created twice:
     // the flow continues from it, and its repository comes from
     // test_plans_provision_repository, never from another creation.
@@ -553,6 +550,18 @@ async function callTool(params) {
         throw new Error(
           'Blocked by Voidr workflow: test_plans_create_test_plan already failed in this session. Changing the name, status, or other parameters never fixes a provisioning failure and can create duplicate plans. Show the user the exact previous error and offer only two options: retry the same creation unchanged, or cancel.'
         )
+      }
+    }
+    // The key identifies one creation intent, not one call: the platform
+    // matches it to decide whether to insert or to resume the plan it already
+    // holds, so a retry finishes the previous attempt instead of duplicating
+    // it. Reused while the arguments are identical, dropped once it succeeds.
+    // Only a call that reaches the platform may replace it — a blocked one
+    // would otherwise discard the key of the attempt still to be finished.
+    if (creationIdempotency?.fingerprint !== creationFingerprint) {
+      creationIdempotency = {
+        fingerprint: creationFingerprint,
+        key: randomUUID()
       }
     }
     let result
@@ -1171,6 +1180,15 @@ function automationPendingMessage(attempt) {
   return `Blocked by Voidr workflow: Test Plan ${pending?.planId}${named} was created in this session without a linked repository, so it cannot ${attempt}. Provision it with test_plans_provision_repository first — that finishes this exact plan without creating another one — or tell the user the automation stays pending. Never create a second plan and never retry the creation.`
 }
 
+// A repository is only usable when the platform returns every field the
+// preparation gate needs, so a partial link never counts as provisioned.
+function hasLinkedRepository(repository) {
+  if (!repository || typeof repository !== 'object') return false
+  return ['url', 'owner', 'name', 'defaultBranch'].every(key =>
+    String(repository[key] || '').trim()
+  )
+}
+
 function validateProvisionedTestPlan(result) {
   if (result?.isError) {
     const platformError = structureResultText(result).slice(-400).trim()
@@ -1181,14 +1199,7 @@ function validateProvisionedTestPlan(result) {
   const data = remoteResultData(result)
   const repository = data?.repository
   const planId = String(data?._id || data?.testPlanId || data?.id || '').trim()
-  if (
-    !planId ||
-    !repository ||
-    !String(repository.url || '').trim() ||
-    !String(repository.owner || '').trim() ||
-    !String(repository.name || '').trim() ||
-    !String(repository.defaultBranch || '').trim()
-  ) {
+  if (!planId || !hasLinkedRepository(repository)) {
     throw new Error(
       'Incomplete Voidr creation response: the Test Plan is not usable until the server returns its ID and a linked repository with URL, owner, name, and default branch. populate_test_plan was blocked.'
     )

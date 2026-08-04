@@ -476,7 +476,9 @@ application when product repositories are added.
   anything: Playwright 1.48 hangs on Node 23+. If they report an unsupported
   Node version, relay that message as it came — it names whether the required
   version is already installed on that machine and the exact command of the
-  manager found there — and retry once. Do not attempt to run Playwright on the unsupported version, and
+  manager found there. Then stop and wait: retry the tool once only after the
+  user confirms they activated that runtime and reopened VS Code from that
+  terminal. Never retry immediately, since nothing changed yet. Do not attempt to run Playwright on the unsupported version, and
   never install, switch, or pin Node yourself — no `nvm install`,
   `volta install`, or package-manager Node installs in the terminal; runtime
   activation belongs to the user.

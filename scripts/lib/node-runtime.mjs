@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { runCommand } from './command.mjs'
+import { nodeExecutableForToolchain, runCommand } from './command.mjs'
 
 // Playwright 1.48, pinned by the published Voidr framework, hangs before
 // listing or starting workers on newer Node majors (reproduced on 24.x).
@@ -36,8 +36,11 @@ const NODE_MANAGERS = [
     homeDirectories: ['.volta'],
     localAppData: ['Volta'],
     versionDirectories: root => [join(root, 'tools', 'image', 'node')],
+    // `volta install` is also how a version becomes the default one, and it is
+    // the only form used here: `volta pin` would write the pin into the
+    // repository's package.json, mutating the checkout to fix a shell problem.
     install: major => `volta install node@${major}`,
-    activate: major => `volta pin node@${major}`
+    activate: major => `volta install node@${major}`
   },
   {
     name: 'fnm',
@@ -53,21 +56,29 @@ const NODE_MANAGERS = [
 export async function assertSupportedNodeRuntime({
   repositoryPath,
   run = runCommand,
-  guidance
+  guidance,
+  nodeExecutable = nodeExecutableForToolchain()
 }) {
   const declared = declaredNodeVersion(repositoryPath)
-  const result = await run('node', ['--version'], {
-    cwd: repositoryPath,
-    timeout: 15_000,
-    env: process.env
-  })
-  const version = String(result?.stdout || '').trim()
-  const major = Number.parseInt(version.replace(/^v/i, ''), 10)
   const required = declared.major || SUPPORTED_NODE_MAJOR
   // Scanned only when the runtime is rejected: the happy path never touches the
   // version-manager directories.
   const howToGetIt = () =>
     guidance === undefined ? nodeVersionGuidance(required) : guidance
+  let result
+  try {
+    result = await run(nodeExecutable, ['--version'], {
+      cwd: repositoryPath,
+      timeout: 15_000,
+      env: process.env
+    })
+  } catch (error) {
+    // A Node that cannot even report its version is the case where the guidance
+    // matters most: the runtime is missing, not merely the wrong major.
+    throw new Error(`${error?.message || error} ${howToGetIt()}`)
+  }
+  const version = String(result?.stdout || '').trim()
+  const major = Number.parseInt(version.replace(/^v/i, ''), 10)
   if (!Number.isInteger(major) || major <= 0) {
     throw new Error(
       'Could not determine the Node.js version that runs inside the selected ' +

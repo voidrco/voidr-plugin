@@ -350,8 +350,9 @@ If `npm install` or another step fails with a network error, say the shell has
 no network access (Copilot sandbox) and ask once to rerun with network. If the
 tools report an unsupported Node version, relay that message as it came: it
 already says whether the required version is installed on that machine and the
-exact command of the manager found there. Then retry once — never install,
-switch, or pin Node yourself. Never
+exact command of the manager found there. Then stop and wait — retry the tool
+once only after the user confirms they activated that runtime and reopened VS
+Code from that terminal, and never install, switch, or pin Node yourself. Never
 change registry, cache, lockfile, or package manager, and never read or print
 `.env` contents.
 

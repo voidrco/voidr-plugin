@@ -14,7 +14,7 @@ import {
 test('selects specs with a filter Playwright can match on Windows', () => {
   const windowsPath = 'tests\\test-checkout\\login.spec.js'
   const filter = playwrightSpecFilter(windowsPath, '\\')
-  assert.equal(filter, 'tests/test-checkout/login.spec.js')
+  assert.equal(filter, 'tests/test-checkout/login\\.spec\\.js')
 
   // Playwright compiles each positional filter with new RegExp(pattern, 'gi')
   // and, on Windows, also tests it against the file URL of the spec.
@@ -27,11 +27,15 @@ test('selects specs with a filter Playwright can match on Windows', () => {
     asPlaywrightWould(windowsPath).test('C:\\repo\\' + windowsPath),
     false
   )
-  // Nothing changes where the separator already is a forward slash.
-  assert.equal(
-    playwrightSpecFilter('tests/login.spec.js', '/'),
-    'tests/login.spec.js'
-  )
+  // A metacharacter in a file name must select that file, not a pattern.
+  const brackets = playwrightSpecFilter('tests/[checkout].spec.js', '/')
+  assert.equal(asPlaywrightWould(brackets).test('/repo/tests/[checkout].spec.js'), true)
+  assert.equal(asPlaywrightWould(brackets).test('/repo/tests/c.spec.js'), false)
+  // Escaping never loosens an ordinary path: the literal still matches, and a
+  // neighbour that only differs by a dot does not.
+  const plain = playwrightSpecFilter('tests/login.spec.js', '/')
+  assert.equal(asPlaywrightWould(plain).test('/repo/tests/login.spec.js'), true)
+  assert.equal(asPlaywrightWould(plain).test('/repo/tests/loginXspecXjs'), false)
 })
 
 test('scaffolds selected cases with credentials confined to the child process', async () => {
@@ -334,11 +338,12 @@ test('lists and runs only selected Playwright specs outside the agent shell', as
     calls[2].options.env.APPLICATION_URL,
     'https://app.example.test/'
   )
+  // The reported path stays literal; only the Playwright filter is escaped.
   assert.deepEqual(calls[1].args, [
     '--no-install',
     'playwright',
     'test',
-    'modules/selected.spec.js',
+    'modules/selected\\.spec\\.js',
     '--list'
   ])
   assert.equal(calls[2].args.includes('--reporter=json'), true)

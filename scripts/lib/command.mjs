@@ -1,7 +1,20 @@
 import { execFile } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import { win32 as windowsPath } from 'node:path'
 import { promisify } from 'node:util'
 
 const execFileAsync = promisify(execFile)
+
+// Windows ships npm and npx only as .cmd shims: CreateProcess completes a bare
+// name with .exe, so the shim is invisible here, and Node refuses to run a .cmd
+// without a shell. Running through a shell would rebuild the command line by
+// interpolating platform-provided arguments, so the shim is located on PATH and
+// the JS entry point of that same toolchain is executed directly instead.
+const WINDOWS_CLI_ENTRIES = {
+  npm: 'npm-cli.js',
+  npx: 'npx-cli.js'
+}
+const WINDOWS_EXECUTABLE_SUFFIXES = ['.exe', '.cmd', '.bat']
 
 const NETWORK_ERROR_MARKERS = [
   'eai_again',
@@ -23,8 +36,11 @@ const SENSITIVE_OUTPUT_LINE =
   /(secret|password|senha|token|authorization|client[_-]?secret|api[_-]?key)/i
 
 export async function runCommand(file, args, options = {}) {
+  const resolved = resolveNodeToolchainCommand(file, args, {
+    env: options.env
+  })
   try {
-    return await execFileAsync(file, args, {
+    return await execFileAsync(resolved.file, resolved.args, {
       cwd: options.cwd,
       timeout: options.timeout || 30_000,
       maxBuffer: options.maxBuffer || 10 * 1024 * 1024,
@@ -33,6 +49,76 @@ export async function runCommand(file, args, options = {}) {
   } catch (error) {
     throw new Error(describeCommandFailure(file, args, error))
   }
+}
+
+// Only npm and npx are rewritten: node, git, and gh are real .exe files that
+// resolve normally, and every other platform runs the command as given.
+export function resolveNodeToolchainCommand(file, args, options = {}) {
+  const platform = options.platform || process.platform
+  const entry = WINDOWS_CLI_ENTRIES[String(file || '').toLowerCase()]
+  if (platform !== 'win32' || !entry) return { file, args }
+
+  const exists = options.exists || existsSync
+  const nodeDirectory = windowsPath.dirname(options.execPath || process.execPath)
+  const directories = [
+    ...windowsPathEntries(options.env || process.env),
+    nodeDirectory
+  ]
+  const shim = findWindowsCommand(file, directories, exists)
+  // A real executable needs no rewriting, only an absolute path.
+  if (shim?.suffix === '.exe') return { file: shim.path, args }
+
+  for (const directory of shim ? [shim.directory, nodeDirectory] : directories) {
+    const cli = windowsPath.join(
+      directory,
+      'node_modules',
+      'npm',
+      'bin',
+      entry
+    )
+    if (!exists(cli)) continue
+    // The Node binary that ships with the located toolchain keeps npm and the
+    // repository on the same runtime; the bridge's own binary is the fallback.
+    const node = windowsPath.join(directory, 'node.exe')
+    return {
+      file: exists(node) ? node : options.execPath || process.execPath,
+      args: [cli, ...args]
+    }
+  }
+
+  throw new Error(
+    shim
+      ? `${file} was found at ${shim.path}, but the Node toolchain that owns it ` +
+        `does not expose ${entry} next to it, so it cannot run without a shell. ` +
+        `Verify the Node installation that provides ${file} and retry.`
+      : `${file} is not reachable from this shell: neither ${file}.exe nor ` +
+        `${file}.cmd exists in PATH. On Windows the plugin needs the directory ` +
+        `of the active Node toolchain — the one that owns ${file} — on the PATH ` +
+        'this extension inherits. Activate that Node version in a terminal ' +
+        '(for example `nvs use 22` or `nvm use 22`), open VS Code from that ' +
+        'terminal, and retry. Never install a second package manager and never ' +
+        'run this step manually in the terminal.'
+  )
+}
+
+function windowsPathEntries(env) {
+  const key = Object.keys(env || {}).find(
+    name => name.toLowerCase() === 'path'
+  )
+  return String((key && env[key]) || '')
+    .split(';')
+    .map(entry => entry.trim().replace(/^"|"$/g, ''))
+    .filter(Boolean)
+}
+
+function findWindowsCommand(file, directories, exists) {
+  for (const directory of directories) {
+    for (const suffix of WINDOWS_EXECUTABLE_SUFFIXES) {
+      const candidate = windowsPath.join(directory, `${file}${suffix}`)
+      if (exists(candidate)) return { path: candidate, directory, suffix }
+    }
+  }
+  return null
 }
 
 export function describeCommandFailure(file, args, error) {

@@ -20,9 +20,10 @@ partial read.
 4. Implement only the explicitly selected cases.
 5. Never read or print `.env` values.
 6. Never install, switch, or pin a Node runtime. When a tool reports an
-   unsupported Node version, report the pinned Node 22 requirement, ask
-   the user to activate it in their own terminal (nvm/volta), and retry
-   the tool once after they confirm — nothing else.
+   unsupported Node version, relay that message as it came — it names
+   whether the required version is already installed on that machine and
+   the exact command of the manager found there — and retry the tool once
+   after the user confirms, nothing else.
 7. A routed tool missing from your available tools is grouped, not
    absent: past a tool-count threshold the editor collapses tool sets
    into groups the model has to expand first. Find the activation entry

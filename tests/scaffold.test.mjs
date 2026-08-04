@@ -6,9 +6,33 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   buildTestRepository,
+  playwrightSpecFilter,
   scaffoldTestCases,
   validateSelectedPlaywrightTests
 } from '../scripts/lib/scaffold.mjs'
+
+test('selects specs with a filter Playwright can match on Windows', () => {
+  const windowsPath = 'tests\\test-checkout\\login.spec.js'
+  const filter = playwrightSpecFilter(windowsPath, '\\')
+  assert.equal(filter, 'tests/test-checkout/login.spec.js')
+
+  // Playwright compiles each positional filter with new RegExp(pattern, 'gi')
+  // and, on Windows, also tests it against the file URL of the spec.
+  const asPlaywrightWould = pattern => new RegExp(pattern, 'gi')
+  const fileUrl = 'file:///C:/repo/tests/test-checkout/login.spec.js'
+  assert.equal(asPlaywrightWould(filter).test(fileUrl), true)
+  // The raw Windows path matches neither form: \t became a tab character.
+  assert.equal(asPlaywrightWould(windowsPath).test(fileUrl), false)
+  assert.equal(
+    asPlaywrightWould(windowsPath).test('C:\\repo\\' + windowsPath),
+    false
+  )
+  // Nothing changes where the separator already is a forward slash.
+  assert.equal(
+    playwrightSpecFilter('tests/login.spec.js', '/'),
+    'tests/login.spec.js'
+  )
+})
 
 test('scaffolds selected cases with credentials confined to the child process', async () => {
   const workspace = mkdtempSync(join(tmpdir(), 'voidr-scaffold-'))

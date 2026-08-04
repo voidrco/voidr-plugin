@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { isAbsolute, relative, resolve } from 'node:path'
+import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
 import { runCommand } from './command.mjs'
 import { assertSupportedNodeRuntime } from './node-runtime.mjs'
@@ -11,6 +11,15 @@ import {
 import { voidrCliEnvironment } from './credentials.mjs'
 
 const execFileAsync = promisify(execFile)
+
+// Playwright turns each positional filter into a regex without escaping it, so a
+// Windows separator would be read as an escape sequence — `tests\login.spec.js`
+// stops matching, and a path like `tests\test-x.spec.js` even becomes a tab.
+// Forward slashes match on every platform: on Windows Playwright also tests each
+// filter against the file URL of the spec, which is slash-separated.
+export function playwrightSpecFilter(relativePath, separator = sep) {
+  return String(relativePath).split(separator).join('/')
+}
 
 export async function scaffoldTestCases({
   repositoryPath,
@@ -181,7 +190,7 @@ export async function validateSelectedPlaywrightTests({
     ) {
       throw new Error(`Selected spec does not exist in the repository: ${spec}`)
     }
-    return insideRepository
+    return playwrightSpecFilter(insideRepository)
   })
   if (selectedSpecs.length === 0) {
     throw new Error('At least one selected Playwright spec is required.')

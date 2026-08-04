@@ -348,8 +348,10 @@ infrastructure: none of that is something the developer can act on from here.
 
 If `npm install` or another step fails with a network error, say the shell has
 no network access (Copilot sandbox) and ask once to rerun with network. If the
-tools report an unsupported Node version, ask the user to activate Node 22
-(volta/nvm) and retry — never install, switch, or pin Node yourself. Never
+tools report an unsupported Node version, relay that message as it came: it
+already says whether the required version is installed on that machine and the
+exact command of the manager found there. Then retry once — never install,
+switch, or pin Node yourself. Never
 change registry, cache, lockfile, or package manager, and never read or print
 `.env` contents.
 

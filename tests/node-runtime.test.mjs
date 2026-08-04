@@ -5,7 +5,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
   assertSupportedNodeRuntime,
-  declaredNodeVersion
+  declaredNodeVersion,
+  detectNodeManagers,
+  nodeVersionGuidance
 } from '../scripts/lib/node-runtime.mjs'
 
 function repositoryWith(packageJson) {
@@ -64,6 +66,112 @@ test('fails clearly when the runtime version cannot be determined', async () => 
       run: async () => ({ stdout: '', stderr: '', exitCode: 1 })
     }),
     /Could not determine the Node\.js version/i
+  )
+})
+
+test('tells the user to activate a version that is installed but inactive', () => {
+  const message = nodeVersionGuidance(22, {
+    managers: [
+      {
+        name: 'nvs',
+        versions: ['20.19.5', '22.23.2'],
+        majors: [20, 22],
+        install: major => `nvs add ${major}`,
+        activate: major => `nvs use ${major}`
+      }
+    ]
+  })
+
+  assert.match(message, /already installed \(nvs 22\.23\.2\)/)
+  assert.match(message, /activate it with `nvs use 22`/)
+  assert.match(message, /reopen VS Code from it/i)
+  assert.equal(/is not installed/.test(message), false)
+})
+
+test('gives the install command of the detected manager when the version is absent', () => {
+  const message = nodeVersionGuidance(22, {
+    managers: [
+      {
+        name: 'volta',
+        versions: ['20.19.5'],
+        majors: [20],
+        install: major => `volta install node@${major}`,
+        activate: major => `volta pin node@${major}`
+      }
+    ]
+  })
+
+  assert.match(message, /not installed: add it with `volta install node@22`/)
+  assert.match(message, /activate it with `volta pin node@22`/)
+})
+
+test('asks for an install without a manager, and never for the agent to do it', () => {
+  const message = nodeVersionGuidance(22, { managers: [] })
+
+  assert.match(message, /no version manager was found/i)
+  assert.match(message, /nodejs\.org/)
+  assert.match(message, /agent must never install, switch, or pin a Node runtime/i)
+})
+
+test('asks for the version the repository pins, not the plugin default', () => {
+  const message = nodeVersionGuidance(18, {
+    managers: [
+      {
+        name: 'nvm',
+        versions: ['22.23.2'],
+        majors: [22],
+        install: major => `nvm install ${major}`,
+        activate: major => `nvm use ${major}`
+      }
+    ]
+  })
+
+  assert.match(message, /Node 18 is not installed: add it with `nvm install 18`/)
+})
+
+test('carries the install guidance into every runtime rejection', async () => {
+  const repositoryPath = repositoryWith(JSON.stringify({ name: 'tests' }))
+  await assert.rejects(
+    assertSupportedNodeRuntime({
+      repositoryPath,
+      run: nodeRun('v24.13.1'),
+      guidance: 'SYNTHETIC-GUIDANCE'
+    }),
+    /requires Node 22[\s\S]*SYNTHETIC-GUIDANCE/
+  )
+  await assert.rejects(
+    assertSupportedNodeRuntime({
+      repositoryPath,
+      run: async () => ({ stdout: '', stderr: '', exitCode: 1 }),
+      guidance: 'SYNTHETIC-GUIDANCE'
+    }),
+    /Could not determine[\s\S]*SYNTHETIC-GUIDANCE/
+  )
+})
+
+test('detects installed majors from the layout of each version manager', () => {
+  const managers = detectNodeManagers({
+    env: {
+      NVS_HOME: 'C:\\nvs',
+      NVM_HOME: 'C:\\nvm4w',
+      LOCALAPPDATA: 'C:\\Users\\dev\\AppData\\Local'
+    },
+    home: 'C:\\Users\\dev',
+    exists: path => ['C:\\nvs', 'C:\\nvm4w'].includes(path),
+    list: path => {
+      // nvs keeps <root>/node/<version>/<arch>, nvm-windows keeps <root>/v<version>.
+      if (path === join('C:\\nvs', 'node')) return ['22.23.2', '20.19.5']
+      if (path === 'C:\\nvm4w') return ['v18.19.0', 'settings.txt']
+      return []
+    }
+  })
+
+  assert.deepEqual(
+    managers.map(manager => [manager.name, manager.majors]),
+    [
+      ['nvs', [22, 20]],
+      ['nvm', [18]]
+    ]
   )
 })
 

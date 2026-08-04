@@ -12,13 +12,23 @@ import { voidrCliEnvironment } from './credentials.mjs'
 
 const execFileAsync = promisify(execFile)
 
-// Playwright turns each positional filter into a regex without escaping it, so a
-// Windows separator would be read as an escape sequence — `tests\login.spec.js`
-// stops matching, and a path like `tests\test-x.spec.js` even becomes a tab.
 // Forward slashes match on every platform: on Windows Playwright also tests each
-// filter against the file URL of the spec, which is slash-separated.
-export function playwrightSpecFilter(relativePath, separator = sep) {
+// filter against the slash-separated file URL of the spec.
+export function playwrightSpecPath(relativePath, separator = sep) {
   return String(relativePath).split(separator).join('/')
+}
+
+// Playwright turns each positional filter into a regex without escaping it, so a
+// path has to be spelled as one. A Windows separator would be read as an escape
+// sequence — `tests\login.spec.js` stops matching and `tests\test-x.spec.js` even
+// becomes a tab — and any regex metacharacter in a file name would change which
+// files the filter selects. Only the arguments are escaped: the reported paths
+// stay literal.
+export function playwrightSpecFilter(relativePath, separator = sep) {
+  return playwrightSpecPath(relativePath, separator).replace(
+    /[.*+?^${}()|[\]\\]/g,
+    '\\$&'
+  )
 }
 
 export async function scaffoldTestCases({
@@ -190,17 +200,18 @@ export async function validateSelectedPlaywrightTests({
     ) {
       throw new Error(`Selected spec does not exist in the repository: ${spec}`)
     }
-    return playwrightSpecFilter(insideRepository)
+    return playwrightSpecPath(insideRepository)
   })
   if (selectedSpecs.length === 0) {
     throw new Error('At least one selected Playwright spec is required.')
   }
+  const specFilters = selectedSpecs.map(spec => playwrightSpecFilter(spec, '/'))
 
   await assertSupportedNodeRuntime({ repositoryPath: selected.path, run })
 
   const listResult = await run(
     'npx',
-    ['--no-install', 'playwright', 'test', ...selectedSpecs, '--list'],
+    ['--no-install', 'playwright', 'test', ...specFilters, '--list'],
     {
       cwd: selected.path,
       timeout: 120_000,
@@ -217,7 +228,7 @@ export async function validateSelectedPlaywrightTests({
       '--no-install',
       'playwright',
       'test',
-      ...selectedSpecs,
+      ...specFilters,
       '--reporter=json',
       '--trace',
       'on'

@@ -94,11 +94,26 @@ export function resolveNodeToolchainCommand(file, args, options = {}) {
       : `${file} is not reachable from this shell: neither ${file}.exe nor ` +
         `${file}.cmd exists in PATH. On Windows the plugin needs the directory ` +
         `of the active Node toolchain — the one that owns ${file} — on the PATH ` +
-        'this extension inherits. Activate that Node version in a terminal ' +
-        '(for example `nvs use 22` or `nvm use 22`), open VS Code from that ' +
-        'terminal, and retry. Never install a second package manager and never ' +
-        'run this step manually in the terminal.'
+        'this extension inherits. Activate the Node version this repository ' +
+        'requires in a terminal (with the version manager already installed ' +
+        'there), open VS Code from that terminal, and retry. Never install a ' +
+        'second package manager and never run this step manually in the ' +
+        'terminal.'
   )
+}
+
+// The runtime gate has to measure the Node that will actually execute Playwright.
+// On Windows that is the node.exe of the toolchain that owns the npx shim, which
+// is not necessarily the one a bare `node` resolves to; anywhere else, and when
+// no toolchain is reachable, the shell's own `node` is the answer and the failure
+// surfaces from the step that needs it.
+export function nodeExecutableForToolchain(options = {}) {
+  try {
+    const resolved = resolveNodeToolchainCommand('npx', [], options)
+    return resolved.args.length ? resolved.file : 'node'
+  } catch {
+    return 'node'
+  }
 }
 
 function windowsPathEntries(env) {

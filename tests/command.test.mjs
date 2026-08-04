@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {
   describeCommandFailure,
   isNetworkFailure,
+  nodeExecutableForToolchain,
   resolveNodeToolchainCommand
 } from '../scripts/lib/command.mjs'
 
@@ -85,6 +86,47 @@ test('falls back to the toolchain of the running Node when PATH omits the shim',
   assert.match(resolved.args[0], /npm-cli\.js$/)
 })
 
+test('measures the Node that will actually run npx, not the one PATH resolves', () => {
+  // A directory carrying only node.exe comes first; the npx shim belongs to
+  // another toolchain, and that is the runtime Playwright will run under.
+  const BARE_22 = 'C:\\tools\\node22'
+  const OWNS_NPX_24 = 'C:\\tools\\node24'
+  const present = new Set([
+    `${BARE_22}\\node.exe`,
+    `${OWNS_NPX_24}\\node.exe`,
+    `${OWNS_NPX_24}\\npx.cmd`,
+    `${OWNS_NPX_24}\\node_modules\\npm\\bin\\npx-cli.js`
+  ])
+  const options = {
+    platform: 'win32',
+    env: { PATH: `${BARE_22};${OWNS_NPX_24}` },
+    execPath: `${BARE_22}\\node.exe`,
+    exists: path => present.has(path)
+  }
+
+  const resolved = resolveNodeToolchainCommand('npx', ['playwright', 'test'], options)
+  assert.equal(resolved.file, `${OWNS_NPX_24}\\node.exe`)
+  // The runtime gate receives that same binary, so it can reject Node 24 before
+  // Playwright hangs on it.
+  assert.equal(nodeExecutableForToolchain(options), `${OWNS_NPX_24}\\node.exe`)
+})
+
+test('falls back to the shell node when no toolchain can be resolved', () => {
+  assert.equal(
+    nodeExecutableForToolchain({
+      platform: 'win32',
+      env: { PATH: 'C:\\Windows\\system32' },
+      execPath: 'C:\\Windows\\system32\\node.exe',
+      exists: () => false
+    }),
+    'node'
+  )
+  assert.equal(
+    nodeExecutableForToolchain({ platform: 'linux', env: { PATH: '/usr/bin' } }),
+    'node'
+  )
+})
+
 test('names the PATH problem when no Windows Node toolchain is reachable', () => {
   assert.throws(
     () =>
@@ -94,7 +136,7 @@ test('names the PATH problem when no Windows Node toolchain is reachable', () =>
         execPath: 'C:\\Windows\\system32\\node.exe',
         exists: () => false
       }),
-    /neither npm\.exe nor npm\.cmd exists in PATH[\s\S]*nvs use 22[\s\S]*never run this step manually/i
+    /neither npm\.exe nor npm\.cmd exists in PATH[\s\S]*version this repository requires[\s\S]*never run this step manually/i
   )
 })
 

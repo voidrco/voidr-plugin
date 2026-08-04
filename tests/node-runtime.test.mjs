@@ -89,20 +89,25 @@ test('tells the user to activate a version that is installed but inactive', () =
 })
 
 test('gives the install command of the detected manager when the version is absent', () => {
-  const message = nodeVersionGuidance(22, {
-    managers: [
-      {
-        name: 'volta',
-        versions: ['20.19.5'],
-        majors: [20],
-        install: major => `volta install node@${major}`,
-        activate: major => `volta pin node@${major}`
-      }
-    ]
+  // Built from the real volta entry, so the suggested commands are the ones
+  // users will actually be told to run.
+  const managers = detectNodeManagers({
+    env: { VOLTA_HOME: 'C:\\Users\\dev\\AppData\\Local\\Volta' },
+    home: 'C:\\Users\\dev',
+    exists: path => path === 'C:\\Users\\dev\\AppData\\Local\\Volta',
+    list: () => ['20.19.5']
   })
+  const message = nodeVersionGuidance(22, { managers })
 
+  assert.deepEqual(
+    managers.map(manager => manager.name),
+    ['volta']
+  )
   assert.match(message, /not installed: add it with `volta install node@22`/)
-  assert.match(message, /activate it with `volta pin node@22`/)
+  // `volta pin` would write the pin into the repository's package.json, which is
+  // never the fix for a shell that resolves the wrong runtime.
+  assert.match(message, /activate it with `volta install node@22`/)
+  assert.equal(/volta pin/.test(message), false)
 })
 
 test('asks for an install without a manager, and never for the agent to do it', () => {
@@ -147,6 +152,37 @@ test('carries the install guidance into every runtime rejection', async () => {
     }),
     /Could not determine[\s\S]*SYNTHETIC-GUIDANCE/
   )
+  // A Node that cannot even be executed is exactly when the guidance matters.
+  await assert.rejects(
+    assertSupportedNodeRuntime({
+      repositoryPath,
+      run: async () => {
+        throw new Error(
+          'node --version failed because the node executable is not available in this shell.'
+        )
+      },
+      guidance: 'SYNTHETIC-GUIDANCE'
+    }),
+    /node executable is not available[\s\S]*SYNTHETIC-GUIDANCE/
+  )
+})
+
+test('measures the Node binary that will run the toolchain, when given one', async () => {
+  const repositoryPath = repositoryWith(JSON.stringify({ name: 'tests' }))
+  const measured = []
+  await assert.rejects(
+    assertSupportedNodeRuntime({
+      repositoryPath,
+      nodeExecutable: 'C:\\tools\\node24\\node.exe',
+      run: async file => {
+        measured.push(file)
+        return { stdout: 'v24.13.1\n', stderr: '', exitCode: 0 }
+      },
+      guidance: 'SYNTHETIC-GUIDANCE'
+    }),
+    /requires Node 22/
+  )
+  assert.deepEqual(measured, ['C:\\tools\\node24\\node.exe'])
 })
 
 test('detects installed majors from the layout of each version manager', () => {

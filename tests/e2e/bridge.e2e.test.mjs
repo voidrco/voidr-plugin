@@ -1524,7 +1524,7 @@ test('the same creation intent reuses one idempotency key across retries', async
   assert.equal(seenKeys[0], seenKeys[1], 'the retry must reuse the first key')
 })
 
-test('a plan created without provisioning blocks every retry instead of duplicating', async t => {
+test('an orphaned plan lets the unchanged retry resume it and blocks a changed one', async t => {
   const orphanId = '6a70b0fcf2fc9085f680ea1e'
   const calls = []
   const server = createServer(async (request, response) => {
@@ -1639,18 +1639,32 @@ test('a plan created without provisioning blocks every retry instead of duplicat
   assert.match(failed.error.message, /not found/i)
   assert.match(failed.error.message, new RegExp(orphanId))
   assert.match(failed.error.message, /already created Test Plan/i)
-  assert.match(failed.error.message, /would create a duplicate/i)
   assert.match(failed.error.message, /no linked repository/i)
 
-  // The identical retry is normally allowed; a confirmed orphan revokes that.
-  const retried = await client.requestRaw('tools/call', {
+  // Unchanged arguments carry the same idempotency key, so the platform
+  // resumes the plan it already holds: this retry is the repair path and must
+  // reach the platform.
+  await client.requestRaw('tools/call', {
     name: 'test_plans_create_test_plan',
     arguments: args
   })
-  assert.match(retried.error.message, /already created Test Plan/i)
   assert.equal(
     calls.filter(name => name === 'test_plans_create_test_plan').length,
-    1,
-    'the retry must never reach the platform'
+    2,
+    'the unchanged retry must reach the platform to resume the plan'
+  )
+
+  // Different arguments mint a new key, which would insert a second plan next
+  // to the one already left behind.
+  const changed = await client.requestRaw('tools/call', {
+    name: 'test_plans_create_test_plan',
+    arguments: { ...args, name: 'Outro nome' }
+  })
+  assert.match(changed.error.message, /already created Test Plan/i)
+  assert.match(changed.error.message, /would insert a second plan/i)
+  assert.equal(
+    calls.filter(name => name === 'test_plans_create_test_plan').length,
+    2,
+    'the changed retry must never reach the platform'
   )
 })

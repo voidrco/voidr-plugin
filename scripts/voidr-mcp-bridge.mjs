@@ -507,22 +507,6 @@ async function callTool(params) {
   }
 
   if (name === 'test_plans_create_test_plan') {
-    // The creation is not atomic on the platform: the plan can commit while
-    // repository provisioning fails. Retrying then duplicates it, so a
-    // confirmed orphan blocks every retry, identical or not.
-    if (orphanedTestPlans.size) {
-      throw new Error(orphanedTestPlanMessage())
-    }
-    // A provisioning failure is never fixed by mutating parameters. After a
-    // failure, only an identical retry (same args) may reach the platform.
-    if (planCreationFailed && lastFailedCreateArgs) {
-      const same = stableStringify(args) === lastFailedCreateArgs
-      if (!same) {
-        throw new Error(
-          'Blocked by Voidr workflow: test_plans_create_test_plan already failed in this session. Changing the name, status, or other parameters never fixes a provisioning failure and can create duplicate plans. Show the user the exact previous error and offer only two options: retry the same creation unchanged, or cancel.'
-        )
-      }
-    }
     // The key identifies one creation intent, not one call: the platform
     // matches it to decide whether to insert or to resume the plan it already
     // holds, so a retry finishes the previous attempt instead of duplicating
@@ -532,6 +516,27 @@ async function callTool(params) {
       creationIdempotency = {
         fingerprint: creationFingerprint,
         key: randomUUID()
+      }
+    }
+    // The creation is not atomic on the platform: the plan can commit while
+    // repository provisioning fails. An unchanged retry carries the same key,
+    // so the platform resumes that plan — that is the repair path and must go
+    // through. Changed arguments mint a new key, which would insert a second
+    // plan next to the one already left behind, so that is what gets blocked.
+    const resumableOrphan = [...orphanedTestPlans.values()].some(
+      orphan => orphan.fingerprint === creationFingerprint
+    )
+    if (orphanedTestPlans.size && !resumableOrphan) {
+      throw new Error(orphanedTestPlanMessage())
+    }
+    // A provisioning failure is never fixed by mutating parameters. After a
+    // failure, only an identical retry (same args) may reach the platform.
+    if (planCreationFailed && lastFailedCreateArgs) {
+      const same = creationFingerprint === lastFailedCreateArgs
+      if (!same) {
+        throw new Error(
+          'Blocked by Voidr workflow: test_plans_create_test_plan already failed in this session. Changing the name, status, or other parameters never fixes a provisioning failure and can create duplicate plans. Show the user the exact previous error and offer only two options: retry the same creation unchanged, or cancel.'
+        )
       }
     }
     let result
@@ -551,7 +556,10 @@ async function callTool(params) {
       lastFailedCreateArgs = creationFingerprint
       const orphan = await findOrphanedTestPlan(error, args)
       if (orphan) {
-        orphanedTestPlans.set(orphan.planId, orphan)
+        orphanedTestPlans.set(orphan.planId, {
+          ...orphan,
+          fingerprint: creationFingerprint
+        })
         throw new Error(`${error?.message || error} ${orphanedTestPlanMessage()}`)
       }
       throw error
@@ -1088,7 +1096,7 @@ function orphanedTestPlanMessage() {
   const repositoryState = orphan?.hasRepository
     ? 'It does have a linked repository, so read it with test_plans_get_test_plan and continue from it instead of creating anything.'
     : 'It has no linked repository, so it cannot be prepared or executed and no case should be written into it.'
-  return `Blocked by Voidr workflow: the platform already created Test Plan ${orphan?.planId}${named} for this application and then failed before finishing it, so the creation is not atomic and the plan persisted. Retrying — identical or not — would create a duplicate, never fix this one. ${repositoryState} Show the user the exact platform error and this plan ID, and offer only two options: have the plan removed or finished on the Voidr platform before any new attempt, or cancel. Never create another plan in this session.`
+  return `Blocked by Voidr workflow: the platform already created Test Plan ${orphan?.planId}${named} for this application and then failed before finishing it, so the creation is not atomic and the plan persisted. Retrying with the same name, status, and application resumes that plan and is allowed; the arguments you just sent are different, and that would insert a second plan next to the one already left behind. ${repositoryState} Show the user the exact platform error and this plan ID, and offer only two options: retry the creation unchanged so the platform finishes that plan, or cancel and have it removed on the Voidr platform.`
 }
 
 function validateProvisionedTestPlan(result) {

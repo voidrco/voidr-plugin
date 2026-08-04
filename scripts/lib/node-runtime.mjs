@@ -1,4 +1,5 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { runCommand } from './command.mjs'
 
@@ -6,9 +7,53 @@ import { runCommand } from './command.mjs'
 // listing or starting workers on newer Node majors (reproduced on 24.x).
 const SUPPORTED_NODE_MAJOR = 22
 
+// Version managers keep their installs in known roots, so the required major
+// can be reported as already installed but inactive — the common case — instead
+// of telling the user to install what they already have.
+const NODE_MANAGERS = [
+  {
+    name: 'nvs',
+    variables: ['NVS_HOME'],
+    homeDirectories: ['.nvs'],
+    localAppData: ['nvs'],
+    versionDirectories: root => [join(root, 'node')],
+    install: major => `nvs add ${major}`,
+    activate: major => `nvs use ${major}`
+  },
+  {
+    name: 'nvm',
+    variables: ['NVM_HOME', 'NVM_DIR'],
+    homeDirectories: ['.nvm'],
+    localAppData: [],
+    // nvm-windows keeps the versions in the root, nvm.sh under versions/node.
+    versionDirectories: root => [join(root, 'versions', 'node'), root],
+    install: major => `nvm install ${major}`,
+    activate: major => `nvm use ${major}`
+  },
+  {
+    name: 'volta',
+    variables: ['VOLTA_HOME'],
+    homeDirectories: ['.volta'],
+    localAppData: ['Volta'],
+    versionDirectories: root => [join(root, 'tools', 'image', 'node')],
+    install: major => `volta install node@${major}`,
+    activate: major => `volta pin node@${major}`
+  },
+  {
+    name: 'fnm',
+    variables: ['FNM_DIR'],
+    homeDirectories: ['.fnm', join('.local', 'share', 'fnm')],
+    localAppData: ['fnm'],
+    versionDirectories: root => [join(root, 'node-versions')],
+    install: major => `fnm install ${major}`,
+    activate: major => `fnm use ${major}`
+  }
+]
+
 export async function assertSupportedNodeRuntime({
   repositoryPath,
-  run = runCommand
+  run = runCommand,
+  guidance
 }) {
   const declared = declaredNodeVersion(repositoryPath)
   const result = await run('node', ['--version'], {
@@ -18,20 +63,25 @@ export async function assertSupportedNodeRuntime({
   })
   const version = String(result?.stdout || '').trim()
   const major = Number.parseInt(version.replace(/^v/i, ''), 10)
+  const required = declared.major || SUPPORTED_NODE_MAJOR
+  // Scanned only when the runtime is rejected: the happy path never touches the
+  // version-manager directories.
+  const howToGetIt = () =>
+    guidance === undefined ? nodeVersionGuidance(required) : guidance
   if (!Number.isInteger(major) || major <= 0) {
     throw new Error(
       'Could not determine the Node.js version that runs inside the selected ' +
         'test repository. Verify that this shell can execute node --version ' +
-        'in that directory.'
+        `in that directory. ${howToGetIt()}`
     )
   }
   if (declared.major && major !== declared.major) {
     throw new Error(
       `The repository pins Node ${declared.raw} (${declared.source}) but this ` +
         `shell resolves ${version}. Playwright 1.48 hangs indefinitely on ` +
-        `unsupported Node versions. Activate Node ${declared.major} (for ` +
-        'example through volta or nvm) and retry. Do not install ' +
-        `dependencies or run Playwright on ${version}.`
+        `unsupported Node versions. Activate Node ${declared.major} and ` +
+        `retry. ${howToGetIt()} Do not install dependencies or run Playwright ` +
+        `on ${version}.`
     )
   }
   if (!declared.major && major !== SUPPORTED_NODE_MAJOR) {
@@ -39,10 +89,88 @@ export async function assertSupportedNodeRuntime({
       `This shell resolves Node ${version}, but the Voidr Playwright ` +
         `framework requires Node ${SUPPORTED_NODE_MAJOR}. Playwright 1.48 ` +
         'hangs indefinitely on newer majors. Activate Node ' +
-        `${SUPPORTED_NODE_MAJOR} and retry.`
+        `${SUPPORTED_NODE_MAJOR} and retry. ${howToGetIt()}`
     )
   }
   return { version, major }
+}
+
+// The message has to distinguish "installed but not active" from "not installed
+// at all": both look identical from node --version, and the wrong one sends the
+// user to install a runtime they already have.
+export function nodeVersionGuidance(major, options = {}) {
+  const managers = options.managers || detectNodeManagers(options)
+  const installed = managers.find(manager => manager.majors.includes(major))
+  const shellNote =
+    'Do this in your own terminal and then reopen VS Code from it, so the ' +
+    'extension inherits that PATH — the agent must never install, switch, or ' +
+    'pin a Node runtime.'
+  if (installed) {
+    return (
+      `Node ${major} is already installed (${installed.name} ` +
+      `${installed.versions.find(entry => entry.startsWith(`${major}.`)) || major}), ` +
+      `it is just not the version this shell resolves: activate it with ` +
+      `\`${installed.activate(major)}\`. ${shellNote}`
+    )
+  }
+  if (managers.length) {
+    const manager = managers[0]
+    return (
+      `Node ${major} is not installed: add it with \`${manager.install(major)}\` and ` +
+      `activate it with \`${manager.activate(major)}\`. ${shellNote}`
+    )
+  }
+  return (
+    `Node ${major} is not installed and no version manager was found. ` +
+    `Install Node ${major} from nodejs.org, or install a manager (nvs, nvm, ` +
+    `volta, or fnm) and add Node ${major} with it. ${shellNote}`
+  )
+}
+
+export function detectNodeManagers(options = {}) {
+  const env = options.env || process.env
+  const home = options.home || homedir()
+  const localAppData = env.LOCALAPPDATA || ''
+  const exists = options.exists || existsSync
+  const list = options.list || safeReadDirectory
+  const detected = []
+  for (const manager of NODE_MANAGERS) {
+    const roots = [
+      ...manager.variables.map(variable => env[variable]),
+      ...manager.homeDirectories.map(directory => join(home, directory)),
+      ...(localAppData
+        ? manager.localAppData.map(directory => join(localAppData, directory))
+        : [])
+    ].filter(root => root && exists(root))
+    if (!roots.length) continue
+    const versions = []
+    for (const root of roots) {
+      for (const directory of manager.versionDirectories(root)) {
+        for (const entry of list(directory)) {
+          const normalized = entry.replace(/^v/i, '')
+          if (/^\d+\.\d+/.test(normalized)) versions.push(normalized)
+        }
+      }
+    }
+    detected.push({
+      name: manager.name,
+      versions,
+      majors: [
+        ...new Set(versions.map(version => Number.parseInt(version, 10)))
+      ],
+      install: manager.install,
+      activate: manager.activate
+    })
+  }
+  return detected
+}
+
+function safeReadDirectory(directory) {
+  try {
+    return readdirSync(directory)
+  } catch {
+    return []
+  }
 }
 
 export function declaredNodeVersion(repositoryPath) {

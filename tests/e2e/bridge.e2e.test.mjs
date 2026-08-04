@@ -1405,6 +1405,125 @@ test('document search never forwards an unprojected payload and clamps its argum
   assert.equal(withheld.content[0].text.length < 600, true)
 })
 
+test('the same creation intent reuses one idempotency key across retries', async t => {
+  const seenKeys = []
+  let failFirst = true
+  const server = createServer(async (request, response) => {
+    const message = JSON.parse(await readBody(request))
+    response.setHeader('content-type', 'application/json')
+    response.setHeader('mcp-session-id', 'synthetic-session')
+    if (message.method === 'notifications/initialized') {
+      response.writeHead(202)
+      response.end()
+      return
+    }
+    if (message.method === 'initialize') {
+      sendResult(response, message.id, {
+        protocolVersion: '2024-11-05',
+        capabilities: { tools: {} },
+        serverInfo: { name: 'mock', version: '1' }
+      })
+      return
+    }
+    if (message.method === 'tools/call') {
+      const { name, arguments: args } = message.params
+      if (name === 'applications_list_applications') {
+        const data = { data: [{ _id: '6a510c7b9bc772cdbee9d197', name: 'App' }] }
+        sendResult(response, message.id, {
+          structuredContent: { data },
+          content: [{ type: 'text', text: JSON.stringify(data) }]
+        })
+        return
+      }
+      if (name === 'test_plans_create_test_plan') {
+        seenKeys.push(args.idempotencyKey)
+        if (failFirst) {
+          failFirst = false
+          response.end(
+            JSON.stringify({
+              jsonrpc: '2.0',
+              id: message.id,
+              error: { code: -32000, message: 'GitHub unavailable' }
+            })
+          )
+          return
+        }
+        const data = {
+          _id: '0123456789abcdef01234567',
+          repository: {
+            url: 'https://github.com/voidrco/voidr-tp-app',
+            owner: 'voidrco',
+            name: 'voidr-tp-app',
+            defaultBranch: 'main'
+          }
+        }
+        sendResult(response, message.id, {
+          structuredContent: { data },
+          content: [{ type: 'text', text: JSON.stringify(data) }]
+        })
+        return
+      }
+    }
+    sendResult(response, message.id, {})
+  })
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+  t.after(() => server.close())
+
+  const temp = mkdtempSync(join(tmpdir(), 'voidr-bridge-idem-'))
+  const storePath = join(temp, 'service-accounts.json')
+  writeFileSync(
+    storePath,
+    JSON.stringify({
+      activeOrgId: 'org-idem',
+      accounts: {
+        'org-idem': {
+          clientId: 'sa_idem_e2e',
+          clientSecret: 'synthetic-idem-secret',
+          scopes: ['read', 'write']
+        }
+      }
+    })
+  )
+  const child = spawn(process.execPath, [bridgePath], {
+    cwd: temp,
+    env: {
+      ...process.env,
+      VOIDR_SERVICE_ACCOUNTS_PATH: storePath,
+      VOIDR_MCP_URL: `http://127.0.0.1:${server.address().port}/mcp`
+    },
+    stdio: ['pipe', 'pipe', 'pipe']
+  })
+  t.after(() => child.kill())
+  const client = jsonRpcClient(child)
+  await client.request('initialize', {
+    protocolVersion: '2024-11-05',
+    capabilities: {},
+    clientInfo: { name: 'e2e', version: '1' }
+  })
+  await client.request('tools/call', {
+    name: 'applications_list_applications',
+    arguments: {}
+  })
+
+  const args = { applicationId: '6a510c7b9bc772cdbee9d197', name: 'Plano' }
+  const failed = await client.requestRaw('tools/call', {
+    name: 'test_plans_create_test_plan',
+    arguments: args
+  })
+  assert.match(failed.error.message, /GitHub unavailable/)
+
+  await client.request('tools/call', {
+    name: 'test_plans_create_test_plan',
+    arguments: args
+  })
+
+  assert.equal(seenKeys.length, 2)
+  assert.match(seenKeys[0], /^[0-9a-f-]{36}$/)
+  // One intent, one key: the platform resumes the plan instead of inserting a
+  // second one.
+  assert.equal(seenKeys[0], seenKeys[1], 'the retry must reuse the first key')
+})
+
 test('a plan created without provisioning blocks every retry instead of duplicating', async t => {
   const orphanId = '6a70b0fcf2fc9085f680ea1e'
   const calls = []

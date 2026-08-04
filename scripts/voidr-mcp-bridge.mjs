@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { randomUUID } from 'node:crypto'
 import { createInterface } from 'node:readline'
 import {
   authStatus,
@@ -45,6 +46,9 @@ const provisionedTestPlans = new Set()
 let negotiatedProtocol = '2024-11-05'
 let selectedTestPlanId = null
 let planCreationFailed = false
+// { fingerprint, key } for the creation being attempted. The platform stores
+// the key on the plan, so resending it is what turns a retry into a resume.
+let creationIdempotency = null
 // Plans the platform created and then failed to finish. Confirmed by reading
 // them back, so a retry is known to duplicate rather than repair.
 const orphanedTestPlans = new Map() // planId -> { planId, name, hasRepository }
@@ -519,17 +523,32 @@ async function callTool(params) {
         )
       }
     }
+    // The key identifies one creation intent, not one call: the platform
+    // matches it to decide whether to insert or to resume the plan it already
+    // holds, so a retry finishes the previous attempt instead of duplicating
+    // it. Reused while the arguments are identical, dropped once it succeeds.
+    const creationFingerprint = stableStringify(args)
+    if (creationIdempotency?.fingerprint !== creationFingerprint) {
+      creationIdempotency = {
+        fingerprint: creationFingerprint,
+        key: randomUUID()
+      }
+    }
     let result
     try {
-      result = await remote.callTool(name, args)
+      result = await remote.callTool(name, {
+        ...args,
+        idempotencyKey: creationIdempotency.key
+      })
       const provisioned = validateProvisionedTestPlan(result)
       provisionedTestPlans.add(provisioned.planId)
       selectedTestPlanId = provisioned.planId.toLowerCase()
       planCreationFailed = false
       lastFailedCreateArgs = null
+      creationIdempotency = null
     } catch (error) {
       planCreationFailed = true
-      lastFailedCreateArgs = stableStringify(args)
+      lastFailedCreateArgs = creationFingerprint
       const orphan = await findOrphanedTestPlan(error, args)
       if (orphan) {
         orphanedTestPlans.set(orphan.planId, orphan)
@@ -844,8 +863,11 @@ function resetStructureTracking() {
   executionNeedsDeploy = false
   lastFailedCreateArgs = null
   // An orphan belongs to the organization that was selected when it was
-  // created, so switching organizations or re-authenticating clears it.
+  // created, so switching organizations or re-authenticating clears it. The
+  // pending creation key is scoped the same way: the platform matches it per
+  // organization.
   orphanedTestPlans.clear()
+  creationIdempotency = null
 }
 
 // Every platform identifier used in a mutating or preparing call must have

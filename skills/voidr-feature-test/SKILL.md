@@ -246,8 +246,15 @@ Only after `Criar testes`:
    - If none exists, call `test_plans_create_test_plan` named after the
      application and `test_plans_populate_test_plan` with the approved
      scenarios. Capture the returned `repository` object.
-   - If a creation call fails, stop, show the exact error, and offer retry or
-     cancel. Never silently switch to another plan.
+   - When the creation answers with `automationPending: true` and no
+     `repository`, the plan exists but the platform could not provision its
+     repository. Write the approved structure into it anyway — that work is
+     kept — and then stop the flow there: skip preparation, implementation,
+     smoke, and publishing, which have no checkout to run in. Do not create
+     another plan and do not retry the creation. Then report it as described
+     in “Reporting a missing test repository”.
+   - If a creation call fails without a plan, stop, show the exact error, and
+     offer retry or cancel. Never silently switch to another plan.
 2. Call `voidr_workspace_prepare_test_repository` once with the selected IDs,
    environment slug, the server-returned linked `repositoryUrl`, the approved
    case slugs, and `workspaceRoot` set to the absolute path of the open
@@ -298,6 +305,17 @@ Only after `Criar testes`:
 
 Report progress in one short line per step ("Preparando o repositório de
 testes…", "Escrevendo os testes…"), not tool-by-tool narration.
+
+## Reporting a missing test repository
+
+A plan without a linked repository is a partial delivery, so report it as one.
+Lead with the state, never with success: name what exists (the scenarios that
+were recorded) and say plainly that the tests cannot run yet because the test
+repository is missing. Offer the next step in the developer's words — "posso
+provisionar o repositório agora" — never a tool name. Include the platform's own
+failure text once, marked as detail for whoever operates the platform, and never
+advise changing an environment variable, a service configuration, or any
+infrastructure: none of that is something the developer can act on from here.
 
 ## 5. Run, analyze, fix
 
@@ -382,6 +400,7 @@ out of scope for this flow.
 | Read a reused plan's linked `repositoryUrl`, or the real slugs after a not-found error | `test_plans_get_test_plan` |
 | Add the feature to an existing plan | `test_plans_create_module`, `test_plans_create_suite`, `test_plans_create_case` |
 | Create and fill a new plan | `test_plans_create_test_plan`, then `test_plans_populate_test_plan` |
+| Provision the repository of a plan this flow created without one, when the user asks to resume | `test_plans_provision_repository` |
 | Materialize and prepare the test repository | `voidr_workspace_prepare_test_repository` |
 | Assimilate indexed application documentation for scenario design and implementation (read-only, never blocking) | `file_embeddings_search_documents` |
 | Run the new specs locally | `voidr_smoke_build` |
@@ -397,6 +416,11 @@ Disambiguation:
   `voidr_workspace_select_test_repository` in this flow.
 - Never call `test_plans_update_*` tools here; this flow only adds new
   modules, suites, and cases.
+- `test_plans_provision_repository` applies only to a plan this flow just
+  created and that came back without a repository. A reused plan whose
+  `gitProviderConfig.repositoryUrl` is missing follows the reuse rule instead:
+  offer the other plans plus `Criar um novo`, and direct the user to
+  `/voidr-develop-tests` for repository selection.
 - Deploy and execution tools (`voidr_release_deploy_merged_pr`,
   `executions_create_execution`, `executions_get_execution`,
   `test_plans_get_test_counts`) run only inside `/voidr-deploy-run` and its

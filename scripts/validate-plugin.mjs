@@ -531,6 +531,21 @@ for (const skillName of [
   )
 }
 
+// A plan without a repository is reported as a partial delivery, in the user's
+// terms, and never as an instruction to change infrastructure.
+for (const [skillName, skillText] of [
+  ['voidr-feature-test', devSkill.replace(/\s+/g, ' ')],
+  ['voidr-test-plan', testPlanSkill.replace(/\s+/g, ' ')]
+]) {
+  assert(
+    /Reporting a missing test repository/i.test(skillText) &&
+      /Lead with the state/i.test(skillText) &&
+      /never a tool name/i.test(skillText) &&
+      /never advise changing an environment variable/i.test(skillText),
+    `${skillName} must report a missing test repository as a partial delivery instead of success.`
+  )
+}
+
 // The framework's own convention file is the source of truth for test style,
 // and the four rules below each come from a failure observed in a real run.
 for (const [skillName, skillText] of [

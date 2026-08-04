@@ -40,6 +40,7 @@ Routing invariants:
 | `test_plans_get_test_counts` | `voidr-deploy-run` | Post-deploy synchronization verification only. |
 | `test_plans_create_test_plan` | `voidr-test-plan`, `voidr-feature-test` | First mutation of an approved new plan; must return the linked `repository`. |
 | `test_plans_populate_test_plan` | `voidr-test-plan`, `voidr-feature-test` | Bulk write immediately after a complete creation response, same approved flow. |
+| `test_plans_provision_repository` | `voidr-test-plan`, `voidr-feature-test` | Provision and link the repository of a plan that was created while provisioning was unavailable, so automation can start later without creating a second plan. Idempotent: a plan that already has a repository returns the stored result. |
 | `test_plans_create_module` / `test_plans_create_suite` / `test_plans_create_case` | `voidr-test-plan`, `voidr-feature-test` | Incremental additions to an already-persisted plan. |
 | `test_plans_update_test_plan` / `test_plans_update_module` / `test_plans_update_suite` / `test_plans_update_case` | `voidr-test-plan` | Edits explicitly requested by the user on persisted entities. Never error repair. |
 | `test_plans_get_case` | `voidr-failure-analysis` | Expected behavior of one case; read-back after a tag change. |

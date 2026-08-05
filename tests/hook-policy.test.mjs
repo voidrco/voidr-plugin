@@ -56,60 +56,29 @@ function runScript(script, payload, dataRoot) {
   return JSON.parse(result.stdout || '{}')
 }
 
-test('accepts a clone destination that does not exist yet, but only for the linked repository', () => {
+test('requires a checkout that exists, and says who clones it', () => {
   const workspace = mkdtempSync(join(tmpdir(), 'voidr-clone-destination-'))
   const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-'))
-  const destination = join(workspace, 'voidr-tp-desk-web')
+  const missing = join(workspace, 'voidr-tp-desk-web')
 
-  // The preparation clones into this path, so requiring it to exist first would
-  // make the clone unreachable — the deadlock that pushed the agent to fake a
-  // checkout with git init.
-  const cloning = runHook(
+  // No tool clones the linked repository: the user does, with their own
+  // credentials, and that is what proves their access to it.
+  const output = runHook(
     {
       sessionId: 'clone-destination',
       cwd: workspace,
       toolName: 'voidr-voidr_workspace_prepare_test_repository',
       toolArgs: {
-        repositoryPath: destination,
+        repositoryPath: missing,
         repositoryUrl: 'https://github.com/voidrco/voidr-tp-desk-web',
         workspaceRoot: workspace
       }
     },
     dataRoot
   )
-  assert.notEqual(cloning.permissionDecision, 'deny')
-
-  // Without a linked repository there is nothing to clone, so the path must be a
-  // repository that already exists.
-  const selecting = runHook(
-    {
-      sessionId: 'clone-destination',
-      cwd: workspace,
-      toolName: 'voidr-voidr_workspace_prepare_test_repository',
-      toolArgs: { repositoryPath: destination, workspaceRoot: workspace }
-    },
-    dataRoot
-  )
-  assert.equal(selecting.permissionDecision, 'deny')
-  assert.match(selecting.permissionDecisionReason, /must be an existing directory/i)
-
-  // The parent still has to exist inside the workspace: a clone never lands in
-  // an invented directory tree.
-  const orphan = runHook(
-    {
-      sessionId: 'clone-destination',
-      cwd: workspace,
-      toolName: 'voidr-voidr_workspace_prepare_test_repository',
-      toolArgs: {
-        repositoryPath: join(workspace, 'missing', 'voidr-tp-desk-web'),
-        repositoryUrl: 'https://github.com/voidrco/voidr-tp-desk-web',
-        workspaceRoot: workspace
-      }
-    },
-    dataRoot
-  )
-  assert.equal(orphan.permissionDecision, 'deny')
-  assert.match(orphan.permissionDecisionReason, /directly inside an existing directory/i)
+  assert.equal(output.permissionDecision, 'deny')
+  assert.match(output.permissionDecisionReason, /must be an existing directory/i)
+  assert.match(output.permissionDecisionReason, /ask the user to clone it/i)
 })
 
 test('falls through for a safe Voidr read tool', () => {

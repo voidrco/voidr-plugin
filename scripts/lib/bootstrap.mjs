@@ -85,14 +85,14 @@ export function bootstrapTestRepository({
       }
     }
   }
-  // A plan whose repository Voidr already provisioned must be materialized by
-  // cloning it, never by writing a skeleton next to a fabricated origin: the
-  // remote already holds the framework, and a local skeleton that merely points
-  // at it is not that repository. Without this, the destination produced here
-  // is one the preparation gate rejects forever as "not a checkout".
+  // A plan whose repository Voidr already provisioned is materialized by the
+  // user cloning it, never by writing a skeleton next to a fabricated origin:
+  // the remote already holds the framework, and a local skeleton that merely
+  // points at it is not that repository. Without this, the destination produced
+  // here is one the preparation gate rejects forever as "not a checkout".
   if (repositoryUrl && !existsSync(resolve(resolvedTarget, '.git'))) {
     throw new Error(
-      `The Test Plan already has a repository provisioned by Voidr (${normalizeGitHubRepositoryUrl(repositoryUrl)}), so it must be cloned, not bootstrapped. Call voidr_workspace_prepare_test_repository with this path as the clone destination — it clones the linked repository and prepares it in one step. Never create a skeleton here and never add the origin by hand: that produces a directory that is not a checkout of the linked repository.`
+      `The Test Plan already has a repository provisioned by Voidr (${normalizeGitHubRepositoryUrl(repositoryUrl)}), so it must be cloned, not bootstrapped. Ask the user to clone it inside the open workspace — the clone is theirs, performed with their own credentials, and it is what proves their access to a repository that lives in Voidr's organization. Then call voidr_workspace_prepare_test_repository, which finds the checkout by its Git origin. Never create a skeleton here and never add the origin by hand: that produces a directory that is not a checkout of the linked repository.`
     )
   }
   if (existsSync(resolvedTarget) && readdirSync(resolvedTarget).length > 0) {

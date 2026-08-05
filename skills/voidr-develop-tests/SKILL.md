@@ -381,11 +381,14 @@ created or reused and linked the correct repository.
    error or hook message. Never inspect, clone, select, or create a
    repository inside the plugin installation directory
    (`installed-plugins`); the runtime hook blocks it.
-3. If no matching checkout exists, ask for the exact local destination inside
-   the workspace. Show the exact `git clone` source and destination and obtain
-   confirmation before cloning.
-4. Clone only the server-returned `cloneUrl` or `url`. Do not construct or
-   guess a GitHub URL.
+3. If no matching checkout exists, hand the clone to the user as described in
+   “Handing the clone to the user”: give both commands built from the exact
+   server-returned `cloneUrl` or `url`, HTTPS first and SSH after it, say the
+   checkout has to land inside the open workspace folder, and wait for the user
+   to confirm it is done before calling `voidr_workspace_inspect` again.
+4. Never clone the repository yourself, and never construct or guess a GitHub
+   URL: the clone is the user's, and it is what proves their access to a
+   repository that lives in Voidr's organization.
 5. Inspect the cloned checkout. If the provisioned repository already contains
    its Voidr Playwright package and configuration, keep those files. Only when
    the checkout is empty of test-project files, call
@@ -517,7 +520,7 @@ out of scope for this skill and belongs to the skill named for it.
 | Assimilate indexed application documentation for planning | `file_embeddings_search_documents` |
 | Read the explicitly selected Test Plan | `test_plans_get_test_plan` |
 | Discover workspace checkouts (origin matching, read-only context candidates) | `voidr_workspace_inspect` |
-| Initialize the test-project skeleton in a confirmed empty destination, or in an origin-matching checkout that has no test-project files (never clones — cloning belongs to the preparation gate, which is also the only path when the plan already has a linked repository) | `voidr_workspace_bootstrap_test_repository` |
+| Initialize the test-project skeleton in a confirmed empty destination, or in an origin-matching checkout that has no test-project files (never clones, and neither does any other tool: a plan whose repository is already provisioned is cloned by the user) | `voidr_workspace_bootstrap_test_repository` |
 | Register a user-selected existing repository when the plan has no linked repository | `voidr_workspace_select_test_repository` |
 | Run the mandatory repository setup gate | `voidr_workspace_prepare_test_repository` |
 

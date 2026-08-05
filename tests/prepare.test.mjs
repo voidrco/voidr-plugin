@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   realpathSync,
@@ -262,47 +263,64 @@ test('rejects a stale destination that is not a checkout of the linked repositor
         throw new Error('setup must not run for a stale destination')
       }
     }),
-    /already exists but is not a checkout/
+    /never clones it[\s\S]*git clone/
   )
 })
 
-test('clones the linked repository inside the workspace when no checkout exists', async () => {
+test('asks the user to clone the linked repository instead of cloning it', async () => {
   const workspace = mkdtempSync(join(tmpdir(), 'voidr-clone-'))
   const destination = join(workspace, 'tests')
   const repositoryUrl =
     'https://github.com/voidrco/voidr-tp-synthetic-01234567.git'
   const calls = []
-  const innerRun = fakeVoidrRun({ repositoryPath: destination, calls, context })
 
-  const result = await prepareTestRepository({
-    repositoryPath: destination,
-    ...context,
-    repositoryUrl,
-    workspaceRoot: workspace,
-    cliEnvironment: {
-      VOIDR_CLIENT_ID: 'sa_synthetic_clone',
-      VOIDR_CLIENT_SECRET: 'synthetic-clone-secret',
-      VOIDR_ORG_ID: context.organizationId
-    },
-    run: async (file, args, options) => {
-      if (file === 'git' && args[0] === 'clone') {
-        calls.push({ file, args, options })
-        mkdirSync(destination, { recursive: true })
-        writeFileSync(
-          join(destination, 'package.json'),
-          JSON.stringify({ name: 'cloned-tests' })
-        )
-        initializeOrigin(destination, repositoryUrl)
-        return { stdout: '' }
+  await assert.rejects(
+    prepareTestRepository({
+      repositoryPath: destination,
+      ...context,
+      repositoryUrl,
+      workspaceRoot: workspace,
+      cliEnvironment: {
+        VOIDR_CLIENT_ID: 'sa_synthetic_clone',
+        VOIDR_CLIENT_SECRET: 'synthetic-clone-secret',
+        VOIDR_ORG_ID: context.organizationId
+      },
+      run: async (file, args) => {
+        calls.push([file, ...args])
+        // The only command a missing checkout may run is the read-only lookup of
+        // the GitHub account the administrator has to authorize.
+        return file === 'gh' ? { stdout: 'synthetic-dev\n' } : { stdout: '' }
       }
-      return innerRun(file, args, options)
+    }),
+    error => {
+      // Both protocols, because a corporate Windows machine uses the credential
+      // manager over HTTPS while other developers already have an SSH key.
+      assert.match(
+        error.message,
+        /HTTPS: git clone https:\/\/github\.com\/voidrco\/voidr-tp-synthetic-01234567\.git/
+      )
+      assert.match(
+        error.message,
+        /SSH: git clone git@github\.com:voidrco\/voidr-tp-synthetic-01234567\.git/
+      )
+      // The retry only works when the checkout lands where it is looked for.
+      assert.match(error.message, /inside the open workspace/)
+      // A failed clone is the access answer, and it is requested from Voidr.
+      assert.match(error.message, /not authorized on this repository/)
+      // The person who unblocks it is named, and so is the account to authorize.
+      assert.match(
+        error.message,
+        /granted by an administrator of the user's own organization in the Voidr platform/
+      )
+      assert.match(error.message, /GitHub account synthetic-dev/)
+      assert.match(error.message, /Never clone it from the agent terminal/)
+      return true
     }
-  })
+  )
 
-  assert.equal(result.completed, true)
-  assert.equal(result.checkoutSource, 'cloned')
-  assert.equal(result.repositoryPath, realpathSync(destination))
-  assert.deepEqual(calls[0].args.slice(0, 2), ['clone', repositoryUrl])
+  // Nothing else ran: no clone, and no setup on a repository that is not there.
+  assert.deepEqual(calls, [['gh', 'api', 'user', '--jq', '.login']])
+  assert.equal(existsSync(destination), false)
 })
 
 function createRepository(workspace) {

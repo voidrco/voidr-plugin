@@ -133,7 +133,7 @@ if (
     'voidr_workspace_prepare_test_repository'
   ].includes(toolName)
 ) {
-  recordSelection(payload, toolArgs, toolName)
+  recordSelection(payload, toolArgs)
 }
 
 enforcePluginInstallationBoundary(payload, rawToolName, toolArgs)
@@ -142,36 +142,20 @@ const updatedToolArgs = addDefectExecutionEvidence(payload, toolName, toolArgs)
 if (updatedToolArgs) allowUpdatedInput(updatedToolArgs)
 process.stdout.write('{}\n')
 
-function recordSelection(hookPayload, args, toolName) {
+function recordSelection(hookPayload, args) {
   const requested = args?.path || args?.repositoryPath
   if (!requested || typeof requested !== 'string') {
     deny('A test repository path is required.')
   }
   const cwd = realpathOrResolve(hookPayload.cwd || process.cwd())
   const selected = realpathOrResolve(resolve(cwd, requested))
-  // A preparation carrying the linked repository URL clones into this path, so
-  // it is a destination and not a selection: demanding that it already exist
-  // would make the clone unreachable, and the only way out would be faking a
-  // checkout by hand. The parent still has to be a real directory inside the
-  // workspace, which keeps the clone where the workspace can see it.
-  const clonesLinkedRepository =
-    toolName === 'voidr_workspace_prepare_test_repository' &&
-    typeof args?.repositoryUrl === 'string' &&
-    args.repositoryUrl.trim().length > 0
-  const stats = existsSync(selected) ? statSync(selected) : null
-  if (stats && !stats.isDirectory()) {
-    deny('The selected test repository path is not a directory.')
-  }
-  if (!stats) {
-    if (!clonesLinkedRepository) {
-      deny('The selected test repository must be an existing directory.')
-    }
-    const parent = dirname(selected)
-    if (!existsSync(parent) || !statSync(parent).isDirectory()) {
-      deny(
-        'The clone destination of the linked repository must be a new path directly inside an existing directory of the workspace.'
-      )
-    }
+  // Nothing here creates a checkout: the user clones the linked repository with
+  // their own credentials, which is also how access to it is proven. So the path
+  // is always a repository that already exists.
+  if (!existsSync(selected) || !statSync(selected).isDirectory()) {
+    deny(
+      'The selected test repository must be an existing directory. When the Test Plan has a linked repository, ask the user to clone it into the workspace first — no tool clones it for them.'
+    )
   }
   if (isInside(selected, pluginInstallationRoot)) {
     deny(
@@ -356,7 +340,7 @@ function enforceRepositoryMaterializationThroughTools(
         )))
   if (clonesTestRepository) {
     deny(
-      'Blocked by Voidr policy: never clone the Voidr test repository from the terminal — it has no Voidr credentials there, and the provisioned repository is private. voidr_workspace_prepare_test_repository clones and prepares it in one step; pass repositoryPath as the destination inside the workspace, even when that path does not exist yet.'
+      'Blocked by Voidr policy: never clone the Voidr test repository — not from the terminal and not on the user\'s behalf. Every provisioned repository lives in Voidr\'s GitHub organization, so the clone is the user\'s, performed with their own credentials, and that is what proves their access. Show them the repository URL with the HTTPS and SSH commands, ask them to clone it inside the open workspace, and call voidr_workspace_prepare_test_repository again afterwards: it finds the checkout by its Git origin.'
     )
   }
   const fabricatesCheckout =

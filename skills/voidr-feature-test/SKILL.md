@@ -258,14 +258,15 @@ Only after `Criar testes`:
 2. Call `voidr_workspace_prepare_test_repository` once with the selected IDs,
    environment slug, the server-returned linked `repositoryUrl`, the approved
    case slugs, and `workspaceRoot` set to the absolute path of the open
-   VS Code workspace folder. This single tool materializes and prepares the
-   repository itself: it locates an existing checkout by Git `origin`
-   anywhere in the workspace, or clones the linked repository inside the
-   workspace when none exists. Never run `git clone`, `npx voidr login`, or
-   any manual setup command, never use terminal `find`/`ls` to decide whether
-   a checkout exists, and never place the repository outside the workspace
-   (the tool rejects `/tmp`). If it reports that the destination exists but
-   is not a checkout of the linked repository, ask the user what to do with
+   VS Code workspace folder. This single tool prepares the repository: it
+   locates an existing checkout by Git `origin` anywhere in the workspace, and
+   when none exists it returns the commands for the user to clone it — see
+   “Handing the clone to the user”. Never run `git clone`, `npx voidr login`,
+   or any manual setup command, never use terminal `find`/`ls` to decide
+   whether a checkout exists, and never place the repository outside the
+   workspace (the tool rejects `/tmp`). If it reports that the destination
+   exists but is not a checkout of the linked repository, ask the user what to
+   do with
    that stale directory — do not delete it and do not clone elsewhere.
 3. Reuse the functional evidence retrieved before approval. If it does not
    contain enough implementation guidance, make at most one refined
@@ -316,6 +317,35 @@ provisionar o repositório agora" — never a tool name. Include the platform's 
 failure text once, marked as detail for whoever operates the platform, and never
 advise changing an environment variable, a service configuration, or any
 infrastructure: none of that is something the developer can act on from here.
+
+## Handing the clone to the user
+
+The plugin never clones the Test Plan repository, and this is deliberate: every
+provisioned repository lives in Voidr's GitHub organization, so a clone performed
+here would grant access to whoever runs the plugin instead of to whoever was
+granted it. The user's own clone is at once the materialization and the proof of
+access.
+
+When the preparation gate reports that the repository is not in the workspace,
+hand the clone over in one message:
+
+- name the repository and give both commands exactly as the tool returned them,
+  HTTPS first and SSH after it — a corporate Windows machine goes through the
+  credential manager over HTTPS, while other developers already have a key;
+- say it has to land inside the open workspace folder, because that is where the
+  checkout is found by its Git origin;
+- ask the user to say when the clone is done, then call the preparation gate
+  again — nothing else changes and no other tool is needed;
+- never run the clone yourself, in the terminal or anywhere else, and never
+  offer to.
+
+If their clone fails with "Repository not found" or a permission error, that is
+the answer, not a transient failure: the GitHub account is not authorized on that
+repository. Say so plainly and say who unblocks it — an administrator of their own
+organization in the Voidr platform authorizes that GitHub account on the
+repository, and the tool names the account when it can discover it. It is not a
+GitHub request and not a Voidr support request. Then stop: retrying, changing the
+URL, or bootstrapping a skeleton never grants access.
 
 ## 5. Run, analyze, fix
 

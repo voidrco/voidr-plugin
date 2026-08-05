@@ -301,6 +301,35 @@ Finish with:
 - unresolved blockers;
 - whether the build artifact is ready for deployment.
 
+## Handing the clone to the user
+
+The plugin never clones the Test Plan repository, and this is deliberate: every
+provisioned repository lives in Voidr's GitHub organization, so a clone performed
+here would grant access to whoever runs the plugin instead of to whoever was
+granted it. The user's own clone is at once the materialization and the proof of
+access.
+
+When the preparation gate reports that the repository is not in the workspace,
+hand the clone over in one message:
+
+- name the repository and give both commands exactly as the tool returned them,
+  HTTPS first and SSH after it — a corporate Windows machine goes through the
+  credential manager over HTTPS, while other developers already have a key;
+- say it has to land inside the open workspace folder, because that is where the
+  checkout is found by its Git origin;
+- ask the user to say when the clone is done, then call the preparation gate
+  again — nothing else changes and no other tool is needed;
+- never run the clone yourself, in the terminal or anywhere else, and never
+  offer to.
+
+If their clone fails with "Repository not found" or a permission error, that is
+the answer, not a transient failure: the GitHub account is not authorized on that
+repository. Say so plainly and say who unblocks it — an administrator of their own
+organization in the Voidr platform authorizes that GitHub account on the
+repository, and the tool names the account when it can discover it. It is not a
+GitHub request and not a Voidr support request. Then stop: retrying, changing the
+URL, or bootstrapping a skeleton never grants access.
+
 ## Tool routing
 
 Use exactly these tools for these needs. Any Voidr MCP tool not listed here is

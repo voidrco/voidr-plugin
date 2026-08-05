@@ -295,14 +295,21 @@ test('asks the user to clone the linked repository instead of cloning it', async
     error => {
       // Both protocols, because a corporate Windows machine uses the credential
       // manager over HTTPS while other developers already have an SSH key.
-      assert.match(
-        error.message,
-        /HTTPS: git clone https:\/\/github\.com\/voidrco\/voidr-tp-synthetic-01234567\.git/
-      )
-      assert.match(
-        error.message,
-        /SSH: git clone git@github\.com:voidrco\/voidr-tp-synthetic-01234567\.git/
-      )
+      // Both commands carry an absolute destination inside the workspace: a
+      // relative one would land wherever the user's terminal happens to be, and
+      // the retry only finds a checkout inside the workspace.
+      for (const [protocol, source] of [
+        ['HTTPS', 'https://github.com/voidrco/voidr-tp-synthetic-01234567.git'],
+        ['SSH', 'git@github.com:voidrco/voidr-tp-synthetic-01234567.git']
+      ]) {
+        const command = error.message
+          .split('\n')
+          .find(line => line.startsWith(`${protocol}: `))
+        assert.ok(command, protocol)
+        assert.ok(command.includes(`git clone ${source} `), protocol)
+        assert.ok(command.includes(workspace), protocol)
+        assert.match(command, /"[^"]+"$/, protocol)
+      }
       // The retry only works when the checkout lands where it is looked for.
       assert.match(error.message, /inside the open workspace/)
       // A failed clone is the access answer, and it is requested from Voidr.

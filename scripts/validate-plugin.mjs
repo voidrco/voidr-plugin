@@ -551,7 +551,8 @@ for (const [skillName, skillText] of [
 for (const [skillName, skillText] of [
   ['voidr-feature-test', devSkill.replace(/\s+/g, ' ')],
   ['voidr-test-plan', testPlanSkill.replace(/\s+/g, ' ')],
-  ['voidr-implement-tests', implementationSkill.replace(/\s+/g, ' ')]
+  ['voidr-implement-tests', implementationSkill.replace(/\s+/g, ' ')],
+  ['voidr-develop-tests', entrySkill.replace(/\s+/g, ' ')]
 ]) {
   assert(
     /Handing the clone to the user/i.test(skillText) &&

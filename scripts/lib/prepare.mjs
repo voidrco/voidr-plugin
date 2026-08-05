@@ -236,11 +236,14 @@ export function cloneRequestMessage({
 }) {
   const canonical = normalizeGitHubRepositoryUrl(repositoryUrl)
   const slug = canonical.replace(/^https:\/\/github\.com\//i, '')
-  const directory = basename(canonical)
+  // An absolute destination, quoted for paths with spaces: a relative one would
+  // land wherever the user's terminal happens to be, and a checkout outside the
+  // workspace is not found by the retry.
+  const destination = `"${join(workspaceRoot, basename(canonical))}"`
   return (
     `The Test Plan repository is not in this workspace yet, and the plugin never clones it: the clone is done by the user, whose access to the repository is what the clone proves. Ask the user to clone ${canonical} inside the open workspace (${workspaceRoot}) and to say when it is done, then call this tool again — the checkout is found by its Git origin.\n` +
-    `HTTPS: git clone ${canonical}.git ${directory}\n` +
-    `SSH: git clone git@github.com:${slug}.git ${directory}\n` +
+    `HTTPS: git clone ${canonical}.git ${destination}\n` +
+    `SSH: git clone git@github.com:${slug}.git ${destination}\n` +
     `If the clone fails with "Repository not found" or a permission error, the GitHub account${githubAccount ? ` (${githubAccount})` : ''} is not authorized on this repository, which lives in Voidr's organization. The authorization is granted by an administrator of the user's own organization in the Voidr platform — not by GitHub, and not by retrying here. Tell the user to ask their Voidr administrator to authorize ${githubAccount ? `the GitHub account ${githubAccount}` : 'their GitHub account on this repository, telling the administrator which account it is'}${githubAccount ? ' on this repository' : ''}, and stop: no tool and no retry grants access. Never clone it from the agent terminal on the user's behalf.`
   )
 }

@@ -255,7 +255,7 @@ Only after `Criar testes`:
      in “Reporting a missing test repository”.
    - If a creation call fails without a plan, stop, show the exact error, and
      offer retry or cancel. Never silently switch to another plan.
-2. Call `voidr_workspace_prepare_test_repository` once with the selected IDs,
+2. Call `voidr_workspace_prepare_test_repository` with the selected IDs,
    environment slug, the server-returned linked `repositoryUrl`, the approved
    case slugs, and `workspaceRoot` set to the absolute path of the open
    VS Code workspace folder. This single tool prepares the repository: it
@@ -264,7 +264,10 @@ Only after `Criar testes`:
    “Handing the clone to the user”. Never run `git clone`, `npx voidr login`,
    or any manual setup command, never use terminal `find`/`ls` to decide
    whether a checkout exists, and never place the repository outside the
-   workspace (the tool rejects `/tmp`). If it reports that the destination
+   workspace (the tool rejects `/tmp`). Call it once, with one exception: when
+   it returns the clone instructions, call it a second time after the user
+   confirms the clone is done — that second call is what prepares the checkout.
+   Never call it again for any other reason. If it reports that the destination
    exists but is not a checkout of the linked repository, ask the user what to
    do with
    that stale directory — do not delete it and do not clone elsewhere.

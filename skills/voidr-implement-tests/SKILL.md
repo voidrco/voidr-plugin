@@ -80,12 +80,18 @@ replace platform configuration with localhost.
 ## Mandatory repository setup
 
 Before reading or editing a generated spec, call
-`voidr_workspace_prepare_test_repository` once with the exact repository path,
+`voidr_workspace_prepare_test_repository` with the exact repository path,
 organization ID, application ID, Test Plan ID, selected environment slug, and
 selected case slugs, plus the exact server-returned linked repository URL as
 `repositoryUrl`.
 
-This tool is the only allowed initial setup path. It must complete, in order:
+This tool is the only allowed initial setup path. Call it once, with one
+exception: when it returns the clone instructions of a repository that is not in
+the workspace, hand them to the user as described in “Handing the clone to the
+user” and call it a second time after they confirm the clone is done. That second
+call is what prepares the checkout; never call it again for any other reason.
+
+It must complete, in order:
 
 1. dependency installation;
 2. Playwright framework authentication from the plugin's selected Service Account,

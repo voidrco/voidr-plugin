@@ -205,7 +205,31 @@ test('reuses an existing checkout of the linked repository anywhere in the works
   assert.equal(existsSync(join(workspace, 'somewhere-else')), false)
 })
 
-test('bootstraps normally when no checkout of the linked repository exists', async () => {
+test('refuses to bootstrap a plan whose repository Voidr already provisioned', async () => {
+  const { bootstrapTestRepository } = await import(
+    '../scripts/lib/bootstrap.mjs'
+  )
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-bootstrap-linked-'))
+
+  // The provisioned repository is not empty — its first commit is the framework
+  // skeleton — so a local skeleton pointing at that origin is not a checkout of
+  // it, and the preparation gate rejects such a directory forever.
+  assert.throws(
+    () =>
+      bootstrapTestRepository({
+        target: join(workspace, 'fresh-tests'),
+        organizationId: 'org-fresh',
+        applicationId: 'app-fresh',
+        testPlanId: '0123456789abcdef01234567',
+        repositoryUrl: 'https://github.com/voidrco/voidr-tp-fresh.git',
+        workspaceRoot: workspace
+      }),
+    /must be cloned, not bootstrapped[\s\S]*voidr_workspace_prepare_test_repository[\s\S]*never add the origin by hand/i
+  )
+  assert.equal(existsSync(join(workspace, 'fresh-tests', 'package.json')), false)
+})
+
+test('bootstraps a plan without a provisioned repository', async () => {
   const { bootstrapTestRepository } = await import(
     '../scripts/lib/bootstrap.mjs'
   )
@@ -223,7 +247,6 @@ test('bootstraps normally when no checkout of the linked repository exists', asy
     organizationId: 'org-fresh',
     applicationId: 'app-fresh',
     testPlanId: '0123456789abcdef01234567',
-    repositoryUrl: 'https://github.com/voidrco/voidr-tp-fresh.git',
     workspaceRoot: workspace
   })
 

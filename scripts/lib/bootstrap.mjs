@@ -85,6 +85,16 @@ export function bootstrapTestRepository({
       }
     }
   }
+  // A plan whose repository Voidr already provisioned must be materialized by
+  // cloning it, never by writing a skeleton next to a fabricated origin: the
+  // remote already holds the framework, and a local skeleton that merely points
+  // at it is not that repository. Without this, the destination produced here
+  // is one the preparation gate rejects forever as "not a checkout".
+  if (repositoryUrl && !existsSync(resolve(resolvedTarget, '.git'))) {
+    throw new Error(
+      `The Test Plan already has a repository provisioned by Voidr (${normalizeGitHubRepositoryUrl(repositoryUrl)}), so it must be cloned, not bootstrapped. Call voidr_workspace_prepare_test_repository with this path as the clone destination — it clones the linked repository and prepares it in one step. Never create a skeleton here and never add the origin by hand: that produces a directory that is not a checkout of the linked repository.`
+    )
+  }
   if (existsSync(resolvedTarget) && readdirSync(resolvedTarget).length > 0) {
     validateExistingProvisionedRepository({
       target: resolvedTarget,

@@ -56,6 +56,62 @@ function runScript(script, payload, dataRoot) {
   return JSON.parse(result.stdout || '{}')
 }
 
+test('accepts a clone destination that does not exist yet, but only for the linked repository', () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-clone-destination-'))
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-'))
+  const destination = join(workspace, 'voidr-tp-desk-web')
+
+  // The preparation clones into this path, so requiring it to exist first would
+  // make the clone unreachable — the deadlock that pushed the agent to fake a
+  // checkout with git init.
+  const cloning = runHook(
+    {
+      sessionId: 'clone-destination',
+      cwd: workspace,
+      toolName: 'voidr-voidr_workspace_prepare_test_repository',
+      toolArgs: {
+        repositoryPath: destination,
+        repositoryUrl: 'https://github.com/voidrco/voidr-tp-desk-web',
+        workspaceRoot: workspace
+      }
+    },
+    dataRoot
+  )
+  assert.notEqual(cloning.permissionDecision, 'deny')
+
+  // Without a linked repository there is nothing to clone, so the path must be a
+  // repository that already exists.
+  const selecting = runHook(
+    {
+      sessionId: 'clone-destination',
+      cwd: workspace,
+      toolName: 'voidr-voidr_workspace_prepare_test_repository',
+      toolArgs: { repositoryPath: destination, workspaceRoot: workspace }
+    },
+    dataRoot
+  )
+  assert.equal(selecting.permissionDecision, 'deny')
+  assert.match(selecting.permissionDecisionReason, /must be an existing directory/i)
+
+  // The parent still has to exist inside the workspace: a clone never lands in
+  // an invented directory tree.
+  const orphan = runHook(
+    {
+      sessionId: 'clone-destination',
+      cwd: workspace,
+      toolName: 'voidr-voidr_workspace_prepare_test_repository',
+      toolArgs: {
+        repositoryPath: join(workspace, 'missing', 'voidr-tp-desk-web'),
+        repositoryUrl: 'https://github.com/voidrco/voidr-tp-desk-web',
+        workspaceRoot: workspace
+      }
+    },
+    dataRoot
+  )
+  assert.equal(orphan.permissionDecision, 'deny')
+  assert.match(orphan.permissionDecisionReason, /directly inside an existing directory/i)
+})
+
 test('falls through for a safe Voidr read tool', () => {
   const output = runHook({
     sessionId: 'safe-read',

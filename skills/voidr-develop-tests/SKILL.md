@@ -517,7 +517,7 @@ out of scope for this skill and belongs to the skill named for it.
 | Assimilate indexed application documentation for planning | `file_embeddings_search_documents` |
 | Read the explicitly selected Test Plan | `test_plans_get_test_plan` |
 | Discover workspace checkouts (origin matching, read-only context candidates) | `voidr_workspace_inspect` |
-| Initialize the test-project skeleton in a confirmed empty destination, or in an origin-matching checkout that has no test-project files (never clones — cloning belongs to the preparation gate) | `voidr_workspace_bootstrap_test_repository` |
+| Initialize the test-project skeleton in a confirmed empty destination, or in an origin-matching checkout that has no test-project files (never clones — cloning belongs to the preparation gate, which is also the only path when the plan already has a linked repository) | `voidr_workspace_bootstrap_test_repository` |
 | Register a user-selected existing repository when the plan has no linked repository | `voidr_workspace_select_test_repository` |
 | Run the mandatory repository setup gate | `voidr_workspace_prepare_test_repository` |
 

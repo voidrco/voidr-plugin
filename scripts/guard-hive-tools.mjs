@@ -132,7 +132,7 @@ if (
     'voidr_workspace_prepare_test_repository'
   ].includes(toolName)
 ) {
-  recordSelection(payload, toolArgs)
+  recordSelection(payload, toolArgs, toolName)
 }
 
 enforcePluginInstallationBoundary(payload, rawToolName, toolArgs)
@@ -141,15 +141,36 @@ const updatedToolArgs = addDefectExecutionEvidence(payload, toolName, toolArgs)
 if (updatedToolArgs) allowUpdatedInput(updatedToolArgs)
 process.stdout.write('{}\n')
 
-function recordSelection(hookPayload, args) {
+function recordSelection(hookPayload, args, toolName) {
   const requested = args?.path || args?.repositoryPath
   if (!requested || typeof requested !== 'string') {
     deny('A test repository path is required.')
   }
   const cwd = realpathOrResolve(hookPayload.cwd || process.cwd())
   const selected = realpathOrResolve(resolve(cwd, requested))
-  if (!existsSync(selected) || !statSync(selected).isDirectory()) {
-    deny('The selected test repository must be an existing directory.')
+  // A preparation carrying the linked repository URL clones into this path, so
+  // it is a destination and not a selection: demanding that it already exist
+  // would make the clone unreachable, and the only way out would be faking a
+  // checkout by hand. The parent still has to be a real directory inside the
+  // workspace, which keeps the clone where the workspace can see it.
+  const clonesLinkedRepository =
+    toolName === 'voidr_workspace_prepare_test_repository' &&
+    typeof args?.repositoryUrl === 'string' &&
+    args.repositoryUrl.trim().length > 0
+  const stats = existsSync(selected) ? statSync(selected) : null
+  if (stats && !stats.isDirectory()) {
+    deny('The selected test repository path is not a directory.')
+  }
+  if (!stats) {
+    if (!clonesLinkedRepository) {
+      deny('The selected test repository must be an existing directory.')
+    }
+    const parent = dirname(selected)
+    if (!existsSync(parent) || !statSync(parent).isDirectory()) {
+      deny(
+        'The clone destination of the linked repository must be a new path directly inside an existing directory of the workspace.'
+      )
+    }
   }
   if (isInside(selected, pluginInstallationRoot)) {
     deny(

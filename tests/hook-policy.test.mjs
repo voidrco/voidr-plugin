@@ -1391,6 +1391,83 @@ function transcriptEntry(type, data) {
   return JSON.stringify({ type, data })
 }
 
+test('blocks a manual clone or a fabricated checkout during a workflow', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-materialize-'))
+  const sessionId = 'materialization-gate'
+  const now = Date.now()
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-materialize-ws-'))
+
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now,
+      prompt: 'Quero desenvolver testes na Voidr',
+      transformedPrompt: 'Quero desenvolver testes na Voidr'
+    },
+    dataRoot
+  )
+  submitPrompt(
+    {
+      sessionId,
+      timestamp: now + 1,
+      prompt: 'Usar Test Plan existente',
+      transformedPrompt: 'Usar Test Plan existente'
+    },
+    dataRoot
+  )
+
+  // The preparation records which repository the plan is linked to.
+  runHook(
+    {
+      sessionId,
+      cwd: workspace,
+      toolName: 'voidr-voidr_workspace_prepare_test_repository',
+      toolArgs: {
+        repositoryPath: join(workspace, 'voidr-tp-desk-web'),
+        repositoryUrl: 'https://github.com/voidrco/voidr-tp-desk-web',
+        workspaceRoot: workspace
+      }
+    },
+    dataRoot
+  )
+
+  const denied = {
+    'git clone https://github.com/voidrco/voidr-tp-desk-web tests':
+      /never clone the Voidr test repository/i,
+    'git clone https://github.com/voidrco/voidr-tp-plano-e37c1b5b skeleton':
+      /never clone the Voidr test repository/i,
+    'git init ; git remote add origin https://github.com/voidrco/voidr-tp-desk-web':
+      /never create a Git repository or add a remote by hand/i,
+    'cd tests && git remote add origin https://example.test/repo.git':
+      /never create a Git repository or add a remote by hand/i
+  }
+  for (const [command, reason] of Object.entries(denied)) {
+    const output = runHook(
+      { sessionId, cwd: workspace, toolName: 'bash', toolArgs: { command } },
+      dataRoot
+    )
+    assert.equal(output.permissionDecision, 'deny', command)
+    assert.match(output.permissionDecisionReason, reason, command)
+  }
+
+  // Cloning something that is not the test repository stays the user's business,
+  // and reading Git state is never blocked.
+  for (const command of [
+    'git clone https://github.com/blip/desk-web product',
+    'git status',
+    'git remote -v'
+  ]) {
+    assert.deepEqual(
+      runHook(
+        { sessionId, cwd: workspace, toolName: 'bash', toolArgs: { command } },
+        dataRoot
+      ),
+      {},
+      command
+    )
+  }
+})
+
 test('blocks Node runtime installs from the agent terminal during a workflow', () => {
   const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
   const sessionId = 'runtime-install-gate'
@@ -1418,6 +1495,8 @@ test('blocks Node runtime installs from the agent terminal during a workflow', (
   for (const command of [
     'nvm install 22',
     'nvm use 22 && npm test',
+    'nvs add 22',
+    'nvs use 22',
     'volta install node@22',
     'sudo apt-get install -y nodejs',
     'curl -fsSL https://nodejs.org/dist/v22.0.0/node-v22.0.0-linux-x64.tar.xz -o node.tar.xz'

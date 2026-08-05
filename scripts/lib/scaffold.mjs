@@ -3,7 +3,11 @@ import { existsSync } from 'node:fs'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
 import { runCommand } from './command.mjs'
-import { assertSupportedNodeRuntime } from './node-runtime.mjs'
+import {
+  assertSupportedNodeRuntime,
+  describeNodeRuntime,
+  withToolchainPath
+} from './node-runtime.mjs'
 import {
   validateProvisionedRepositorySelection,
   validateRepositorySelection
@@ -142,7 +146,7 @@ export async function buildTestRepository({
   await run('npx', ['--no-install', 'voidr', 'build'], {
     cwd: selected.path,
     timeout: 180_000,
-    env: cliEnvironment
+    env: withToolchainPath(cliEnvironment, validation.nodeRuntime?.toolchain)
   })
 
   return {
@@ -207,7 +211,10 @@ export async function validateSelectedPlaywrightTests({
   }
   const specFilters = selectedSpecs.map(spec => playwrightSpecFilter(spec, '/'))
 
-  await assertSupportedNodeRuntime({ repositoryPath: selected.path, run })
+  const runtime = await assertSupportedNodeRuntime({
+    repositoryPath: selected.path,
+    run
+  })
 
   const listResult = await run(
     'npx',
@@ -215,7 +222,10 @@ export async function validateSelectedPlaywrightTests({
     {
       cwd: selected.path,
       timeout: 120_000,
-      env: playwrightEnvironment(selectedBaseUrl)
+      env: withToolchainPath(
+        playwrightEnvironment(selectedBaseUrl),
+        runtime.toolchain
+      )
     }
   )
   if (listResult.exitCode !== 0) {
@@ -236,7 +246,10 @@ export async function validateSelectedPlaywrightTests({
     {
       cwd: selected.path,
       timeout: 300_000,
-      env: playwrightEnvironment(selectedBaseUrl)
+      env: withToolchainPath(
+        playwrightEnvironment(selectedBaseUrl),
+        runtime.toolchain
+      )
     }
   )
   const report = parsePlaywrightReport(testResult.stdout)
@@ -252,6 +265,7 @@ export async function validateSelectedPlaywrightTests({
       Number(stats.skipped || 0) === 0,
     repositoryPath: selected.path,
     testPlanId: String(testPlanId),
+    nodeRuntime: describeNodeRuntime(runtime),
     specs: selectedSpecs,
     baseUrl: selectedBaseUrl,
     listCompleted: true,

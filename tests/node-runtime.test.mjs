@@ -2,12 +2,15 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 import {
   assertSupportedNodeRuntime,
   declaredNodeVersion,
+  describeNodeRuntime,
   detectNodeManagers,
-  nodeVersionGuidance
+  nodeVersionGuidance,
+  resolveCompatibleToolchain,
+  withToolchainPath
 } from '../scripts/lib/node-runtime.mjs'
 
 function repositoryWith(packageJson) {
@@ -38,7 +41,11 @@ test('accepts the supported Node 22 runtime', async () => {
 test('fails closed on Node 24, which hangs Playwright 1.48', async () => {
   const repositoryPath = repositoryWith(JSON.stringify({ name: 'tests' }))
   await assert.rejects(
-    assertSupportedNodeRuntime({ repositoryPath, run: nodeRun('v24.13.1') }),
+    assertSupportedNodeRuntime({
+      repositoryPath,
+      run: nodeRun('v24.13.1'),
+      compatibleToolchain: null
+    }),
     /requires Node 22[\s\S]*hangs/i
   )
 })
@@ -48,7 +55,11 @@ test('enforces the volta pin declared by the repository', async () => {
     JSON.stringify({ name: 'tests', volta: { node: '22.22.0' } })
   )
   await assert.rejects(
-    assertSupportedNodeRuntime({ repositoryPath, run: nodeRun('v24.13.1') }),
+    assertSupportedNodeRuntime({
+      repositoryPath,
+      run: nodeRun('v24.13.1'),
+      compatibleToolchain: null
+    }),
     /pins Node 22\.22\.0 \(volta\)[\s\S]*Activate Node 22/i
   )
   const accepted = await assertSupportedNodeRuntime({
@@ -74,7 +85,10 @@ test('tells the user to activate a version that is installed but inactive', () =
     managers: [
       {
         name: 'nvs',
-        versions: ['20.19.5', '22.23.2'],
+        versions: [
+          { version: '20.19.5', directory: '/nvs/node/20.19.5' },
+          { version: '22.23.2', directory: '/nvs/node/22.23.2' }
+        ],
         majors: [20, 22],
         install: major => `nvs add ${major}`,
         activate: major => `nvs use ${major}`
@@ -123,7 +137,7 @@ test('asks for the version the repository pins, not the plugin default', () => {
     managers: [
       {
         name: 'nvm',
-        versions: ['22.23.2'],
+        versions: [{ version: '22.23.2', directory: '/nvm/v22.23.2' }],
         majors: [22],
         install: major => `nvm install ${major}`,
         activate: major => `nvm use ${major}`
@@ -140,6 +154,7 @@ test('carries the install guidance into every runtime rejection', async () => {
     assertSupportedNodeRuntime({
       repositoryPath,
       run: nodeRun('v24.13.1'),
+      compatibleToolchain: null,
       guidance: 'SYNTHETIC-GUIDANCE'
     }),
     /requires Node 22[\s\S]*SYNTHETIC-GUIDANCE/
@@ -178,6 +193,7 @@ test('measures the Node binary that will run the toolchain, when given one', asy
         measured.push(file)
         return { stdout: 'v24.13.1\n', stderr: '', exitCode: 0 }
       },
+      compatibleToolchain: null,
       guidance: 'SYNTHETIC-GUIDANCE'
     }),
     /requires Node 22/
@@ -209,6 +225,115 @@ test('detects installed majors from the layout of each version manager', () => {
       ['nvm', [18]]
     ]
   )
+})
+
+test('runs on a compatible installed toolchain instead of stopping the flow', async () => {
+  const repositoryPath = repositoryWith(JSON.stringify({ name: 'tests' }))
+  const toolchain = {
+    directory: 'C:\\nvs\\node\\22.23.2\\x64',
+    node: 'C:\\nvs\\node\\22.23.2\\x64\\node.exe',
+    version: '22.23.2',
+    manager: 'nvs'
+  }
+  const measured = []
+
+  const result = await assertSupportedNodeRuntime({
+    repositoryPath,
+    compatibleToolchain: toolchain,
+    run: async file => {
+      measured.push(file)
+      // The shell is on Node 20; the toolchain binary is the required major.
+      return file === toolchain.node
+        ? { stdout: 'v22.23.2\n', stderr: '', exitCode: 0 }
+        : { stdout: 'v20.20.0\n', stderr: '', exitCode: 0 }
+    }
+  })
+
+  assert.equal(result.major, 22)
+  assert.equal(result.shellVersion, 'v20.20.0')
+  assert.deepEqual(result.toolchain, toolchain)
+  assert.deepEqual(measured, ['node', toolchain.node])
+
+  // The report names the runtime used and warns that the shell disagrees.
+  const described = describeNodeRuntime(result)
+  assert.match(described.source, /nvs 22\.23\.2/)
+  assert.match(described.note, /shell resolves v20\.20\.0[\s\S]*ran on v22\.23\.2/)
+})
+
+test('refuses a toolchain whose binary reports another version', async () => {
+  const repositoryPath = repositoryWith(JSON.stringify({ name: 'tests' }))
+
+  await assert.rejects(
+    assertSupportedNodeRuntime({
+      repositoryPath,
+      // The directory name says 22, the binary says otherwise: the directory is
+      // evidence, not proof.
+      compatibleToolchain: {
+        directory: '/managers/22.23.2',
+        node: '/managers/22.23.2/bin/node',
+        version: '22.23.2',
+        manager: 'nvm'
+      },
+      guidance: 'SYNTHETIC-GUIDANCE',
+      run: async () => ({ stdout: 'v20.20.0\n', stderr: '', exitCode: 0 })
+    }),
+    /requires Node 22[\s\S]*SYNTHETIC-GUIDANCE/
+  )
+})
+
+test('locates the newest install of the required major across layouts', () => {
+  const unix = resolveCompatibleToolchain(22, {
+    managers: [
+      {
+        name: 'nvm',
+        majors: [20, 22],
+        versions: [
+          { version: '22.9.0', directory: '/home/dev/.nvm/versions/node/v22.9.0' },
+          { version: '22.23.2', directory: '/home/dev/.nvm/versions/node/v22.23.2' },
+          { version: '20.19.5', directory: '/home/dev/.nvm/versions/node/v20.19.5' }
+        ]
+      }
+    ],
+    // Unix keeps the binary under bin/, and 22.23.2 must win over 22.9.0.
+    exists: path => path === '/home/dev/.nvm/versions/node/v22.23.2/bin/node'
+  })
+  assert.equal(unix.node, '/home/dev/.nvm/versions/node/v22.23.2/bin/node')
+  assert.equal(unix.version, '22.23.2')
+
+  const windows = resolveCompatibleToolchain(22, {
+    managers: [
+      {
+        name: 'nvs',
+        majors: [22],
+        versions: [{ version: '22.23.2', directory: 'C:\\nvs\\node\\22.23.2\\x64' }]
+      }
+    ],
+    exists: path => path === 'C:\\nvs\\node\\22.23.2\\x64/node.exe'
+  })
+  assert.equal(windows.directory, 'C:\\nvs\\node\\22.23.2\\x64')
+
+  assert.equal(
+    resolveCompatibleToolchain(22, { managers: [], exists: () => true }),
+    null
+  )
+})
+
+test('prepends the toolchain to the PATH the children inherit', () => {
+  const windows = withToolchainPath(
+    { Path: 'C:\\Program Files\\nodejs', OTHER: 'keep' },
+    { directory: 'C:\\nvs\\node\\22.23.2\\x64' }
+  )
+  // The existing key casing is preserved, so Windows does not end up with two.
+  assert.equal(
+    windows.Path,
+    `C:\\nvs\\node\\22.23.2\\x64${delimiter}C:\\Program Files\\nodejs`
+  )
+  assert.equal(windows.OTHER, 'keep')
+  assert.equal(Object.hasOwn(windows, 'PATH'), false)
+
+  const untouched = { PATH: '/usr/bin' }
+  assert.equal(withToolchainPath(untouched, null), untouched)
+  assert.equal(withToolchainPath(untouched, undefined), untouched)
 })
 
 test('reads only a valid volta pin from package.json', () => {

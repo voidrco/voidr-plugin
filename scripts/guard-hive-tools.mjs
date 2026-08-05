@@ -97,6 +97,7 @@ if (isShell) {
   enforceDependencyStrategyProtection(payload, normalizedShell)
   enforceRuntimeInstallProtection(payload, normalizedShell)
   enforcePublishThroughBridge(payload, normalizedShell)
+  enforceRepositoryMaterializationThroughTools(payload, normalizedShell)
   const forbiddenDeploy = (policy.forbiddenDeployShellFragments || []).find(value =>
     normalizedShell.includes(value.toLowerCase())
   )
@@ -181,9 +182,14 @@ function recordSelection(hookPayload, args, toolName) {
     deny('The test repository must be inside the current Copilot workspace.')
   }
 
+  const linkedRepositoryUrl =
+    typeof args?.repositoryUrl === 'string' && args.repositoryUrl.trim()
+      ? args.repositoryUrl.trim()
+      : undefined
   updateSessionState(hookPayload, {
     selectedRepository: selected,
-    workspaceRoot: cwd
+    workspaceRoot: cwd,
+    ...(linkedRepositoryUrl ? { linkedRepositoryUrl } : {})
   })
 }
 
@@ -326,11 +332,47 @@ function enforcePublishThroughBridge(hookPayload, normalizedShell) {
   )
 }
 
+// A checkout of the linked repository comes from the tools or it does not exist.
+// The terminal has no Voidr credentials, so a manual clone of a private
+// provisioned repository cannot work, and a repository faked with git init plus
+// git remote add only defeats the check that protects the flow: it looks like a
+// checkout of the linked repository without being one.
+function enforceRepositoryMaterializationThroughTools(
+  hookPayload,
+  normalizedShell
+) {
+  const state = readSessionState(hookPayload)
+  if (state.workflowActive !== true) return
+  const linkedUrl = String(state.linkedRepositoryUrl || '')
+    .trim()
+    .toLowerCase()
+  const clones = /(?:^|[\s;|&(])git\b[^;&|\n]*\bclone\b/.test(normalizedShell)
+  const clonesTestRepository =
+    clones &&
+    (/voidr-tp-/.test(normalizedShell) ||
+      (linkedUrl.length > 0 &&
+        normalizedShell.includes(
+          linkedUrl.replace(/^https?:\/\//, '').replace(/\.git$/, '')
+        )))
+  if (clonesTestRepository) {
+    deny(
+      'Blocked by Voidr policy: never clone the Voidr test repository from the terminal — it has no Voidr credentials there, and the provisioned repository is private. voidr_workspace_prepare_test_repository clones and prepares it in one step; pass repositoryPath as the destination inside the workspace, even when that path does not exist yet.'
+    )
+  }
+  const fabricatesCheckout =
+    /(?:^|[\s;|&(])git\b[^;&|\n]*\binit\b/.test(normalizedShell) ||
+    /(?:^|[\s;|&(])git\b[^;&|\n]*\bremote\s+add\b/.test(normalizedShell)
+  if (!fabricatesCheckout) return
+  deny(
+    'Blocked by Voidr policy: never create a Git repository or add a remote by hand during a Voidr flow. A directory with a matching origin is not a checkout of the provisioned repository, and the preparation gate would work on a repository that only looks right. Let voidr_workspace_prepare_test_repository clone the linked repository, or voidr_workspace_bootstrap_test_repository create the skeleton when the plan has no linked repository.'
+  )
+}
+
 function enforceRuntimeInstallProtection(hookPayload, normalizedShell) {
   const state = readGateState(hookPayload)
   if (state.workflowActive !== true) return
   const installsRuntime =
-    /\b(?:nvm|volta|fnm|asdf)\b[^;&|\n]*\b(?:install|use|pin|global|exec)\b/.test(
+    /\b(?:nvm|nvs|volta|fnm|asdf)\b[^;&|\n]*\b(?:install|use|add|pin|global|exec)\b/.test(
       normalizedShell
     ) ||
     /\b(?:apt|apt-get|dnf|yum|pacman|brew|snap)\b[^;&|\n]*\binstall\b[^;&|\n]*\bnode/.test(

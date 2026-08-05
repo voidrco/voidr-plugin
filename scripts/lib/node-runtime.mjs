@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { delimiter, join } from 'node:path'
 import { nodeExecutableForToolchain, runCommand } from './command.mjs'
 
 // Playwright 1.48, pinned by the published Voidr framework, hangs before
@@ -53,12 +53,13 @@ const NODE_MANAGERS = [
   }
 ]
 
-export async function assertSupportedNodeRuntime({
-  repositoryPath,
-  run = runCommand,
-  guidance,
-  nodeExecutable = nodeExecutableForToolchain()
-}) {
+export async function assertSupportedNodeRuntime(options) {
+  const {
+    repositoryPath,
+    run = runCommand,
+    guidance,
+    nodeExecutable = nodeExecutableForToolchain()
+  } = options
   const declared = declaredNodeVersion(repositoryPath)
   const required = declared.major || SUPPORTED_NODE_MAJOR
   // Scanned only when the runtime is rejected: the happy path never touches the
@@ -86,6 +87,19 @@ export async function assertSupportedNodeRuntime({
         `in that directory. ${howToGetIt()}`
     )
   }
+  if (major !== required) {
+    const compatible = await compatibleToolchainRuntime({
+      required,
+      repositoryPath,
+      run,
+      declared: options.compatibleToolchain
+    })
+    // The PATH is wrong, not necessarily the machine: when the required major is
+    // installed elsewhere, run the flow on it and report which runtime was used,
+    // instead of stopping on something the user can only fix by relaunching the
+    // editor.
+    if (compatible) return { ...compatible, shellVersion: version }
+  }
   if (declared.major && major !== declared.major) {
     throw new Error(
       `The repository pins Node ${declared.raw} (${declared.source}) but this ` +
@@ -106,6 +120,27 @@ export async function assertSupportedNodeRuntime({
   return { version, major }
 }
 
+// The directory name is evidence, not proof: the binary is executed before the
+// flow commits to it.
+async function compatibleToolchainRuntime({
+  required,
+  repositoryPath,
+  run,
+  declared
+}) {
+  const toolchain =
+    declared === undefined ? resolveCompatibleToolchain(required) : declared
+  if (!toolchain) return null
+  const result = await run(toolchain.node, ['--version'], {
+    cwd: repositoryPath,
+    timeout: 15_000,
+    env: process.env
+  })
+  const version = String(result?.stdout || '').trim()
+  if (Number.parseInt(version.replace(/^v/i, ''), 10) !== required) return null
+  return { version, major: required, toolchain }
+}
+
 // The message has to distinguish "installed but not active" from "not installed
 // at all": both look identical from node --version, and the wrong one sends the
 // user to install a runtime they already have.
@@ -119,7 +154,7 @@ export function nodeVersionGuidance(major, options = {}) {
   if (installed) {
     return (
       `Node ${major} is already installed (${installed.name} ` +
-      `${installed.versions.find(entry => entry.startsWith(`${major}.`)) || major}), ` +
+      `${installed.versions.find(entry => entry.version.startsWith(`${major}.`))?.version || major}), ` +
       `it is just not the version this shell resolves: activate it with ` +
       `\`${installed.activate(major)}\`. ${shellNote}`
     )
@@ -136,6 +171,91 @@ export function nodeVersionGuidance(major, options = {}) {
     `Install Node ${major} from nodejs.org, or install a manager (nvs, nvm, ` +
     `volta, or fnm) and add Node ${major} with it. ${shellNote}`
   )
+}
+
+// The report has to name the runtime the flow actually used, and say when it was
+// not the one the shell resolves: otherwise a user whose terminal stays on the
+// wrong major has no way to explain why the same command behaves differently
+// there.
+export function describeNodeRuntime(runtime) {
+  if (!runtime?.version) return null
+  const toolchain = runtime.toolchain
+  return {
+    version: runtime.version,
+    source: toolchain
+      ? `${toolchain.manager} ${toolchain.version} (${toolchain.directory})`
+      : 'this shell',
+    ...(toolchain ? { toolchain } : {}),
+    ...(runtime.shellVersion && runtime.shellVersion !== runtime.version
+      ? {
+          note: `This shell resolves ${runtime.shellVersion}; the flow ran on ${runtime.version} from ${toolchain?.manager}. Activate that version in your terminal before running Playwright there by hand.`
+        }
+      : {})
+  }
+}
+
+// A version manager keeps every installed runtime in a known directory, so an
+// incompatible PATH is not the same as a missing runtime. The binary is located
+// instead of assumed, because the layout differs per manager and platform
+// (`<version>/bin/node` on Unix, `<version>\node.exe` on Windows).
+export function resolveCompatibleToolchain(major, options = {}) {
+  const exists = options.exists || existsSync
+  const managers = options.managers || detectNodeManagers(options)
+  const candidates = managers
+    .flatMap(manager =>
+      manager.versions
+        .filter(entry => Number.parseInt(entry.version, 10) === major)
+        .map(entry => ({ ...entry, manager: manager.name }))
+    )
+    .sort((left, right) => compareVersions(right.version, left.version))
+  for (const candidate of candidates) {
+    for (const directory of [
+      candidate.directory,
+      join(candidate.directory, 'bin')
+    ]) {
+      for (const binary of ['node.exe', 'node']) {
+        const node = join(directory, binary)
+        if (!exists(node)) continue
+        return {
+          directory,
+          node,
+          version: candidate.version,
+          manager: candidate.manager
+        }
+      }
+    }
+  }
+  return null
+}
+
+// Prepending the toolchain keeps every child process — npm, the Voidr CLI, and
+// the Playwright workers they spawn — on the runtime the framework requires,
+// without touching the shell the user launched VS Code from.
+export function withToolchainPath(environment, toolchain) {
+  const directory = toolchain?.directory || toolchain
+  if (!directory || typeof directory !== 'string') return environment
+  const source = environment || {}
+  const key =
+    Object.keys(source).find(name => name.toLowerCase() === 'path') || 'PATH'
+  const current = String(source[key] || '')
+  return {
+    ...source,
+    [key]: current ? `${directory}${delimiter}${current}` : directory
+  }
+}
+
+function compareVersions(left, right) {
+  const parse = value =>
+    String(value)
+      .split('.')
+      .map(part => Number.parseInt(part, 10) || 0)
+  const first = parse(left)
+  const second = parse(right)
+  for (let index = 0; index < Math.max(first.length, second.length); index += 1) {
+    const difference = (first[index] || 0) - (second[index] || 0)
+    if (difference !== 0) return difference
+  }
+  return 0
 }
 
 export function detectNodeManagers(options = {}) {
@@ -159,7 +279,8 @@ export function detectNodeManagers(options = {}) {
       for (const directory of manager.versionDirectories(root)) {
         for (const entry of list(directory)) {
           const normalized = entry.replace(/^v/i, '')
-          if (/^\d+\.\d+/.test(normalized)) versions.push(normalized)
+          if (!/^\d+\.\d+/.test(normalized)) continue
+          versions.push({ version: normalized, directory: join(directory, entry) })
         }
       }
     }
@@ -167,7 +288,7 @@ export function detectNodeManagers(options = {}) {
       name: manager.name,
       versions,
       majors: [
-        ...new Set(versions.map(version => Number.parseInt(version, 10)))
+        ...new Set(versions.map(entry => Number.parseInt(entry.version, 10)))
       ],
       install: manager.install,
       activate: manager.activate

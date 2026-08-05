@@ -7,7 +7,11 @@ import {
 import { basename, join, resolve } from 'node:path'
 import { runCommand } from './command.mjs'
 import { voidrCliEnvironment } from './credentials.mjs'
-import { assertSupportedNodeRuntime } from './node-runtime.mjs'
+import {
+  assertSupportedNodeRuntime,
+  describeNodeRuntime,
+  withToolchainPath
+} from './node-runtime.mjs'
 import {
   assertOutsidePluginInstallation,
   canonicalizePotentialPath,
@@ -62,12 +66,15 @@ export async function prepareTestRepository({
     validateProject(projectPath, identifiers)
   }
 
-  await assertSupportedNodeRuntime({ repositoryPath: selected.path, run })
+  const runtime = await assertSupportedNodeRuntime({
+    repositoryPath: selected.path,
+    run
+  })
 
   await run('npm', ['install'], {
     cwd: selected.path,
     timeout: 300_000,
-    env: process.env
+    env: withToolchainPath(process.env, runtime.toolchain)
   })
 
   // The selected plugin Service Account is injected only into Voidr CLI child
@@ -82,10 +89,15 @@ export async function prepareTestRepository({
       'The selected plugin Service Account belongs to a different organization.'
     )
   }
-  const childEnvironment = {
-    ...resolvedCliEnvironment,
-    VOIDR_ORG_ID: identifiers.organizationId
-  }
+  // Every child of this gate runs on the runtime the gate approved, which is not
+  // always the one this shell resolves.
+  const childEnvironment = withToolchainPath(
+    {
+      ...resolvedCliEnvironment,
+      VOIDR_ORG_ID: identifiers.organizationId
+    },
+    runtime.toolchain
+  )
 
   if (!hadProject) {
     await run(
@@ -176,7 +188,8 @@ export async function prepareTestRepository({
       linked: !hadProject,
       existingProjectValidated: hadProject,
       scaffolded: true,
-      secretsPulled: true
+      secretsPulled: true,
+      nodeRuntime: describeNodeRuntime(runtime)
     }
   }
 }

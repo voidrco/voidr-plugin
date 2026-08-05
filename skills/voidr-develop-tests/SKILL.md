@@ -381,11 +381,14 @@ created or reused and linked the correct repository.
    error or hook message. Never inspect, clone, select, or create a
    repository inside the plugin installation directory
    (`installed-plugins`); the runtime hook blocks it.
-3. If no matching checkout exists, ask for the exact local destination inside
-   the workspace. Show the exact `git clone` source and destination and obtain
-   confirmation before cloning.
-4. Clone only the server-returned `cloneUrl` or `url`. Do not construct or
-   guess a GitHub URL.
+3. If no matching checkout exists, hand the clone to the user as described in
+   “Handing the clone to the user”: give both commands built from the exact
+   server-returned `cloneUrl` or `url`, HTTPS first and SSH after it, say the
+   checkout has to land inside the open workspace folder, and wait for the user
+   to confirm it is done before calling `voidr_workspace_inspect` again.
+4. Never clone the repository yourself, and never construct or guess a GitHub
+   URL: the clone is the user's, and it is what proves their access to a
+   repository that lives in Voidr's organization.
 5. Inspect the cloned checkout. If the provisioned repository already contains
    its Voidr Playwright package and configuration, keep those files. Only when
    the checkout is empty of test-project files, call
@@ -501,6 +504,35 @@ At each handoff, summarize:
 
 Never auto-deploy and never auto-execute.
 
+## Handing the clone to the user
+
+The plugin never clones the Test Plan repository, and this is deliberate: every
+provisioned repository lives in Voidr's GitHub organization, so a clone performed
+here would grant access to whoever runs the plugin instead of to whoever was
+granted it. The user's own clone is at once the materialization and the proof of
+access.
+
+When the preparation gate reports that the repository is not in the workspace,
+hand the clone over in one message:
+
+- name the repository and give both commands exactly as the tool returned them,
+  HTTPS first and SSH after it — a corporate Windows machine goes through the
+  credential manager over HTTPS, while other developers already have a key;
+- say it has to land inside the open workspace folder, because that is where the
+  checkout is found by its Git origin;
+- ask the user to say when the clone is done, then call the preparation gate
+  again — nothing else changes and no other tool is needed;
+- never run the clone yourself, in the terminal or anywhere else, and never
+  offer to.
+
+If their clone fails with "Repository not found" or a permission error, that is
+the answer, not a transient failure: the GitHub account is not authorized on that
+repository. Say so plainly and say who unblocks it — an administrator of their own
+organization in the Voidr platform authorizes that GitHub account on the
+repository, and the tool names the account when it can discover it. It is not a
+GitHub request and not a Voidr support request. Then stop: retrying, changing the
+URL, or bootstrapping a skeleton never grants access.
+
 ## Tool routing
 
 Use exactly these tools for these needs. Any Voidr MCP tool not listed here is
@@ -517,7 +549,7 @@ out of scope for this skill and belongs to the skill named for it.
 | Assimilate indexed application documentation for planning | `file_embeddings_search_documents` |
 | Read the explicitly selected Test Plan | `test_plans_get_test_plan` |
 | Discover workspace checkouts (origin matching, read-only context candidates) | `voidr_workspace_inspect` |
-| Initialize the test-project skeleton in a confirmed empty destination, or in an origin-matching checkout that has no test-project files (never clones — cloning belongs to the preparation gate) | `voidr_workspace_bootstrap_test_repository` |
+| Initialize the test-project skeleton in a confirmed empty destination, or in an origin-matching checkout that has no test-project files (never clones, and neither does any other tool: a plan whose repository is already provisioned is cloned by the user) | `voidr_workspace_bootstrap_test_repository` |
 | Register a user-selected existing repository when the plan has no linked repository | `voidr_workspace_select_test_repository` |
 | Run the mandatory repository setup gate | `voidr_workspace_prepare_test_repository` |
 

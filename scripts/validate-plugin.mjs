@@ -546,6 +546,24 @@ for (const [skillName, skillText] of [
   )
 }
 
+// The clone is the user's, and it is also how access to a repository living in
+// Voidr's organization is proven. No skill may offer to clone it.
+for (const [skillName, skillText] of [
+  ['voidr-feature-test', devSkill.replace(/\s+/g, ' ')],
+  ['voidr-test-plan', testPlanSkill.replace(/\s+/g, ' ')],
+  ['voidr-implement-tests', implementationSkill.replace(/\s+/g, ' ')],
+  ['voidr-develop-tests', entrySkill.replace(/\s+/g, ' ')]
+]) {
+  assert(
+    /Handing the clone to the user/i.test(skillText) &&
+      /HTTPS first and SSH after it/i.test(skillText) &&
+      /inside the open workspace folder/i.test(skillText) &&
+      /never run the clone yourself/i.test(skillText) &&
+      /administrator of their own\s+organization in the Voidr platform/i.test(skillText),
+    `${skillName} must hand the clone to the user with both commands, and never clone it.`
+  )
+}
+
 // The framework's own convention file is the source of truth for test style,
 // and the four rules below each come from a failure observed in a real run.
 for (const [skillName, skillText] of [

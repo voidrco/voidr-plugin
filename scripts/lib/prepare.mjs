@@ -4,13 +4,15 @@ import {
   readFileSync,
   writeFileSync
 } from 'node:fs'
-import { basename, join, resolve } from 'node:path'
+import { basename, join } from 'node:path'
 import { runCommand } from './command.mjs'
 import { voidrCliEnvironment } from './credentials.mjs'
-import { assertSupportedNodeRuntime } from './node-runtime.mjs'
 import {
-  assertOutsidePluginInstallation,
-  canonicalizePotentialPath,
+  assertSupportedNodeRuntime,
+  describeNodeRuntime,
+  withToolchainPath
+} from './node-runtime.mjs'
+import {
   findCheckoutByOrigin,
   isInside,
   normalizeGitHubRepositoryUrl,
@@ -33,9 +35,8 @@ export async function prepareTestRepository({
 }) {
   const resolvedRoot = resolveWorkspaceRoot({ explicit: workspaceRoot })
   const materialized = repositoryUrl
-    ? await materializeLinkedCheckout({
+    ? await locateLinkedCheckout({
         workspaceRoot: resolvedRoot,
-        repositoryPath,
         repositoryUrl,
         run
       })
@@ -62,12 +63,15 @@ export async function prepareTestRepository({
     validateProject(projectPath, identifiers)
   }
 
-  await assertSupportedNodeRuntime({ repositoryPath: selected.path, run })
+  const runtime = await assertSupportedNodeRuntime({
+    repositoryPath: selected.path,
+    run
+  })
 
   await run('npm', ['install'], {
     cwd: selected.path,
     timeout: 300_000,
-    env: process.env
+    env: withToolchainPath(process.env, runtime.toolchain)
   })
 
   // The selected plugin Service Account is injected only into Voidr CLI child
@@ -82,10 +86,15 @@ export async function prepareTestRepository({
       'The selected plugin Service Account belongs to a different organization.'
     )
   }
-  const childEnvironment = {
-    ...resolvedCliEnvironment,
-    VOIDR_ORG_ID: identifiers.organizationId
-  }
+  // Every child of this gate runs on the runtime the gate approved, which is not
+  // always the one this shell resolves.
+  const childEnvironment = withToolchainPath(
+    {
+      ...resolvedCliEnvironment,
+      VOIDR_ORG_ID: identifiers.organizationId
+    },
+    runtime.toolchain
+  )
 
   if (!hadProject) {
     await run(
@@ -176,48 +185,67 @@ export async function prepareTestRepository({
       linked: !hadProject,
       existingProjectValidated: hadProject,
       scaffolded: true,
-      secretsPulled: true
+      secretsPulled: true,
+      nodeRuntime: describeNodeRuntime(runtime)
     }
   }
 }
 
-// Finds or clones the platform-linked repository inside the workspace. The
-// tool, not the model, decides where the checkout lives: an existing clone is
-// located by Git origin anywhere in the workspace, and a fresh clone always
-// lands inside the workspace root — never in /tmp or another external path.
-async function materializeLinkedCheckout({
-  workspaceRoot,
-  repositoryPath,
-  repositoryUrl,
-  run
-}) {
+// Locates the platform-linked repository inside the workspace. Nothing here
+// clones it: the checkout is created by the user, with the user's own
+// credentials, and that is deliberate. Every provisioned repository lives in
+// Voidr's GitHub organization, so a clone performed by the plugin would hand
+// access to whoever runs the plugin, instead of to whoever was granted it. A
+// clone the user performs is at once the materialization and the proof of
+// access.
+async function locateLinkedCheckout({ workspaceRoot, repositoryUrl, run }) {
   const existing = findCheckoutByOrigin(workspaceRoot, repositoryUrl)
   if (existing) return { path: existing, how: 'existing-checkout' }
-
-  const requested = String(repositoryPath || '').trim()
-  const destination = canonicalizePotentialPath(
-    resolve(
+  throw new Error(
+    cloneRequestMessage({
       workspaceRoot,
-      requested || basename(normalizeGitHubRepositoryUrl(repositoryUrl))
-    )
+      repositoryUrl,
+      // The administrator has to authorize an account, so naming it saves a
+      // round trip. Best effort only: this is a failure path, and the message
+      // stands without it.
+      githubAccount: await githubAccountLogin(run)
+    })
   )
-  if (!isInside(destination, workspaceRoot)) {
-    throw new Error(
-      `The clone destination must be inside the open workspace (${workspaceRoot}). Never clone the linked repository into /tmp or another external directory.`
-    )
-  }
-  assertOutsidePluginInstallation(destination, 'clone destination')
-  if (existsSync(destination)) {
-    throw new Error(
-      `The destination ${destination} already exists but is not a checkout of the linked repository (no matching Git origin). Ask the user whether to remove the stale directory or pick another repositoryPath inside the workspace. Never delete it automatically and never clone outside the workspace.`
-    )
-  }
+}
 
-  await run('git', ['clone', repositoryUrl, destination], {
-    timeout: 300_000,
-    env: process.env
-  })
-  return { path: destination, how: 'cloned' }
+async function githubAccountLogin(run) {
+  try {
+    const result = await run('gh', ['api', 'user', '--jq', '.login'], {
+      timeout: 15_000,
+      env: process.env
+    })
+    const login = String(result?.stdout || '').trim()
+    return /^[a-z0-9-]{1,39}$/i.test(login) ? login : ''
+  } catch {
+    return ''
+  }
+}
+
+// The message is the whole handover, so it carries the exact commands and the
+// one constraint that makes the retry work: the checkout has to land inside the
+// open workspace, which is where it is looked for by Git origin.
+export function cloneRequestMessage({
+  workspaceRoot,
+  repositoryUrl,
+  githubAccount
+}) {
+  const canonical = normalizeGitHubRepositoryUrl(repositoryUrl)
+  const slug = canonical.replace(/^https:\/\/github\.com\//i, '')
+  // An absolute destination, quoted for paths with spaces: a relative one would
+  // land wherever the user's terminal happens to be, and a checkout outside the
+  // workspace is not found by the retry.
+  const destination = `"${join(workspaceRoot, basename(canonical))}"`
+  return (
+    `The Test Plan repository is not in this workspace yet, and the plugin never clones it: the clone is done by the user, whose access to the repository is what the clone proves. Ask the user to clone ${canonical} inside the open workspace (${workspaceRoot}) and to say when it is done, then call this tool again — the checkout is found by its Git origin.\n` +
+    `HTTPS: git clone ${canonical}.git ${destination}\n` +
+    `SSH: git clone git@github.com:${slug}.git ${destination}\n` +
+    `If the clone fails with "Repository not found" or a permission error, the GitHub account${githubAccount ? ` (${githubAccount})` : ''} is not authorized on this repository, which lives in Voidr's organization. The authorization is granted by an administrator of the user's own organization in the Voidr platform — not by GitHub, and not by retrying here. Tell the user to ask their Voidr administrator to authorize ${githubAccount ? `the GitHub account ${githubAccount}` : 'their GitHub account on this repository, telling the administrator which account it is'}${githubAccount ? ' on this repository' : ''}, and stop: no tool and no retry grants access. Never clone it from the agent terminal on the user's behalf.`
+  )
 }
 
 function validateIdentifiers({

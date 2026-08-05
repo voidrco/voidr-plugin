@@ -97,6 +97,7 @@ if (isShell) {
   enforceDependencyStrategyProtection(payload, normalizedShell)
   enforceRuntimeInstallProtection(payload, normalizedShell)
   enforcePublishThroughBridge(payload, normalizedShell)
+  enforceRepositoryMaterializationThroughTools(payload, normalizedShell)
   const forbiddenDeploy = (policy.forbiddenDeployShellFragments || []).find(value =>
     normalizedShell.includes(value.toLowerCase())
   )
@@ -148,8 +149,13 @@ function recordSelection(hookPayload, args) {
   }
   const cwd = realpathOrResolve(hookPayload.cwd || process.cwd())
   const selected = realpathOrResolve(resolve(cwd, requested))
+  // Nothing here creates a checkout: the user clones the linked repository with
+  // their own credentials, which is also how access to it is proven. So the path
+  // is always a repository that already exists.
   if (!existsSync(selected) || !statSync(selected).isDirectory()) {
-    deny('The selected test repository must be an existing directory.')
+    deny(
+      'The selected test repository must be an existing directory. When the Test Plan has a linked repository, ask the user to clone it into the workspace first — no tool clones it for them.'
+    )
   }
   if (isInside(selected, pluginInstallationRoot)) {
     deny(
@@ -160,9 +166,14 @@ function recordSelection(hookPayload, args) {
     deny('The test repository must be inside the current Copilot workspace.')
   }
 
+  const linkedRepositoryUrl =
+    typeof args?.repositoryUrl === 'string' && args.repositoryUrl.trim()
+      ? args.repositoryUrl.trim()
+      : undefined
   updateSessionState(hookPayload, {
     selectedRepository: selected,
-    workspaceRoot: cwd
+    workspaceRoot: cwd,
+    ...(linkedRepositoryUrl ? { linkedRepositoryUrl } : {})
   })
 }
 
@@ -305,11 +316,47 @@ function enforcePublishThroughBridge(hookPayload, normalizedShell) {
   )
 }
 
+// A checkout of the linked repository comes from the tools or it does not exist.
+// The terminal has no Voidr credentials, so a manual clone of a private
+// provisioned repository cannot work, and a repository faked with git init plus
+// git remote add only defeats the check that protects the flow: it looks like a
+// checkout of the linked repository without being one.
+function enforceRepositoryMaterializationThroughTools(
+  hookPayload,
+  normalizedShell
+) {
+  const state = readSessionState(hookPayload)
+  if (state.workflowActive !== true) return
+  const linkedUrl = String(state.linkedRepositoryUrl || '')
+    .trim()
+    .toLowerCase()
+  const clones = /(?:^|[\s;|&(])git\b[^;&|\n]*\bclone\b/.test(normalizedShell)
+  const clonesTestRepository =
+    clones &&
+    (/voidr-tp-/.test(normalizedShell) ||
+      (linkedUrl.length > 0 &&
+        normalizedShell.includes(
+          linkedUrl.replace(/^https?:\/\//, '').replace(/\.git$/, '')
+        )))
+  if (clonesTestRepository) {
+    deny(
+      'Blocked by Voidr policy: never clone the Voidr test repository — not from the terminal and not on the user\'s behalf. Every provisioned repository lives in Voidr\'s GitHub organization, so the clone is the user\'s, performed with their own credentials, and that is what proves their access. Show them the repository URL with the HTTPS and SSH commands, ask them to clone it inside the open workspace, and call voidr_workspace_prepare_test_repository again afterwards: it finds the checkout by its Git origin.'
+    )
+  }
+  const fabricatesCheckout =
+    /(?:^|[\s;|&(])git\b[^;&|\n]*\binit\b/.test(normalizedShell) ||
+    /(?:^|[\s;|&(])git\b[^;&|\n]*\bremote\s+add\b/.test(normalizedShell)
+  if (!fabricatesCheckout) return
+  deny(
+    'Blocked by Voidr policy: never create a Git repository or add a remote by hand during a Voidr flow. A directory with a matching origin is not a checkout of the provisioned repository, and the preparation gate would work on a repository that only looks right. Let voidr_workspace_prepare_test_repository clone the linked repository, or voidr_workspace_bootstrap_test_repository create the skeleton when the plan has no linked repository.'
+  )
+}
+
 function enforceRuntimeInstallProtection(hookPayload, normalizedShell) {
   const state = readGateState(hookPayload)
   if (state.workflowActive !== true) return
   const installsRuntime =
-    /\b(?:nvm|volta|fnm|asdf)\b[^;&|\n]*\b(?:install|use|pin|global|exec)\b/.test(
+    /\b(?:nvm|nvs|volta|fnm|asdf)\b[^;&|\n]*\b(?:install|use|add|pin|global|exec)\b/.test(
       normalizedShell
     ) ||
     /\b(?:apt|apt-get|dnf|yum|pacman|brew|snap)\b[^;&|\n]*\binstall\b[^;&|\n]*\bnode/.test(

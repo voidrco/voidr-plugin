@@ -260,6 +260,78 @@ test('runs on a compatible installed toolchain instead of stopping the flow', as
   assert.match(described.note, /shell resolves v20\.20\.0[\s\S]*ran on v22\.23\.2/)
 })
 
+test('skips a broken newest install and falls back to an older one', async () => {
+  const repositoryPath = repositoryWith(JSON.stringify({ name: 'tests' }))
+  const broken = {
+    directory: '/managers/22.23.2',
+    node: '/managers/22.23.2/bin/node',
+    version: '22.23.2',
+    manager: 'nvm'
+  }
+  const mismatched = {
+    directory: '/managers/22.20.0',
+    node: '/managers/22.20.0/bin/node',
+    version: '22.20.0',
+    manager: 'nvm'
+  }
+  const working = {
+    directory: '/managers/22.9.0',
+    node: '/managers/22.9.0/bin/node',
+    version: '22.9.0',
+    manager: 'nvm'
+  }
+  const attempted = []
+
+  const result = await assertSupportedNodeRuntime({
+    repositoryPath,
+    compatibleToolchain: [broken, mismatched, working],
+    run: async file => {
+      attempted.push(file)
+      // The shell is on Node 20, the newest install cannot even execute, and the
+      // next one lies about its version.
+      if (file === broken.node) throw new Error('spawn EACCES')
+      if (file === mismatched.node) {
+        return { stdout: 'v20.19.6\n', stderr: '', exitCode: 0 }
+      }
+      if (file === working.node) {
+        return { stdout: 'v22.9.0\n', stderr: '', exitCode: 0 }
+      }
+      return { stdout: 'v20.20.0\n', stderr: '', exitCode: 0 }
+    }
+  })
+
+  assert.equal(result.major, 22)
+  assert.deepEqual(result.toolchain, working)
+  assert.deepEqual(attempted, [
+    'node',
+    broken.node,
+    mismatched.node,
+    working.node
+  ])
+})
+
+test('keeps failing when no install of the required major qualifies', async () => {
+  const repositoryPath = repositoryWith(JSON.stringify({ name: 'tests' }))
+
+  await assert.rejects(
+    assertSupportedNodeRuntime({
+      repositoryPath,
+      compatibleToolchain: [
+        { node: '/a/node', version: '22.1.0', manager: 'nvm', directory: '/a' },
+        { node: '/b/node', version: '22.0.0', manager: 'nvm', directory: '/b' }
+      ],
+      guidance: 'SYNTHETIC-GUIDANCE',
+      run: async file => {
+        if (file === 'node') {
+          return { stdout: 'v20.20.0\n', stderr: '', exitCode: 0 }
+        }
+        throw new Error('spawn EACCES')
+      }
+    }),
+    /requires Node 22[\s\S]*SYNTHETIC-GUIDANCE/
+  )
+})
+
 test('refuses a toolchain whose binary reports another version', async () => {
   const repositoryPath = repositoryWith(JSON.stringify({ name: 'tests' }))
 
@@ -300,17 +372,22 @@ test('locates the newest install of the required major across layouts', () => {
   assert.equal(unix.node, '/home/dev/.nvm/versions/node/v22.23.2/bin/node')
   assert.equal(unix.version, '22.23.2')
 
+  // nvs, from detection to resolution: it keeps one architecture folder inside
+  // each version, so the binary is a level below what detection enumerates.
+  const nvsRoot = 'C:\\nvs'
+  const nvsBinary = join(nvsRoot, 'node', '22.23.2', 'x64', 'node.exe')
+  const options = {
+    env: { NVS_HOME: nvsRoot },
+    home: 'C:\\Users\\dev',
+    exists: path => path === nvsRoot || path === nvsBinary,
+    list: path => (path === join(nvsRoot, 'node') ? ['22.23.2'] : [])
+  }
   const windows = resolveCompatibleToolchain(22, {
-    managers: [
-      {
-        name: 'nvs',
-        majors: [22],
-        versions: [{ version: '22.23.2', directory: 'C:\\nvs\\node\\22.23.2\\x64' }]
-      }
-    ],
-    exists: path => path === 'C:\\nvs\\node\\22.23.2\\x64/node.exe'
+    ...options,
+    managers: detectNodeManagers(options)
   })
-  assert.equal(windows.directory, 'C:\\nvs\\node\\22.23.2\\x64')
+  assert.equal(windows.node, nvsBinary)
+  assert.equal(windows.manager, 'nvs')
 
   assert.equal(
     resolveCompatibleToolchain(22, { managers: [], exists: () => true }),

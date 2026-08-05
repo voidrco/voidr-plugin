@@ -10,6 +10,8 @@ const SUPPORTED_NODE_MAJOR = 22
 // Version managers keep their installs in known roots, so the required major
 // can be reported as already installed but inactive — the common case — instead
 // of telling the user to install what they already have.
+const ARCHITECTURE_SUBDIRECTORIES = ['x64', 'arm64', 'x86']
+
 const NODE_MANAGERS = [
   {
     name: 'nvs',
@@ -120,25 +122,36 @@ export async function assertSupportedNodeRuntime(options) {
   return { version, major }
 }
 
-// The directory name is evidence, not proof: the binary is executed before the
-// flow commits to it.
+// The directory name is evidence, not proof: every candidate is executed before
+// the flow commits to it, newest first. One broken install — a binary that
+// cannot run, or a directory whose name does not match what it reports — must not
+// hide an older one that works.
 async function compatibleToolchainRuntime({
   required,
   repositoryPath,
   run,
   declared
 }) {
-  const toolchain =
-    declared === undefined ? resolveCompatibleToolchain(required) : declared
-  if (!toolchain) return null
-  const result = await run(toolchain.node, ['--version'], {
-    cwd: repositoryPath,
-    timeout: 15_000,
-    env: process.env
-  })
-  const version = String(result?.stdout || '').trim()
-  if (Number.parseInt(version.replace(/^v/i, ''), 10) !== required) return null
-  return { version, major: required, toolchain }
+  const candidates =
+    declared === undefined
+      ? listCompatibleToolchains(required)
+      : [declared].flat().filter(Boolean)
+  for (const toolchain of candidates) {
+    let version
+    try {
+      const result = await run(toolchain.node, ['--version'], {
+        cwd: repositoryPath,
+        timeout: 15_000,
+        env: process.env
+      })
+      version = String(result?.stdout || '').trim()
+    } catch {
+      continue
+    }
+    if (Number.parseInt(version.replace(/^v/i, ''), 10) !== required) continue
+    return { version, major: required, toolchain }
+  }
+  return null
 }
 
 // The message has to distinguish "installed but not active" from "not installed
@@ -199,8 +212,17 @@ export function describeNodeRuntime(runtime) {
 // instead of assumed, because the layout differs per manager and platform
 // (`<version>/bin/node` on Unix, `<version>\node.exe` on Windows).
 export function resolveCompatibleToolchain(major, options = {}) {
+  return listCompatibleToolchains(major, options)[0] || null
+}
+
+// Every install of the required major, newest first, with the binary located
+// rather than assumed: `<version>/bin/node` on Unix, `<version>\node.exe` on
+// Windows, and `<version>/<arch>/node.exe` under nvs, which keeps one folder per
+// architecture inside each version.
+export function listCompatibleToolchains(major, options = {}) {
   const exists = options.exists || existsSync
   const managers = options.managers || detectNodeManagers(options)
+  const resolved = []
   const candidates = managers
     .flatMap(manager =>
       manager.versions
@@ -209,23 +231,35 @@ export function resolveCompatibleToolchain(major, options = {}) {
     )
     .sort((left, right) => compareVersions(right.version, left.version))
   for (const candidate of candidates) {
-    for (const directory of [
+    const roots = [
       candidate.directory,
-      join(candidate.directory, 'bin')
-    ]) {
-      for (const binary of ['node.exe', 'node']) {
-        const node = join(directory, binary)
-        if (!exists(node)) continue
-        return {
-          directory,
-          node,
-          version: candidate.version,
-          manager: candidate.manager
+      ...ARCHITECTURE_SUBDIRECTORIES.map(architecture =>
+        join(candidate.directory, architecture)
+      )
+    ]
+    for (const root of roots) {
+      let located = null
+      for (const directory of [root, join(root, 'bin')]) {
+        for (const binary of ['node.exe', 'node']) {
+          const node = join(directory, binary)
+          if (!exists(node)) continue
+          located = {
+            directory,
+            node,
+            version: candidate.version,
+            manager: candidate.manager
+          }
+          break
         }
+        if (located) break
+      }
+      if (located) {
+        resolved.push(located)
+        break
       }
     }
   }
-  return null
+  return resolved
 }
 
 // Prepending the toolchain keeps every child process — npm, the Voidr CLI, and

@@ -25,9 +25,7 @@ function isDeployTestsPrompt(prompt) {
   )
 }
 
-// The routing note, independent of how a host delivers it. Copilot appends it
-// to the transformed prompt; Claude passes it as UserPromptSubmit context.
-// Both end up in front of the model before it acts on the request.
+// Copilot appends it to the transformed prompt Claude passes it as UserPromptSubmit context.
 export function voidrPromptGuidance(input) {
   const prompt = String(input?.prompt || '')
 
@@ -86,8 +84,7 @@ note.`
   return null
 }
 
-// Copilot-shaped result, kept as the library's public contract. The hook
-// serializes `guidance` for whichever host is running; see lib/host.mjs.
+// Copilot-shaped result, kept as the library's public contract.
 export function routeVoidrPrompt(input) {
   const guidance = voidrPromptGuidance(input)
   if (!guidance) return {}

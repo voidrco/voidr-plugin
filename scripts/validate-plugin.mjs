@@ -153,8 +153,7 @@ assert(
 
 // --- Claude Code host -------------------------------------------------------
 // The same skills, bridge, and policy serve both hosts. Only the manifest, the
-// hook wiring, and the plugin-root variable differ, so everything below checks
-// that the Claude side stays in step with the Copilot side it mirrors.
+// hook wiring, and the plugin-root variable differ
 
 const claudeManifest = readJson('.claude-plugin/plugin.json')
 const claudeMarketplace = readJson('.claude-plugin/marketplace.json')
@@ -197,9 +196,7 @@ for (const [event, script] of Object.entries(claudeHookEvents)) {
     entry => entry.hooks || []
   )
   const commands = entries.map(item => String(item.command || ''))
-  // A PreToolUse hook that Claude cancels on timeout fails OPEN: the tool call
-  // proceeds ungated. The guard runs in well under a second, so the budget only
-  // has to cover a cold Node start on a loaded machine.
+  // A PreToolUse hook that Claude cancels on timeout fails OPEN
   assert(
     entries.every(item => Number(item.timeout) >= 15),
     `hooks/hooks.json ${event} needs a timeout of at least 15s; a canceled gate hook fails open.`
@@ -220,9 +217,7 @@ assert(
     '${CLAUDE_PLUGIN_ROOT}/scripts/voidr-mcp-bridge.mjs',
   'The Claude MCP bridge path must resolve through ${CLAUDE_PLUGIN_ROOT}.'
 )
-// Copilot filters tools through the .mcp.json allowlist; Claude has no such
-// field. Neither host is the enforcement point — the bridge is — so the two
-// configs only have to agree on everything else.
+// Copilot filters tools through the .mcp.json allowlist; Claude has no such field.
 const hostOnlyMcpKeys = new Set(['tools', 'disableToolCache', 'args'])
 for (const key of new Set([
   ...Object.keys(server || {}),
@@ -262,7 +257,6 @@ for (const path of skillFiles) {
     `${relative(path)} must state the Hive invariant.`
   )
   // The skills say `ask_user`; Claude names the same tool AskUserQuestion.
-  // Without the mapping the selectable-option gates degrade to chat text.
   assert(
     /`AskUserQuestion` on Claude Code/.test(content),
     `${relative(path)} must map ask_user to each host's native question tool.`

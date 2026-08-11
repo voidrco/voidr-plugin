@@ -14,9 +14,6 @@ import {
   updateSessionState
 } from './lib/session-state.mjs'
 
-// Neither host guarantees the model will ever comply, and Claude ships no
-// stop_hook_active flag to break the cycle, so the gate releases the turn
-// after this many consecutive blocks rather than hanging it.
 const MAX_CONSECUTIVE_BLOCKS = 3
 
 const payload = await readPayload()
@@ -65,8 +62,6 @@ if (missing.length === 0) {
 
 const blocks = Number(state.executionLinkBlocks || 0) + 1
 if (blocks > MAX_CONSECUTIVE_BLOCKS) {
-  // Giving up is a relaxed policy, so say so. A silently dropped evidence
-  // requirement reads exactly like one that was satisfied.
   release({
     warning: `Voidr released this turn after ${MAX_CONSECUTIVE_BLOCKS} attempts without the required execution evidence. Missing:\n${missing.join('\n')}`
   })
@@ -87,8 +82,7 @@ process.stdout.write(
 )
 
 function release({ warning } = {}) {
-  // Most turns owe no evidence at all. Only touch the state file when there is
-  // something to clear, so an ordinary Stop stays a read.
+  // Most turns owe no evidence at all.
   if (
     (state.requiredExecutionIds || []).length > 0 ||
     Number(state.executionLinkBlocks || 0) > 0

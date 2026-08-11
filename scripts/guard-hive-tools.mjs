@@ -477,9 +477,7 @@ function containsCredentialLiterals(content) {
 }
 
 // Copilot names its editor tools in snake_case (create_file, read_file);
-// Claude uses PascalCase (Write, NotebookEdit). Splitting camel humps into
-// hyphens lets one boundary-anchored pattern serve both, so NotebookEdit reads
-// as an edit instead of slipping past every write gate.
+// Claude uses PascalCase (Write, NotebookEdit).
 function toolNameWords(name) {
   return String(name || '').replace(/([a-z0-9])([A-Z])/g, '$1-$2')
 }
@@ -974,9 +972,6 @@ function deny(reason) {
 
 function allowUpdatedInput(updatedInput) {
   // This hook only wants to inject the execution evidence into the arguments.
-  // On Claude a permissionDecision of "allow" also skips the permission prompt
-  // the user would otherwise get for a defect mutation, so the decision is
-  // omitted there and only the rewritten input is returned.
   const output =
     detectHost(payload) === CLAUDE
       ? {

@@ -5,6 +5,11 @@ description: Creates one confirmed Voidr platform execution with executions_crea
 
 # Create a Voidr execution
 
+> Host note: `ask_user` names the host's native question tool — `ask_user` on
+> GitHub Copilot CLI, `AskUserQuestion` on Claude Code. Wherever this skill
+> says `ask_user`, use that tool with selectable options; plain chat text is
+> never a substitute.
+
 Never call a tool that starts a Hive process. Use only the sync-verification
 reads and `executions_create_execution`, as routed below.
 

@@ -5,6 +5,11 @@ description: Fluxo dev-first para criar e rodar testes da feature que o desenvol
 
 # Test my feature (developer-first flow)
 
+> Host note: `ask_user` names the host's native question tool — `ask_user` on
+> GitHub Copilot CLI, `AskUserQuestion` on Claude Code. Wherever this skill
+> says `ask_user`, use that tool with selectable options; plain chat text is
+> never a substitute.
+
 Never call a tool that starts a Hive process.
 
 ## Non-negotiables
@@ -73,7 +78,7 @@ When the flow starts:
 
 1. Call `voidr_auth_status`. If `authenticated: false`, reply only:
 
-   > A Voidr não está conectada. Execute `/copilot voidr-connect` para
+   > A Voidr não está conectada. Execute `/copilot voidr-connect` (Claude Code: `/voidr:voidr-connect`) para
    > conectar. Depois volte e peça os testes de novo.
 
    If multiple organizations exist, ask which one with `ask_user`, then call
@@ -380,7 +385,7 @@ URL, or bootstrapping a skeleton never grants access.
    test.
 
 If `npm install` or another step fails with a network error, say the shell has
-no network access (Copilot sandbox) and ask once to rerun with network. If the
+no network access (agent sandbox) and ask once to rerun with network. If the
 tools report an unsupported Node version, relay that message as it came: it
 already says whether the required version is installed on that machine and the
 exact command of the manager found there. Then stop and wait — retry the tool

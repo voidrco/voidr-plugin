@@ -11,10 +11,20 @@ import { dirname, resolve } from 'node:path'
 function stateDataRoot() {
   return (
     process.env.COPILOT_PLUGIN_DATA ||
+    // Claude Code's per-plugin persistent directory, which survives the
+    // plugin update that moves CLAUDE_PLUGIN_ROOT.
+    process.env.CLAUDE_PLUGIN_DATA ||
     process.env.VOIDR_PLUGIN_DATA ||
     resolve(tmpdir(), 'voidr-copilot-plugin-data')
   )
 }
+
+// How each host spells an explicit skill invocation in the prompt text:
+// Copilot uses "/copilot voidr-connect" or "/copilot:voidr-connect", Claude
+// namespaces plugin skills as "/voidr:voidr-connect". A bare "/voidr-connect"
+// works on both. Recognizing all of them keeps the router from re-injecting
+// guidance the user already asked for by name.
+export const SKILL_INVOCATION_PREFIX = '\\/(?:copilot\\s+|copilot:|voidr:)?'
 
 export function sessionStatePath(payload) {
   const sessionId = String(
@@ -142,6 +152,8 @@ export function recordUserPromptState(payload) {
     return {
       ...current,
       requiredExecutionIds: [],
+      // A new user turn clears the Stop-gate's consecutive-block counter.
+      executionLinkBlocks: 0,
       workflowActive: current.workflowActive === true || workflowStarted,
       connectWorkflowActive: connectStarted
         ? true
@@ -369,8 +381,8 @@ export function isDevTestsApproval(prompt) {
 export function isDevTestFlowPrompt(prompt) {
   const text = normalizeText(prompt)
   if (
-    /\/(?:copilot\s+)?voidr-feature-test\b/.test(text) ||
-    /\/(?:copilot\s+)?voidr-test\b(?!-plan)/.test(text)
+    skillInvocation('voidr-feature-test\\b').test(text) ||
+    skillInvocation('voidr-test\\b(?!-plan)').test(text)
   ) {
     return true
   }
@@ -423,7 +435,7 @@ export function extractExplicitTestPlanId(prompt) {
 function isVoidrTestingPrompt(prompt) {
   const text = normalizeText(prompt)
   return (
-    /\/(?:copilot\s+)?voidr-develop-tests\b/.test(text) ||
+    skillInvocation('voidr-develop-tests\\b').test(text) ||
     (/\bvoidr\b/.test(text) &&
       /\b(?:desenvolver|criar|implementar|automatizar|planejar|publicar|subir|executar|rodar)\b/.test(
         text
@@ -433,7 +445,11 @@ function isVoidrTestingPrompt(prompt) {
 }
 
 function isVoidrConnectPrompt(prompt) {
-  return /\/(?:copilot\s+)?voidr-connect\b/i.test(prompt)
+  return skillInvocation('voidr-connect\\b').test(prompt)
+}
+
+function skillInvocation(suffix) {
+  return new RegExp(`${SKILL_INVOCATION_PREFIX}${suffix}`, 'i')
 }
 
 export function isNewPlanChoice(prompt) {

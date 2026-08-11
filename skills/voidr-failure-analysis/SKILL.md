@@ -5,6 +5,11 @@ description: Analyzes a failed Voidr Playwright execution or test using ClickHou
 
 # Analyze Voidr failures
 
+> Host note: `ask_user` names the host's native question tool — `ask_user` on
+> GitHub Copilot CLI, `AskUserQuestion` on Claude Code. Wherever this skill
+> says `ask_user`, use that tool with selectable options; plain chat text is
+> never a substitute.
+
 Never call a tool that starts a Hive process. Do not trigger self-healing,
 automation generation, video generation, or another agent workflow.
 
@@ -22,7 +27,7 @@ Call `voidr_auth_status` before any remote tool.
 
 If it returns `authenticated: false`, stop and reply only:
 
-> A Voidr não está conectada. Execute `/copilot voidr-connect` para conectar
+> A Voidr não está conectada. Execute `/copilot voidr-connect` (Claude Code: `/voidr:voidr-connect`) para conectar
 > uma Service Account. Depois volte e continue este fluxo.
 
 Read-only analysis does not require write access. Every defect mutation and

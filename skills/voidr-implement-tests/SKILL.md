@@ -5,7 +5,12 @@ description: Implements an explicitly selected set of Voidr Test Plan cases in o
 
 # Implement Voidr Playwright tests
 
-Never call a tool that starts a Hive process. The Copilot agent writes and
+> Host note: `ask_user` names the host's native question tool — `ask_user` on
+> GitHub Copilot CLI, `AskUserQuestion` on Claude Code. Wherever this skill
+> says `ask_user`, use that tool with selectable options; plain chat text is
+> never a substitute.
+
+Never call a tool that starts a Hive process. The coding agent writes and
 validates the Playwright code locally.
 
 ## Non-negotiables
@@ -256,7 +261,7 @@ same-origin and the deployed runtime confirms it. A repository default such as
 Call `voidr_smoke_build` once with the
 selected repository path, exact server-returned linked repository URL, Test
 Plan ID, and only the selected generated spec paths. The tool first lists and
-executes those specs outside the Copilot shell sandbox. It requires zero
+executes those specs outside the agent shell sandbox. It requires zero
 failures and zero skipped selected tests before it runs the authenticated
 Voidr build. It returns a sanitized validation summary while keeping `.env`
 and the Service Account opaque.

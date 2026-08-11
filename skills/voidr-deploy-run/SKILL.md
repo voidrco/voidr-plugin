@@ -5,6 +5,11 @@ description: Deploys a locally validated Voidr Playwright suite from an already-
 
 # Deploy and run Voidr tests
 
+> Host note: `ask_user` names the host's native question tool — `ask_user` on
+> GitHub Copilot CLI, `AskUserQuestion` on Claude Code. Wherever this skill
+> says `ask_user`, use that tool with selectable options; plain chat text is
+> never a substitute.
+
 Never call a tool that starts a Hive process. Platform execution is created
 only with `executions_create_execution`.
 

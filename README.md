@@ -1,4 +1,8 @@
-# Voidr Testing plugin for GitHub Copilot CLI
+# Voidr Testing plugin for GitHub Copilot CLI and Claude Code
+
+One plugin, two hosts. The skills, the MCP bridge, the policy engine, and the
+gate hooks are shared; only the manifest, the hook wiring, and the plugin-root
+variable differ per host. See [Host support](#host-support).
 
 This plugin guides a developer from “I want to develop tests in Voidr” through:
 
@@ -22,19 +26,72 @@ callback state before starting Auth0 and asks the user to choose an organization
 when necessary. The temporary user token is kept only in the local Node process
 and discarded after the account is created and validated.
 
-To run an already-automated plan without the development workflow, invoke:
+To run an already-automated plan without the development workflow, invoke
+`/copilot:voidr-create-execution` on Copilot, or `/voidr:voidr-create-execution`
+on Claude Code.
 
-> `/copilot:voidr-create-execution`
+## Host support
+
+| | GitHub Copilot CLI | Claude Code |
+|---|---|---|
+| Plugin name | `copilot` | `voidr` |
+| Manifest | `plugin.json` | `.claude-plugin/plugin.json` |
+| Marketplace | `.github/plugin/marketplace.json` | `.claude-plugin/marketplace.json` |
+| Hooks | `hooks.json` | `hooks/hooks.json` |
+| MCP config | `.mcp.json` | `mcp/claude.json` |
+| Plugin root | `${PLUGIN_ROOT}` | `${CLAUDE_PLUGIN_ROOT}` |
+| Skill call | `/copilot:voidr-connect` | `/voidr:voidr-connect` |
+
+Everything else is shared: `skills/`, `scripts/`, `policy/`, and
+`templates/`. `scripts/lib/host.mjs` detects the host from the hook payload
+(Claude stamps `hook_event_name`; Copilot does not) and serializes each hook's
+output in that host's dialect. Set `VOIDR_PLUGIN_HOST=claude|copilot` to force
+it.
+
+Three host differences are worth knowing when changing hook code:
+
+- Claude's `UserPromptSubmit` **cannot rewrite the prompt**. The routing note
+  from `prompt-router.mjs` is delivered as `additionalContext` instead of being
+  appended to the transformed prompt.
+- Claude's `Stop` decision is read at the **top level** of the hook output, not
+  inside `hookSpecificOutput`, and it hands the hook `last_assistant_message`
+  directly — so the execution-link gate never parses a transcript there.
+- Claude scopes plugin MCP tools as
+  `mcp__plugin_voidr_voidr__<tool>`. `canonicalToolName` strips that prefix, so
+  the policy allowlist and every gate keep matching. Breaking that resolution
+  silently opens every gate — `tests/claude-host.test.mjs` covers it.
+
+`npm run validate` asserts both hosts stay in step: same version, same Voidr
+endpoints, and every hook event wired to its script.
 
 ## Local development
 
 ```sh
 npm run check
+```
+
+On GitHub Copilot CLI:
+
+```sh
 copilot plugin marketplace add .
 copilot plugin install copilot@voidrco
 copilot plugin list
 copilot mcp get voidr --json
 ```
+
+On Claude Code:
+
+```sh
+claude plugin validate .claude-plugin/plugin.json --strict
+claude plugin validate .claude-plugin/marketplace.json --strict
+claude plugin marketplace add .
+claude plugin install voidr@voidrco
+```
+
+Install into a throwaway workspace first. The `PreToolUse` gate denies writes
+before a test repository is explicitly selected, which is correct inside the
+Voidr workflow and disruptive in an unrelated session. `/plugin` disables it
+again without uninstalling.
 
 After every `copilot plugin install`, reload every open VS Code window
 (`Developer: Reload Window`). The MCP bridge and the prompt hook keep

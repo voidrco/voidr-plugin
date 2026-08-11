@@ -1,0 +1,19 @@
+{
+  "name": "voidr",
+  "displayName": "Voidr Testing",
+  "description": "Develop, deploy, and execute Voidr Playwright tests with MCP-backed application and Test Plan selection.",
+  "version": "0.2.22",
+  "author": {
+    "name": "Voidr"
+  },
+  "license": "UNLICENSED",
+  "keywords": [
+    "voidr",
+    "playwright",
+    "testing",
+    "test-plan"
+  ],
+  "skills": "./skills/",
+  "hooks": "./hooks/hooks.json",
+  "mcpServers": "./mcp/claude.json"
+}

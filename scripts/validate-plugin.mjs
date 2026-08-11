@@ -193,8 +193,16 @@ const claudeHookEvents = {
   Stop: 'require-execution-links.mjs'
 }
 for (const [event, script] of Object.entries(claudeHookEvents)) {
-  const commands = (claudeHooks.hooks?.[event] || []).flatMap(entry =>
-    (entry.hooks || []).map(item => String(item.command || ''))
+  const entries = (claudeHooks.hooks?.[event] || []).flatMap(
+    entry => entry.hooks || []
+  )
+  const commands = entries.map(item => String(item.command || ''))
+  // A PreToolUse hook that Claude cancels on timeout fails OPEN: the tool call
+  // proceeds ungated. The guard runs in well under a second, so the budget only
+  // has to cover a cold Node start on a loaded machine.
+  assert(
+    entries.every(item => Number(item.timeout) >= 15),
+    `hooks/hooks.json ${event} needs a timeout of at least 15s; a canceled gate hook fails open.`
   )
   assert(
     commands.some(command => command.includes(script)),

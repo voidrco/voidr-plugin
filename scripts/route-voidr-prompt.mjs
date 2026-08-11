@@ -11,7 +11,9 @@ try {
   const payload = input.trim() ? JSON.parse(input) : {}
   recordUserPromptState(payload)
   const output = userPromptOutput(detectHost(payload), {
-    transformedPrompt: payload?.transformedPrompt ?? payload?.prompt,
+    // An empty transformedPrompt falls back to the raw prompt, or Copilot's
+    // rewrite would replace the user's message with the routing note alone.
+    transformedPrompt: payload?.transformedPrompt || payload?.prompt,
     guidance: voidrPromptGuidance(payload)
   })
   process.stdout.write(`${JSON.stringify(output)}\n`)

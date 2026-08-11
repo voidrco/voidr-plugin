@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { detectHost, postToolContextOutput } from './lib/host.mjs'
+import { postToolContextOutput } from './lib/host.mjs'
 import { canonicalToolName } from './lib/policy.mjs'
 import {
   executionIdsFromToolInput,
@@ -65,7 +65,6 @@ const lines = executionLinkLines(
 process.stdout.write(
   `${JSON.stringify(
     postToolContextOutput(
-      detectHost(payload),
       `The final user-facing response must include these evidence links exactly:\n${lines}`
     )
   )}\n`

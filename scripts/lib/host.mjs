@@ -79,8 +79,9 @@ export function userPromptOutput(host, { transformedPrompt, guidance }) {
   }
 }
 
-export function postToolContextOutput(host, additionalContext) {
-  // Both hosts read PostToolUse context from the same place.
+// Both hosts read PostToolUse context from the same place, so this one takes
+// no host. Give it one the day they diverge.
+export function postToolContextOutput(additionalContext) {
   return {
     hookSpecificOutput: {
       hookEventName: 'PostToolUse',

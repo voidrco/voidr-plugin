@@ -65,7 +65,11 @@ if (missing.length === 0) {
 
 const blocks = Number(state.executionLinkBlocks || 0) + 1
 if (blocks > MAX_CONSECUTIVE_BLOCKS) {
-  release()
+  // Giving up is a relaxed policy, so say so. A silently dropped evidence
+  // requirement reads exactly like one that was satisfied.
+  release({
+    warning: `Voidr released this turn after ${MAX_CONSECUTIVE_BLOCKS} attempts without the required execution evidence. Missing:\n${missing.join('\n')}`
+  })
 }
 
 updateSessionState(payload, current => ({
@@ -82,13 +86,22 @@ process.stdout.write(
   )}\n`
 )
 
-function release() {
-  updateSessionState(payload, current => ({
-    ...current,
-    requiredExecutionIds: [],
-    executionLinkBlocks: 0
-  }))
-  process.stdout.write('{}\n')
+function release({ warning } = {}) {
+  // Most turns owe no evidence at all. Only touch the state file when there is
+  // something to clear, so an ordinary Stop stays a read.
+  if (
+    (state.requiredExecutionIds || []).length > 0 ||
+    Number(state.executionLinkBlocks || 0) > 0
+  ) {
+    updateSessionState(payload, current => ({
+      ...current,
+      requiredExecutionIds: [],
+      executionLinkBlocks: 0
+    }))
+  }
+  process.stdout.write(
+    `${JSON.stringify(warning ? { systemMessage: warning } : {})}\n`
+  )
   process.exit(0)
 }
 

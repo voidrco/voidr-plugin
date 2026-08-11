@@ -4,10 +4,7 @@ import { mkdtempSync, readFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
-import {
-  isDevTestFlowPrompt,
-  isNewPlanChoice
-} from '../scripts/lib/session-state.mjs'
+import { isDevTestFlowPrompt } from '../scripts/lib/session-state.mjs'
 import { routeVoidrPrompt } from '../scripts/lib/prompt-router.mjs'
 
 const root = resolve(import.meta.dirname, '..')
@@ -247,7 +244,7 @@ test('the Stop gate releases the turn instead of looping forever', () => {
   for (let attempt = 1; attempt <= 3; attempt += 1) {
     assert.equal(stop().decision, 'block', `attempt ${attempt}`)
   }
-  assert.deepEqual(stop(), {})
+  assert.match(stop().systemMessage, /without the required execution evidence/)
 })
 
 test('a new user turn re-arms the Stop gate', () => {
@@ -281,7 +278,7 @@ test('a new user turn re-arms the Stop gate', () => {
 
   seed()
   for (let attempt = 1; attempt <= 3; attempt += 1) stop()
-  assert.deepEqual(stop(), {})
+  assert.match(stop().systemMessage, /without the required execution evidence/)
 
   runScript(
     promptHook,
@@ -345,6 +342,67 @@ test('the Claude hook commands resolve and run the real scripts', () => {
   )
 })
 
-test('plan-mode recognizers are shared, not host-specific', () => {
-  assert.equal(isNewPlanChoice('Criar novo Test Plan'), true)
+test('the connect flow arms its gate from a Claude-namespaced call', () => {
+  // connectFirstToolRequired is set by the prompt hook recognizing the skill
+  // call. Miss the namespace and /voidr:voidr-connect loses its gate.
+  const state = mkdtempSync(join(tmpdir(), 'voidr-claude-connect-'))
+  runScript(
+    promptHook,
+    {
+      hook_event_name: 'UserPromptSubmit',
+      session_id: 'claude-connect',
+      cwd: root,
+      prompt: '/voidr:voidr-connect'
+    },
+    state
+  )
+  const recorded = JSON.parse(
+    readFileSync(join(state, 'sessions/latest-prompt-state.json'), 'utf8')
+  )
+  assert.equal(recorded.connectWorkflowActive, true)
+  assert.equal(recorded.connectFirstToolRequired, true)
+})
+
+test('an empty transformed prompt keeps the user message', () => {
+  // Copilot rewrites the prompt, so losing it here would replace what the user
+  // typed with the routing note alone.
+  const output = runScript(
+    promptHook,
+    {
+      sessionId: 'empty-transformed',
+      cwd: root,
+      prompt: 'Quero desenvolver testes na voidr',
+      transformedPrompt: ''
+    },
+    dataRoot()
+  )
+  assert.match(
+    output.modifiedTransformedPrompt,
+    /^Quero desenvolver testes na voidr\n\nUse the \/voidr-develop-tests/
+  )
+})
+
+test('gate state lands in the Claude plugin data directory', () => {
+  const state = mkdtempSync(join(tmpdir(), 'voidr-claude-data-'))
+  const result = spawnSync(process.execPath, [promptHook], {
+    input: JSON.stringify({
+      hook_event_name: 'UserPromptSubmit',
+      session_id: 'claude-data-root',
+      cwd: root,
+      prompt: 'Criar novo Test Plan'
+    }),
+    encoding: 'utf8',
+    // Claude sets CLAUDE_PLUGIN_DATA, never COPILOT_PLUGIN_DATA. Without it the
+    // gate hooks would fall back to a temp directory and lose typed approvals.
+    env: {
+      HOME: process.env.HOME,
+      PATH: process.env.PATH,
+      CLAUDE_PLUGIN_DATA: state
+    }
+  })
+  assert.equal(result.status, 0, result.stderr)
+  const written = JSON.parse(
+    readFileSync(join(state, 'sessions/latest-prompt-state.json'), 'utf8')
+  )
+  assert.equal(written.planMode, 'new')
 })

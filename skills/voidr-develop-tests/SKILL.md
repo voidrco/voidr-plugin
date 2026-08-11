@@ -5,6 +5,11 @@ description: Inicia e orquestra o desenvolvimento de testes na Voidr. Use SEMPRE
 
 # Develop tests in Voidr
 
+> Host note: `ask_user` names the host's native question tool — `ask_user` on
+> GitHub Copilot CLI, `AskUserQuestion` on Claude Code. Wherever this skill
+> says `ask_user`, use that tool with selectable options; plain chat text is
+> never a substitute.
+
 Treat this as a gated workflow. Never call a tool that starts a Hive process,
 including indirectly through a generic or batch tool.
 
@@ -32,14 +37,18 @@ question or tool call; never act from a partial read.
 6. Never delegate any part of this workflow to a subagent. Approval gates
    are recorded per chat session, and a subagent session can never receive
    the user's typed approval — its platform writes are always denied.
-7. A routed tool missing from your available tools is grouped, not absent:
-   past a tool-count threshold the editor collapses tool sets into groups
-   the model has to expand first. Find the activation entry whose summary
-   lists that tool and call it with the exact name you were given — never
-   invent an activation name, never report the tool as unavailable, and
-   never fall back to a terminal command or a manual step. If no
-   activation entry lists it, say exactly which tool is unreachable and
-   stop.
+7. A routed tool missing from your available tools is grouped, not absent,
+   and each host reveals it differently. On GitHub Copilot CLI, past a
+   tool-count threshold the editor collapses tool sets into groups the
+   model has to expand first: find the activation entry whose summary lists
+   that tool and call it with the exact name you were given. On Claude Code
+   the tool is deferred instead: load it with `ToolSearch`, selecting its
+   scoped name (`mcp__plugin_voidr_voidr__<tool>`) or searching the bare
+   name as keywords, then call it. Never invent an activation name, never
+   report the tool as unavailable before the host's own mechanism has been
+   tried, and never fall back to a terminal command or a manual step. Only
+   when that mechanism still does not surface it, say exactly which tool is
+   unreachable and stop.
 
 Selection contract: every choice in this workflow — plan mode, application,
 environment, Test Plan, repository, planning inputs — must be rendered with
@@ -115,7 +124,7 @@ One Voidr application may use multiple product repositories and a separate test
 repository, so never infer or rank applications from directory names.
 
 Never call a tool that starts a Hive process. Plan drafting and Playwright
-implementation are performed by the Copilot agent itself.
+implementation are performed by the coding agent itself.
 
 ## 2. Check authentication
 
@@ -125,7 +134,7 @@ additional user gate.
 - If it returns `authenticated: false`, stop the current workflow and reply
   only:
 
-  > A Voidr não está conectada. Execute `/copilot voidr-connect` para conectar
+  > A Voidr não está conectada. Execute `/copilot voidr-connect` (Claude Code: `/voidr:voidr-connect`) para conectar
   > uma Service Account. Depois volte e continue este fluxo.
 
   Do not explain manual provisioning, suggest `npx voidr login`, ask another
@@ -136,7 +145,7 @@ additional user gate.
 - Call `voidr_auth_select_organization` only after the user chooses.
 - If `write` is absent, allow read-only discovery but stop before plan,
   deploy, or execution mutations. Direct the user to
-  `/copilot voidr-connect` before a mutation.
+  `/copilot voidr-connect` (Claude Code: `/voidr:voidr-connect`) before a mutation.
 - Never ask the user to paste a client secret into chat.
 
 ## 3. Select the Voidr application through MCP
@@ -469,7 +478,7 @@ application when product repositories are added.
 
 - If `npm install` or another network-dependent step fails with a resolution
   or connection error (for example `EAI_AGAIN`, `ENOTFOUND`, `ETIMEDOUT`),
-  identify it explicitly as a shell without network access — the Copilot
+  identify it explicitly as a shell without network access — the agent
   sandbox — and ask the user once to rerun that step with network access.
   Do not invent registry outages.
 - Never change the npm registry, clean caches, delete lockfiles, add

@@ -5,6 +5,11 @@ description: Creates or selects a Voidr Test Plan with mandatory user-selected f
 
 # Voidr Test Plan
 
+> Host note: `ask_user` names the host's native question tool — `ask_user` on
+> GitHub Copilot CLI, `AskUserQuestion` on Claude Code. Wherever this skill
+> says `ask_user`, use that tool with selectable options; plain chat text is
+> never a substitute.
+
 Never call a tool that starts a Hive process. Draft plans locally from the
 user's answers and repository context; use only Test Plan CRUD tools to
 persist an approved result.
@@ -29,14 +34,18 @@ partial read.
 6. Never delegate drafting, approval, or any Test Plan mutation to a
    subagent. Gates are recorded per chat session; a subagent can never
    receive the user's typed approval and its writes are always denied.
-7. A routed tool missing from your available tools is grouped, not absent:
-   past a tool-count threshold the editor collapses tool sets into groups
-   the model has to expand first. Find the activation entry whose summary
-   lists that tool and call it with the exact name you were given — never
-   invent an activation name, never report the tool as unavailable, and
-   never fall back to a terminal command or a manual step. If no
-   activation entry lists it, say exactly which tool is unreachable and
-   stop.
+7. A routed tool missing from your available tools is grouped, not absent,
+   and each host reveals it differently. On GitHub Copilot CLI, past a
+   tool-count threshold the editor collapses tool sets into groups the
+   model has to expand first: find the activation entry whose summary lists
+   that tool and call it with the exact name you were given. On Claude Code
+   the tool is deferred instead: load it with `ToolSearch`, selecting its
+   scoped name (`mcp__plugin_voidr_voidr__<tool>`) or searching the bare
+   name as keywords, then call it. Never invent an activation name, never
+   report the tool as unavailable before the host's own mechanism has been
+   tried, and never fall back to a terminal command or a manual step. Only
+   when that mechanism still does not surface it, say exactly which tool is
+   unreachable and stop.
 
 ## Authentication gate
 
@@ -47,7 +56,7 @@ authentication or continue.
 
 If it returns `authenticated: false`, stop and reply only:
 
-> A Voidr não está conectada. Execute `/copilot voidr-connect` para conectar
+> A Voidr não está conectada. Execute `/copilot voidr-connect` (Claude Code: `/voidr:voidr-connect`) para conectar
 > uma Service Account. Depois volte e continue este fluxo.
 
 Do not ask for application details or continue drafting until authentication

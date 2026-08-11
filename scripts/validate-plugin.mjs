@@ -151,6 +151,91 @@ assert(
   'Responses backed by executions must be blocked until they include links.'
 )
 
+// --- Claude Code host -------------------------------------------------------
+// The same skills, bridge, and policy serve both hosts. Only the manifest, the
+// hook wiring, and the plugin-root variable differ
+
+const claudeManifest = readJson('.claude-plugin/plugin.json')
+const claudeMarketplace = readJson('.claude-plugin/marketplace.json')
+const claudeHooks = readJson('hooks/hooks.json')
+const claudeMcp = readJson('mcp/claude.json')
+
+assert(
+  claudeManifest.name === 'voidr',
+  '.claude-plugin/plugin.json must name the plugin "voidr" so skills resolve as /voidr:<skill>.'
+)
+assert(
+  claudeManifest.version === manifest.version,
+  'Claude and Copilot manifests must ship the same version.'
+)
+assert(
+  claudeManifest.skills === './skills/' &&
+    claudeManifest.hooks === './hooks/hooks.json' &&
+    claudeManifest.mcpServers === './mcp/claude.json',
+  '.claude-plugin/plugin.json must point at the shared skills and the Claude hook and MCP configs.'
+)
+const claudeMarketplaceEntry = claudeMarketplace.plugins?.find(
+  entry => entry.name === claudeManifest.name
+)
+assert(
+  claudeMarketplace.name === 'voidrco' &&
+    claudeMarketplaceEntry?.source === './' &&
+    claudeMarketplaceEntry?.version === manifest.version &&
+    claudeMarketplace.metadata?.version === manifest.version,
+  'The Claude marketplace entry must resolve to this plugin root at the shared version.'
+)
+
+const claudeHookEvents = {
+  UserPromptSubmit: 'route-voidr-prompt.mjs',
+  PreToolUse: 'guard-hive-tools.mjs',
+  PostToolUse: 'post-tool-execution-links.mjs',
+  Stop: 'require-execution-links.mjs'
+}
+for (const [event, script] of Object.entries(claudeHookEvents)) {
+  const entries = (claudeHooks.hooks?.[event] || []).flatMap(
+    entry => entry.hooks || []
+  )
+  const commands = entries.map(item => String(item.command || ''))
+  // A PreToolUse hook that Claude cancels on timeout fails OPEN
+  assert(
+    entries.every(item => Number(item.timeout) >= 15),
+    `hooks/hooks.json ${event} needs a timeout of at least 15s; a canceled gate hook fails open.`
+  )
+  assert(
+    commands.some(command => command.includes(script)),
+    `hooks/hooks.json must run ${script} on ${event}.`
+  )
+  assert(
+    commands.every(command => command.includes('${CLAUDE_PLUGIN_ROOT}')),
+    `hooks/hooks.json ${event} commands must resolve through \${CLAUDE_PLUGIN_ROOT}.`
+  )
+}
+
+const claudeServer = claudeMcp.mcpServers?.voidr
+assert(
+  claudeServer?.args?.[0] ===
+    '${CLAUDE_PLUGIN_ROOT}/scripts/voidr-mcp-bridge.mjs',
+  'The Claude MCP bridge path must resolve through ${CLAUDE_PLUGIN_ROOT}.'
+)
+// Copilot filters tools through the .mcp.json allowlist; Claude has no such field.
+const hostOnlyMcpKeys = new Set(['tools', 'disableToolCache', 'args'])
+for (const key of new Set([
+  ...Object.keys(server || {}),
+  ...Object.keys(claudeServer || {})
+])) {
+  if (hostOnlyMcpKeys.has(key)) continue
+  assert(
+    JSON.stringify(server?.[key]) === JSON.stringify(claudeServer?.[key]),
+    `.mcp.json and mcp/claude.json disagree on "${key}"; the two hosts must reach the same Voidr endpoints.`
+  )
+}
+assert(
+  !JSON.stringify(claudeMcp).includes('${PLUGIN_ROOT}'),
+  'mcp/claude.json must not use the Copilot ${PLUGIN_ROOT} variable.'
+)
+
+// ---------------------------------------------------------------------------
+
 const skillFiles = findFiles(join(root, 'skills'), 'SKILL.md')
 assert(skillFiles.length >= 4, 'Expected the four MVP skills.')
 const toolReferencePattern =
@@ -170,6 +255,11 @@ for (const path of skillFiles) {
   assert(
     /Never call a tool that starts a Hive process/i.test(content),
     `${relative(path)} must state the Hive invariant.`
+  )
+  // The skills say `ask_user`; Claude names the same tool AskUserQuestion.
+  assert(
+    /`AskUserQuestion` on Claude Code/.test(content),
+    `${relative(path)} must map ask_user to each host's native question tool.`
   )
   assert(
     /^## Tool routing$/m.test(content),
@@ -528,6 +618,14 @@ for (const skillName of [
       /never invent an activation name/i.test(skillText) &&
       /never fall back to a terminal command/i.test(skillText),
     `${skillName} must expand a collapsed tool group instead of treating the tool as unavailable.`
+  )
+  // Claude has no activation entry: its Voidr tools are deferred and load
+  // through ToolSearch. Naming only the Copilot mechanism made the paragraph's
+  // closing sentence read as "give up" on Claude.
+  assert(
+    /ToolSearch/.test(skillText) &&
+      /before the host's own mechanism has been tried/i.test(skillText),
+    `${skillName} must route a deferred tool through ToolSearch before reporting it unreachable.`
   )
 }
 

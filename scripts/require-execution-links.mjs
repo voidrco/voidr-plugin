@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { existsSync, readFileSync } from 'node:fs'
+import { CLAUDE, detectHost, stopBlockOutput } from './lib/host.mjs'
 import { canonicalToolName } from './lib/policy.mjs'
 import {
   executionIdsFromToolInput,
@@ -13,11 +14,19 @@ import {
   updateSessionState
 } from './lib/session-state.mjs'
 
+const MAX_CONSECUTIVE_BLOCKS = 3
+
 const payload = await readPayload()
+const host = detectHost(payload)
 const state = readSessionState(payload)
-const transcript = readTranscript(
-  payload.transcriptPath || payload.transcript_path
-)
+
+// Copilot only exposes the turn through its transcript. Claude hands the Stop
+// hook the final assistant text directly and records every tool call through
+// the PostToolUse hook, so the transcript is not read there at all.
+const transcript =
+  host === CLAUDE
+    ? []
+    : readTranscript(payload.transcriptPath || payload.transcript_path)
 const turn = currentUserTurn(transcript)
 const knownExecutionIds = collectKnownExecutionIds(transcript)
 const turnExecutionIds = collectTurnExecutionIds(turn, knownExecutionIds)
@@ -27,38 +36,68 @@ const requiredExecutionIds = uniqueExecutionIds([
 ])
 
 if (requiredExecutionIds.length === 0) {
-  process.stdout.write('{}\n')
-  process.exit(0)
+  release()
 }
 
 const lines = executionLinkLines(
   requiredExecutionIds,
   process.env.VOIDR_PLATFORM_URL
 )
-const assistantText = turn
-  .filter(entry => entry.type === 'assistant.message')
-  .map(entry => String(entry.data?.content || ''))
-  .join('\n')
+const assistantText =
+  host === CLAUDE
+    ? String(
+        payload.last_assistant_message ?? payload.lastAssistantMessage ?? ''
+      )
+    : turn
+        .filter(entry => entry.type === 'assistant.message')
+        .map(entry => String(entry.data?.content || ''))
+        .join('\n')
 const missing = lines
   .split('\n')
   .filter(line => !assistantText.includes(line))
 
 if (missing.length === 0) {
-  updateSessionState(payload, { requiredExecutionIds: [] })
-  process.stdout.write('{}\n')
-  process.exit(0)
+  release()
 }
 
+const blocks = Number(state.executionLinkBlocks || 0) + 1
+if (blocks > MAX_CONSECUTIVE_BLOCKS) {
+  release({
+    warning: `Voidr released this turn after ${MAX_CONSECUTIVE_BLOCKS} attempts without the required execution evidence. Missing:\n${missing.join('\n')}`
+  })
+}
+
+updateSessionState(payload, current => ({
+  ...current,
+  executionLinkBlocks: blocks
+}))
+
 process.stdout.write(
-  `${JSON.stringify({
-    hookSpecificOutput: {
-      hookEventName: 'Stop',
-      decision: 'block',
-      reason:
-        `Your response omitted execution evidence. End the response with:\n${missing.join('\n')}`
-    }
-  })}\n`
+  `${JSON.stringify(
+    stopBlockOutput(
+      host,
+      `Your response omitted execution evidence. End the response with:\n${missing.join('\n')}`
+    )
+  )}\n`
 )
+
+function release({ warning } = {}) {
+  // Most turns owe no evidence at all.
+  if (
+    (state.requiredExecutionIds || []).length > 0 ||
+    Number(state.executionLinkBlocks || 0) > 0
+  ) {
+    updateSessionState(payload, current => ({
+      ...current,
+      requiredExecutionIds: [],
+      executionLinkBlocks: 0
+    }))
+  }
+  process.stdout.write(
+    `${JSON.stringify(warning ? { systemMessage: warning } : {})}\n`
+  )
+  process.exit(0)
+}
 
 function readTranscript(path) {
   if (!path || !existsSync(path)) return []

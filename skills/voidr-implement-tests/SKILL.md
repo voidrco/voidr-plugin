@@ -5,7 +5,12 @@ description: Implements an explicitly selected set of Voidr Test Plan cases in o
 
 # Implement Voidr Playwright tests
 
-Never call a tool that starts a Hive process. The Copilot agent writes and
+> Host note: `ask_user` names the host's native question tool — `ask_user` on
+> GitHub Copilot CLI, `AskUserQuestion` on Claude Code. Wherever this skill
+> says `ask_user`, use that tool with selectable options; plain chat text is
+> never a substitute.
+
+Never call a tool that starts a Hive process. The coding agent writes and
 validates the Playwright code locally.
 
 ## Non-negotiables
@@ -25,13 +30,18 @@ partial read.
    the exact command of the manager found there — and retry the tool once
    after the user confirms, nothing else.
 7. A routed tool missing from your available tools is grouped, not
-   absent: past a tool-count threshold the editor collapses tool sets
-   into groups the model has to expand first. Find the activation entry
-   whose summary lists that tool and call it with the exact name you
-   were given — never invent an activation name, never report the tool
-   as unavailable, and never fall back to a terminal command or a
-   manual step. If no activation entry lists it, say exactly which tool
-   is unreachable and stop.
+   absent, and each host reveals it differently. On GitHub Copilot
+   CLI, past a tool-count threshold the editor collapses tool sets
+   into groups the model has to expand first: find the activation
+   entry whose summary lists that tool and call it with the exact name
+   you were given. On Claude Code the tool is deferred instead: load
+   it with `ToolSearch`, selecting its scoped name
+   (`mcp__plugin_voidr_voidr__<tool>`) or searching the bare name as
+   keywords, then call it. Never invent an activation name, never
+   report the tool as unavailable before the host's own mechanism has
+   been tried, and never fall back to a terminal command or a manual
+   step. Only when that mechanism still does not surface it, say
+   exactly which tool is unreachable and stop.
 8. Write inside the test repository only the files the selected cases
    require: specs and the actions, helpers, or fixtures they import.
    Never create analysis, exploration, summary, or scratch documents
@@ -256,7 +266,7 @@ same-origin and the deployed runtime confirms it. A repository default such as
 Call `voidr_smoke_build` once with the
 selected repository path, exact server-returned linked repository URL, Test
 Plan ID, and only the selected generated spec paths. The tool first lists and
-executes those specs outside the Copilot shell sandbox. It requires zero
+executes those specs outside the agent shell sandbox. It requires zero
 failures and zero skipped selected tests before it runs the authenticated
 Voidr build. It returns a sanitized validation summary while keeping `.env`
 and the Service Account opaque.

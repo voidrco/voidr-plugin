@@ -5,6 +5,11 @@ description: Checks or securely connects Voidr, reuses an existing local Service
 
 # Connect a Voidr Service Account
 
+> Host note: `ask_user` names the host's native question tool — `ask_user` on
+> GitHub Copilot CLI, `AskUserQuestion` on Claude Code. Wherever this skill
+> says `ask_user`, use that tool with selectable options; plain chat text is
+> never a substitute.
+
 Never call a tool that starts a Hive process.
 
 ## Mandatory execution contract

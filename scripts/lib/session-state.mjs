@@ -11,10 +11,15 @@ import { dirname, resolve } from 'node:path'
 function stateDataRoot() {
   return (
     process.env.COPILOT_PLUGIN_DATA ||
+    process.env.CLAUDE_PLUGIN_DATA ||
     process.env.VOIDR_PLUGIN_DATA ||
     resolve(tmpdir(), 'voidr-copilot-plugin-data')
   )
 }
+
+// Copilot uses "/copilot voidr-connect" or "/copilot:voidr-connect"
+// Claude namespaces plugin skills as "/voidr:voidr-connect".
+export const SKILL_INVOCATION_PREFIX = '\\/(?:copilot\\s+|copilot:|voidr:)?'
 
 export function sessionStatePath(payload) {
   const sessionId = String(
@@ -142,6 +147,7 @@ export function recordUserPromptState(payload) {
     return {
       ...current,
       requiredExecutionIds: [],
+      executionLinkBlocks: 0,
       workflowActive: current.workflowActive === true || workflowStarted,
       connectWorkflowActive: connectStarted
         ? true
@@ -212,9 +218,18 @@ export function recordUserPromptState(payload) {
   return next
 }
 
-export function recordAskUserSelections(payload, { toolName, toolResult }) {
+export function recordAskUserSelections(
+  payload,
+  { toolName, toolInput, toolResult }
+) {
   if (!/ask.*question|ask_user/i.test(String(toolName || ''))) return null
-  const answers = collectAskUserAnswers(toolResult)
+  // Claude echoes the identical answers block on both the tool input and the
+  // tool response, so the same answer arrives twice.
+  const answers = dedupeAnswers([
+    ...collectAskUserAnswers(toolResult),
+    ...collectClaudeAskAnswers(toolInput),
+    ...collectClaudeAskAnswers(toolResult)
+  ])
   if (answers.length === 0) return null
 
   return updateSessionState(payload, current => {
@@ -278,6 +293,57 @@ export function recordAskUserSelections(payload, { toolName, toolResult }) {
     }
     return changed ? next : current
   })
+}
+
+// Claude's AskUserQuestion carries the answers back as a flat
+// {question: answer} map of strings, not Copilot's {selected, freeText} record.
+function collectClaudeAskAnswers(container) {
+  const source = parseMaybeJson(container)
+  const answers = source?.answers
+  if (!answers || typeof answers !== 'object' || Array.isArray(answers)) {
+    return []
+  }
+  const questions = Array.isArray(source.questions) ? source.questions : null
+  const offered = new Set(
+    (questions || []).flatMap(question =>
+      (Array.isArray(question?.options) ? question.options : [])
+        .map(option => String(option?.label || '').trim())
+        .filter(Boolean)
+    )
+  )
+  const wasTyped = text =>
+    offered.size > 0 && !offered.has(text.trim())
+
+  const collected = []
+  for (const [header, value] of Object.entries(answers)) {
+    if (typeof value !== 'string' || !value.trim()) continue
+    collected.push({ header, text: value, typed: wasTyped(value) })
+    // Notes come from a free-text field, so they are authored by definition.
+    const notes = source.annotations?.[header]?.notes
+    if (typeof notes === 'string' && notes.trim()) {
+      collected.push({ header, text: notes, typed: true })
+    }
+  }
+  return collected
+}
+
+function dedupeAnswers(answers) {
+  const seen = new Set()
+  return answers.filter(answer => {
+    const key = `${answer.typed} ${answer.header} ${answer.text}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
+}
+
+function parseMaybeJson(value) {
+  if (typeof value !== 'string') return value
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
 }
 
 function collectAskUserAnswers(toolResult) {
@@ -369,8 +435,8 @@ export function isDevTestsApproval(prompt) {
 export function isDevTestFlowPrompt(prompt) {
   const text = normalizeText(prompt)
   if (
-    /\/(?:copilot\s+)?voidr-feature-test\b/.test(text) ||
-    /\/(?:copilot\s+)?voidr-test\b(?!-plan)/.test(text)
+    skillInvocation('voidr-feature-test\\b').test(text) ||
+    skillInvocation('voidr-test\\b(?!-plan)').test(text)
   ) {
     return true
   }
@@ -423,7 +489,7 @@ export function extractExplicitTestPlanId(prompt) {
 function isVoidrTestingPrompt(prompt) {
   const text = normalizeText(prompt)
   return (
-    /\/(?:copilot\s+)?voidr-develop-tests\b/.test(text) ||
+    skillInvocation('voidr-develop-tests\\b').test(text) ||
     (/\bvoidr\b/.test(text) &&
       /\b(?:desenvolver|criar|implementar|automatizar|planejar|publicar|subir|executar|rodar)\b/.test(
         text
@@ -433,7 +499,11 @@ function isVoidrTestingPrompt(prompt) {
 }
 
 function isVoidrConnectPrompt(prompt) {
-  return /\/(?:copilot\s+)?voidr-connect\b/i.test(prompt)
+  return skillInvocation('voidr-connect\\b').test(prompt)
+}
+
+function skillInvocation(suffix) {
+  return new RegExp(`${SKILL_INVOCATION_PREFIX}${suffix}`, 'i')
 }
 
 export function isNewPlanChoice(prompt) {

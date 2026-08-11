@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import { postToolContextOutput } from './lib/host.mjs'
 import { canonicalToolName } from './lib/policy.mjs'
 import {
   executionIdsFromToolInput,
@@ -22,6 +23,7 @@ const toolArgs = payload.toolArgs ?? payload.tool_input ?? {}
 const toolResult = payload.toolResult ?? payload.tool_response
 recordAskUserSelections(payload, {
   toolName: payload.toolName || payload.tool_name || '',
+  toolInput: toolArgs,
   toolResult
 })
 const state = readSessionState(payload)
@@ -62,13 +64,11 @@ const lines = executionLinkLines(
 )
 
 process.stdout.write(
-  `${JSON.stringify({
-    hookSpecificOutput: {
-      hookEventName: 'PostToolUse',
-      additionalContext:
-        `The final user-facing response must include these evidence links exactly:\n${lines}`
-    }
-  })}\n`
+  `${JSON.stringify(
+    postToolContextOutput(
+      `The final user-facing response must include these evidence links exactly:\n${lines}`
+    )
+  )}\n`
 )
 
 async function readPayload() {

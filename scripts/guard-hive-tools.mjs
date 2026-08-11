@@ -8,6 +8,7 @@ import {
 } from 'node:fs'
 import { basename, dirname, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { CLAUDE, detectHost } from './lib/host.mjs'
 import { canonicalToolName, loadPolicy } from './lib/policy.mjs'
 import {
   readGateState,
@@ -475,14 +476,24 @@ function containsCredentialLiterals(content) {
   return (hasEmail && hasCredentialContext) || assignedSecret || tokenLike
 }
 
+// Copilot names its editor tools in snake_case (create_file, read_file);
+// Claude uses PascalCase (Write, NotebookEdit).
+function toolNameWords(name) {
+  return String(name || '').replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+}
+
 function isGenericWriteTool(name) {
   return /(^|[-_/])(create|edit|write|delete|replace|replace_string_in_file|apply_patch|str_replace_editor)(?:$|[-_/])/i.test(
-    name
+    toolNameWords(name)
   )
 }
 
 function isGenericReadTool(name) {
-  return /(^|[-_/])(read|read_file|view|open_file)(?:$|[-_/])/i.test(name)
+  // Grep and Glob return file contents and paths on Claude, so the .env and
+  // sensitive-product gates have to see them as reads.
+  return /(^|[-_/])(read|read_file|view|open_file|grep|glob)(?:$|[-_/])/i.test(
+    toolNameWords(name)
+  )
 }
 
 function recordEnvironmentSelectionRequest(hookPayload, name, args) {
@@ -960,15 +971,24 @@ function deny(reason) {
 }
 
 function allowUpdatedInput(updatedInput) {
-  const output = {
-    permissionDecision: 'allow',
-    updatedInput,
-    hookSpecificOutput: {
-      hookEventName: 'PreToolUse',
-      permissionDecision: 'allow',
-      updatedInput
-    }
-  }
+  // This hook only wants to inject the execution evidence into the arguments.
+  const output =
+    detectHost(payload) === CLAUDE
+      ? {
+          hookSpecificOutput: {
+            hookEventName: 'PreToolUse',
+            updatedInput
+          }
+        }
+      : {
+          permissionDecision: 'allow',
+          updatedInput,
+          hookSpecificOutput: {
+            hookEventName: 'PreToolUse',
+            permissionDecision: 'allow',
+            updatedInput
+          }
+        }
   process.stdout.write(`${JSON.stringify(output)}\n`)
   process.exit(0)
 }

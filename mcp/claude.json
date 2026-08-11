@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "voidr": {
+      "type": "stdio",
+      "command": "node",
+      "args": [
+        "${CLAUDE_PLUGIN_ROOT}/scripts/voidr-mcp-bridge.mjs"
+      ],
+      "env": {
+        "NODE_USE_ENV_PROXY": "1",
+        "VOIDR_PLATFORM_URL": "https://platform.voidr.co",
+        "VOIDR_AUTH_CALLBACK_URL": "https://platform.voidr.co/auth/cli-connect",
+        "VOIDR_API_URL": "https://api.voidr.co/v1",
+        "VOIDR_MCP_URL": "https://api.voidr.co/v1/mcp",
+        "VOIDR_MCP_ORIGIN": "https://platform.voidr.co",
+        "VOIDR_TOKEN_URL": "https://api.voidr.co/v1/service-accounts/token"
+      },
+      "timeout": 360000
+    }
+  }
+}

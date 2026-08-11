@@ -229,12 +229,14 @@ export function recordAskUserSelections(
   { toolName, toolInput, toolResult }
 ) {
   if (!/ask.*question|ask_user/i.test(String(toolName || ''))) return null
-  const answers = [
+  // Claude echoes the identical answers block on both the tool input and the
+  // tool response, so the same answer arrives twice. Applying it twice is
+  // idempotent, but deduplicating keeps the recorded set honest.
+  const answers = dedupeAnswers([
     ...collectAskUserAnswers(toolResult),
-    // Claude reports the answers on the tool input, not the result.
     ...collectClaudeAskAnswers(toolInput),
     ...collectClaudeAskAnswers(toolResult)
-  ]
+  ])
   if (answers.length === 0) return null
 
   return updateSessionState(payload, current => {
@@ -343,6 +345,16 @@ function collectClaudeAskAnswers(container) {
     }
   }
   return collected
+}
+
+function dedupeAnswers(answers) {
+  const seen = new Set()
+  return answers.filter(answer => {
+    const key = `${answer.typed} ${answer.header} ${answer.text}`
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 }
 
 function parseMaybeJson(value) {

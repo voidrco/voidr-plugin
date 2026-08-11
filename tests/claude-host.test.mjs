@@ -342,11 +342,28 @@ test('the Claude hook commands resolve and run the real scripts', () => {
   )
 })
 
+// Recorded from a real Claude Code AskUserQuestion call, not inferred from the
+// tool schema: `answers` is a flat map of strings keyed by the full question
+// text, `annotations` is present but empty, and the identical block is echoed
+// on both the tool input and the tool response.
+function askUserPayload(sessionId, { question, header, options, answer }) {
+  const block = {
+    questions: [{ question, header, options, multiSelect: false }],
+    answers: { [question]: answer },
+    annotations: {}
+  }
+  return {
+    hook_event_name: 'PostToolUse',
+    session_id: sessionId,
+    tool_name: 'AskUserQuestion',
+    tool_input: block,
+    tool_response: block
+  }
+}
+
 test('an AskUserQuestion selection reaches the gates', () => {
-  // Claude answers a question by filling `answers` on the tool input as a flat
-  // {question: answer} map. Miss that shape and nothing is recorded: the
-  // mandatory plan-mode question can never be answered and every following
-  // tool call is denied forever.
+  // Miss that shape and nothing is recorded: the mandatory plan-mode question
+  // can never be answered and every following tool call is denied forever.
   const state = dataRoot()
   const sessionId = 'claude-ask-plan-mode'
 
@@ -363,25 +380,15 @@ test('an AskUserQuestion selection reaches the gates', () => {
 
   runScript(
     postToolHook,
-    {
-      hook_event_name: 'PostToolUse',
-      session_id: sessionId,
-      tool_name: 'AskUserQuestion',
-      tool_input: {
-        questions: [
-          {
-            question: 'O Test Plan é novo ou existente?',
-            header: 'Test Plan',
-            options: [
-              { label: 'Criar novo Test Plan', description: 'x' },
-              { label: 'Usar Test Plan existente', description: 'y' }
-            ]
-          }
-        ],
-        answers: { 'O Test Plan é novo ou existente?': 'Criar novo Test Plan' }
-      },
-      tool_response: 'ok'
-    },
+    askUserPayload(sessionId, {
+      question: 'O Test Plan é novo ou existente?',
+      header: 'Test Plan',
+      options: [
+        { label: 'Criar novo Test Plan', description: 'x' },
+        { label: 'Usar Test Plan existente', description: 'y' }
+      ],
+      answer: 'Criar novo Test Plan'
+    }),
     state
   )
 
@@ -407,23 +414,20 @@ test('an AskUserQuestion selection reaches the gates', () => {
 test('a clicked option is never mistaken for a typed approval', () => {
   const state = dataRoot()
   const sessionId = 'claude-ask-authorship'
-  const ask = (options, answer, answerKey = 'Aprova?') =>
-    runScript(
-      postToolHook,
-      {
-        hook_event_name: 'PostToolUse',
-        session_id: sessionId,
-        tool_name: 'AskUserQuestion',
-        tool_input: {
-          questions: [
-            { question: 'Aprova?', header: 'Aprovação', options }
-          ],
-          answers: { [answerKey]: answer }
-        },
-        tool_response: 'ok'
-      },
-      state
-    )
+  const ask = (options, answer, answerKey = null) => {
+    const payload = askUserPayload(sessionId, {
+      question: 'Aprova?',
+      header: 'Aprovação',
+      options,
+      answer
+    })
+    if (answerKey) {
+      for (const block of [payload.tool_input, payload.tool_response]) {
+        block.answers = { [answerKey]: answer }
+      }
+    }
+    return runScript(postToolHook, payload, state)
+  }
   const attemptWrite = () =>
     runScript(
       guard,

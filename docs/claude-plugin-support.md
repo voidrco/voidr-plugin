@@ -287,12 +287,57 @@ nenhuma delas.
 - Handshake MCP contra `mcp/claude.json`: bridge sobe, 13 tools locais + 40
   remotos, nenhum tool de Hive.
 
+### Formato do `AskUserQuestion` (payload gravado)
+
+O conserto do bug bloqueante foi feito a partir do *schema* da ferramenta. Um
+payload real, capturado com um hook `PostToolUse` de sonda, confirmou as três
+suposições e revelou uma quarta coisa:
+
+```jsonc
+{
+  "tool_input": {
+    "questions": [{ "question": "…", "header": "…",
+                    "options": [{ "label": "Só conversar", "description": "…" }],
+                    "multiSelect": false }],
+    "answers": { "<texto completo da pergunta>": "Só conversar" },
+    "annotations": {}
+  },
+  "tool_response": { /* bloco idêntico */ }
+}
+```
+
+- `answers` é mapa plano de **strings**, chaveado pelo **texto completo da
+  pergunta** — não pelo `header`, não por índice.
+- As labels oferecidas vêm junto em `questions[].options[].label`, que é o que
+  torna a inferência de autoria possível.
+- `annotations` existe mesmo vazio.
+- **O bloco é ecoado nos dois lados**, input e response. O parser roda nos dois
+  (não dá para saber a priori qual host preenche qual), então as respostas
+  chegam duplicadas e são deduplicadas antes de aplicar.
+
+O helper `askUserPayload` em `tests/claude-host.test.mjs` reproduz essa
+estrutura, então os testes agora fixam o formato observado em vez do formato
+que eu supus.
+
 ### O que não foi verificado
 
-O plugin não foi instalado num Claude Code de verdade. O `PreToolUse` bloqueia
-escrita antes de um repositório de teste ser selecionado, o que quebraria uma
-sessão comum — a instalação tem que ser feita num workspace descartável. É o
-único passo que falta antes de publicar.
+O carregamento foi verificado com `claude --plugin-dir .`: as 8 skills entram
+como `voidr:voidr-<name>` e os tools do bridge como
+`mcp__plugin_voidr_voidr__<tool>`. O formato do `AskUserQuestion` foi
+confirmado com payload real.
+
+Falta exercitar o **fluxo gated de ponta a ponta** numa sessão interativa:
+connect, pergunta de plan mode, aprovação digitada, smoke, deploy. Os hooks
+estão verificados peça por peça, mas a sequência inteira não.
+
+Um detalhe que só apareceu no teste real: os 53 tools do MCP entram como
+**deferred** no Claude — o modelo precisa buscá-los via `ToolSearch` antes de
+chamar. As skills já têm um parágrafo sobre "a routed tool missing from your
+available tools is grouped, not absent", escrito para o agrupamento do Copilot,
+que descreve o mesmo fenômeno. Mas a instrução de recuperação é específica do
+Copilot ("find the activation entry whose summary lists that tool"), e no
+Claude o caminho é `ToolSearch`. Não bloqueia nada, mas é o primeiro lugar para
+olhar se o modelo hesitar ao chamar um tool Voidr.
 
 ---
 

@@ -13,13 +13,17 @@ description: Analyzes a failed Voidr Playwright execution or test using ClickHou
 Never call a tool that starts a Hive process. Do not trigger self-healing,
 automation generation, video generation, or another agent workflow.
 
-A routed tool missing from your available tools is grouped, not absent: past
-a tool-count threshold the editor collapses tool sets into groups the model
-has to expand first. Find the activation entry whose summary lists that tool
-and call it with the exact name you were given — never invent an activation
-name, never report the tool as unavailable, and never fall back to a terminal
-command or a manual step. If no activation entry lists it, say exactly which
-tool is unreachable and stop.
+A routed tool missing from your available tools is grouped, not absent, and
+each host reveals it differently. On GitHub Copilot CLI, past a tool-count
+threshold the editor collapses tool sets into groups the model has to expand
+first: find the activation entry whose summary lists that tool and call it
+with the exact name you were given. On Claude Code the tool is deferred
+instead: load it with `ToolSearch`, selecting its scoped name
+(`mcp__plugin_voidr_voidr__<tool>`) or searching the bare name as keywords,
+then call it. Never invent an activation name, never report the tool as
+unavailable before the host's own mechanism has been tried, and never fall
+back to a terminal command or a manual step. Only when that mechanism still
+does not surface it, say exactly which tool is unreachable and stop.
 
 ## Authentication
 

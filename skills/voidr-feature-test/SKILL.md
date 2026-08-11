@@ -32,13 +32,18 @@ partial read.
    import. Never create analysis, exploration, summary, or scratch
    documents there — those notes belong in the chat response.
 7. A routed tool missing from your available tools is grouped, not
-   absent: past a tool-count threshold the editor collapses tool sets
-   into groups the model has to expand first. Find the activation entry
-   whose summary lists that tool and call it with the exact name you
-   were given — never invent an activation name, never report the tool
-   as unavailable, and never fall back to a terminal command or a
-   manual step. If no activation entry lists it, say exactly which tool
-   is unreachable and stop.
+   absent, and each host reveals it differently. On GitHub Copilot
+   CLI, past a tool-count threshold the editor collapses tool sets
+   into groups the model has to expand first: find the activation
+   entry whose summary lists that tool and call it with the exact name
+   you were given. On Claude Code the tool is deferred instead: load
+   it with `ToolSearch`, selecting its scoped name
+   (`mcp__plugin_voidr_voidr__<tool>`) or searching the bare name as
+   keywords, then call it. Never invent an activation name, never
+   report the tool as unavailable before the host's own mechanism has
+   been tried, and never fall back to a terminal command or a manual
+   step. Only when that mechanism still does not surface it, say
+   exactly which tool is unreachable and stop.
 8. The diff is the scope. Never propose, approve, or implement a
    scenario whose behavior the returned diff does not change, and never
    derive scenarios before `voidr_workspace_git_context` returned the

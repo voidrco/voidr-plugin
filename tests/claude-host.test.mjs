@@ -441,9 +441,17 @@ test('a clicked option is never mistaken for a typed approval', () => {
       state
     )
 
+  // AskUserQuestion requires two to four options, so a question with none is
+  // not a shape Claude can produce. Typed text arrives through the "Other"
+  // escape hatch the picker always offers, as an answer that is none of the
+  // labels — which is exactly what the authorship inference reads.
+  const offered = [
+    { label: 'Aprovo este Test Plan', description: 'x' },
+    { label: 'Não aprovo', description: 'y' }
+  ]
+
   // Offering the phrase as a clickable option must not grant the approval:
   // the gate exists to prove the user authored it.
-  const offered = [{ label: 'Aprovo este Test Plan', description: 'x' }]
   ask(offered, 'Aprovo este Test Plan')
   assert.equal(attemptWrite().hookSpecificOutput.permissionDecision, 'deny')
 
@@ -452,19 +460,20 @@ test('a clicked option is never mistaken for a typed approval', () => {
   ask(offered, 'Aprovo este Test Plan', 'Aprovação')
   assert.equal(attemptWrite().hookSpecificOutput.permissionDecision, 'deny')
 
-  // Typed into a free-text field, the same phrase counts.
+  // A malformed payload that carries no labels must not be trusted as typed
+  // either: with nothing to compare against, a click is indistinguishable.
   ask([], 'Aprovo este Test Plan')
-  const allowed = runScript(
-    guard,
-    {
-      hook_event_name: 'PreToolUse',
-      session_id: sessionId,
-      cwd: root,
-      tool_name: 'mcp__plugin_voidr_voidr__test_plans_create_test_plan',
-      tool_input: { name: 'x' }
-    },
-    state
+  assert.equal(attemptWrite().hookSpecificOutput.permissionDecision, 'deny')
+
+  // Typed through "Other": the answer matches no offered label.
+  ask(
+    [
+      { label: 'Sim', description: 'x' },
+      { label: 'Não', description: 'y' }
+    ],
+    'Aprovo este Test Plan'
   )
+  const allowed = attemptWrite()
   assert.notEqual(
     allowed.hookSpecificOutput?.permissionDecision,
     'deny',

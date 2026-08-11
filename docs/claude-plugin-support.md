@@ -270,9 +270,34 @@ autoria. O Claude não marca nenhum dos dois, então a autoria é inferida das
 labels oferecidas em `questions[]`. As labels são reunidas num único conjunto,
 sem casar por pergunta, de propósito: casar por chave faria a inferência
 depender de `answers` usar exatamente aquela chave, e se a chave diferisse todo
-clique passaria por digitado — a única direção em que isso não pode falhar. Uma
-resposta só é aceita como digitada quando as labels foram vistas e ela não é
-nenhuma delas.
+clique passaria por digitado — a única direção em que isso não pode falhar.
+
+O guarda para o conjunto vazio é `offered.size > 0`, não "o payload trazia
+`questions`". A diferença importa: `options` no `AskUserQuestion` tem
+`minItems: 2`, então uma pergunta sem opções não é uma forma que o Claude
+produz. Conjunto vazio só acontece em payload malformado ou parcial, e ali um
+clique é indistinguível de um texto digitado — então não se confia em nenhum dos
+dois. O texto digitado real chega pelo "Other" que o seletor sempre oferece:
+uma resposta que não é nenhuma das labels.
+
+### Ainda depois: achado do CodeRabbit
+
+O parágrafo de recuperação de tool nas 7 skills que o têm descrevia só o
+mecanismo do Copilot, e fechava com `If no activation entry lists it, say
+exactly which tool is unreachable and stop.` No Claude nunca existe activation
+entry — lido literalmente, isso instruía o modelo a **desistir** de um tool que
+estava a um `ToolSearch` de distância. O parágrafo agora nomeia os dois
+mecanismos e só autoriza desistir depois que o do host em uso falhou.
+
+Duas notas de processo, porque as duas foram erros meus de verificação:
+
+- Eu tinha respondido que o parágrafo estava em 5 skills, não 7. Estava errado:
+  em `voidr-feature-test` e `voidr-implement-tests` o texto quebra linha no meio
+  de "grouped, not absent", então um `grep` literal não achava. O validador
+  normaliza o espaço em branco e achava — foi ele que me corrigiu.
+- A versão anterior desta análise afirmava que a divergência de mecanismo "não
+  bloqueia nada". Isso nunca foi verificado e a frase final do parágrafo dizia o
+  contrário.
 
 ### Verificação feita
 
@@ -331,13 +356,21 @@ connect, pergunta de plan mode, aprovação digitada, smoke, deploy. Os hooks
 estão verificados peça por peça, mas a sequência inteira não.
 
 Um detalhe que só apareceu no teste real: os 53 tools do MCP entram como
-**deferred** no Claude — o modelo precisa buscá-los via `ToolSearch` antes de
-chamar. As skills já têm um parágrafo sobre "a routed tool missing from your
-available tools is grouped, not absent", escrito para o agrupamento do Copilot,
-que descreve o mesmo fenômeno. Mas a instrução de recuperação é específica do
-Copilot ("find the activation entry whose summary lists that tool"), e no
-Claude o caminho é `ToolSearch`. Não bloqueia nada, mas é o primeiro lugar para
-olhar se o modelo hesitar ao chamar um tool Voidr.
+**deferred** no Claude — o modelo precisa carregá-los via `ToolSearch` antes de
+chamar.
+
+As 5 skills que têm o parágrafo de recuperação ("a routed tool missing from your
+available tools is grouped, not absent") descreviam só o mecanismo do Copilot,
+e a última frase era `If no activation entry lists it, say exactly which tool is
+unreachable and stop.` No Claude nunca existe activation entry, então lida
+literalmente essa frase instruía o modelo a **desistir** — a versão anterior
+desta análise afirmava que a divergência "não bloqueia nada", e isso estava
+errado. O parágrafo agora nomeia os dois mecanismos e só autoriza a desistência
+depois que o do host em uso falhou; `validate-plugin.mjs` assere isso.
+
+Continua não verificado em sessão interativa se o modelo de fato recorre ao
+`ToolSearch` a partir dessa instrução. É o primeiro lugar para olhar se ele
+hesitar ao chamar um tool Voidr.
 
 ---
 

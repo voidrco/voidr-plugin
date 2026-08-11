@@ -30,13 +30,18 @@ partial read.
    the exact command of the manager found there — and retry the tool once
    after the user confirms, nothing else.
 7. A routed tool missing from your available tools is grouped, not
-   absent: past a tool-count threshold the editor collapses tool sets
-   into groups the model has to expand first. Find the activation entry
-   whose summary lists that tool and call it with the exact name you
-   were given — never invent an activation name, never report the tool
-   as unavailable, and never fall back to a terminal command or a
-   manual step. If no activation entry lists it, say exactly which tool
-   is unreachable and stop.
+   absent, and each host reveals it differently. On GitHub Copilot
+   CLI, past a tool-count threshold the editor collapses tool sets
+   into groups the model has to expand first: find the activation
+   entry whose summary lists that tool and call it with the exact name
+   you were given. On Claude Code the tool is deferred instead: load
+   it with `ToolSearch`, selecting its scoped name
+   (`mcp__plugin_voidr_voidr__<tool>`) or searching the bare name as
+   keywords, then call it. Never invent an activation name, never
+   report the tool as unavailable before the host's own mechanism has
+   been tried, and never fall back to a terminal command or a manual
+   step. Only when that mechanism still does not surface it, say
+   exactly which tool is unreachable and stop.
 8. Write inside the test repository only the files the selected cases
    require: specs and the actions, helpers, or fixtures they import.
    Never create analysis, exploration, summary, or scratch documents

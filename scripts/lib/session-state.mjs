@@ -311,7 +311,8 @@ function collectClaudeAskAnswers(container) {
         .filter(Boolean)
     )
   )
-  const wasTyped = text => Boolean(questions) && !offered.has(text.trim())
+  const wasTyped = text =>
+    offered.size > 0 && !offered.has(text.trim())
 
   const collected = []
   for (const [header, value] of Object.entries(answers)) {

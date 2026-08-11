@@ -619,6 +619,14 @@ for (const skillName of [
       /never fall back to a terminal command/i.test(skillText),
     `${skillName} must expand a collapsed tool group instead of treating the tool as unavailable.`
   )
+  // Claude has no activation entry: its Voidr tools are deferred and load
+  // through ToolSearch. Naming only the Copilot mechanism made the paragraph's
+  // closing sentence read as "give up" on Claude.
+  assert(
+    /ToolSearch/.test(skillText) &&
+      /before the host's own mechanism has been tried/i.test(skillText),
+    `${skillName} must route a deferred tool through ToolSearch before reporting it unreachable.`
+  )
 }
 
 // A plan without a repository is reported as a partial delivery, in the user's

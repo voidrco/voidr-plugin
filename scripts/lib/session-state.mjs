@@ -224,9 +224,17 @@ export function recordUserPromptState(payload) {
   return next
 }
 
-export function recordAskUserSelections(payload, { toolName, toolResult }) {
+export function recordAskUserSelections(
+  payload,
+  { toolName, toolInput, toolResult }
+) {
   if (!/ask.*question|ask_user/i.test(String(toolName || ''))) return null
-  const answers = collectAskUserAnswers(toolResult)
+  const answers = [
+    ...collectAskUserAnswers(toolResult),
+    // Claude reports the answers on the tool input, not the result.
+    ...collectClaudeAskAnswers(toolInput),
+    ...collectClaudeAskAnswers(toolResult)
+  ]
   if (answers.length === 0) return null
 
   return updateSessionState(payload, current => {
@@ -290,6 +298,60 @@ export function recordAskUserSelections(payload, { toolName, toolResult }) {
     }
     return changed ? next : current
   })
+}
+
+// Claude's AskUserQuestion carries the answers back as a flat
+// {question: answer} map of strings, not Copilot's {selected, freeText} record.
+//
+// The approval gates turn on whether the user *typed* the text or clicked a
+// prepared option — a clicked option must never count as authorship, which is
+// why the skills are forbidden from offering an approval phrase as an option.
+// Claude marks neither, so authorship is inferred from the labels that were
+// offered: an answer matching none of them was written by the user.
+//
+// The labels are pooled across every question rather than matched per question
+// on purpose. Keying them by question text would make the inference depend on
+// `answers` using that exact key, and if the key ever differed every clicked
+// option would read as typed — the one direction this must never fail in. An
+// answer is only trusted as typed when the offered labels were actually seen
+// and it is none of them; otherwise the gate stays shut and the user types the
+// approval in chat, which is the primary path anyway.
+function collectClaudeAskAnswers(container) {
+  const source = parseMaybeJson(container)
+  const answers = source?.answers
+  if (!answers || typeof answers !== 'object' || Array.isArray(answers)) {
+    return []
+  }
+  const questions = Array.isArray(source.questions) ? source.questions : null
+  const offered = new Set(
+    (questions || []).flatMap(question =>
+      (Array.isArray(question?.options) ? question.options : [])
+        .map(option => String(option?.label || '').trim())
+        .filter(Boolean)
+    )
+  )
+  const wasTyped = text => Boolean(questions) && !offered.has(text.trim())
+
+  const collected = []
+  for (const [header, value] of Object.entries(answers)) {
+    if (typeof value !== 'string' || !value.trim()) continue
+    collected.push({ header, text: value, typed: wasTyped(value) })
+    // Notes come from a free-text field, so they are authored by definition.
+    const notes = source.annotations?.[header]?.notes
+    if (typeof notes === 'string' && notes.trim()) {
+      collected.push({ header, text: notes, typed: true })
+    }
+  }
+  return collected
+}
+
+function parseMaybeJson(value) {
+  if (typeof value !== 'string') return value
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
 }
 
 function collectAskUserAnswers(toolResult) {

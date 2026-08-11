@@ -23,6 +23,7 @@ const toolArgs = payload.toolArgs ?? payload.tool_input ?? {}
 const toolResult = payload.toolResult ?? payload.tool_response
 recordAskUserSelections(payload, {
   toolName: payload.toolName || payload.tool_name || '',
+  toolInput: toolArgs,
   toolResult
 })
 const state = readSessionState(payload)

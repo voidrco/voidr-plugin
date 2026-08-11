@@ -342,6 +342,236 @@ test('the Claude hook commands resolve and run the real scripts', () => {
   )
 })
 
+test('an AskUserQuestion selection reaches the gates', () => {
+  // Claude answers a question by filling `answers` on the tool input as a flat
+  // {question: answer} map. Miss that shape and nothing is recorded: the
+  // mandatory plan-mode question can never be answered and every following
+  // tool call is denied forever.
+  const state = dataRoot()
+  const sessionId = 'claude-ask-plan-mode'
+
+  runScript(
+    promptHook,
+    {
+      hook_event_name: 'UserPromptSubmit',
+      session_id: sessionId,
+      cwd: root,
+      prompt: 'Quero desenvolver testes na voidr'
+    },
+    state
+  )
+
+  runScript(
+    postToolHook,
+    {
+      hook_event_name: 'PostToolUse',
+      session_id: sessionId,
+      tool_name: 'AskUserQuestion',
+      tool_input: {
+        questions: [
+          {
+            question: 'O Test Plan é novo ou existente?',
+            header: 'Test Plan',
+            options: [
+              { label: 'Criar novo Test Plan', description: 'x' },
+              { label: 'Usar Test Plan existente', description: 'y' }
+            ]
+          }
+        ],
+        answers: { 'O Test Plan é novo ou existente?': 'Criar novo Test Plan' }
+      },
+      tool_response: 'ok'
+    },
+    state
+  )
+
+  // With plan mode recorded the listing gate opens.
+  const listing = runScript(
+    guard,
+    {
+      hook_event_name: 'PreToolUse',
+      session_id: sessionId,
+      cwd: root,
+      tool_name: 'mcp__plugin_voidr_voidr__applications_list_applications',
+      tool_input: {}
+    },
+    state
+  )
+  assert.notEqual(
+    listing.hookSpecificOutput?.permissionDecision,
+    'deny',
+    JSON.stringify(listing)
+  )
+})
+
+test('a clicked option is never mistaken for a typed approval', () => {
+  const state = dataRoot()
+  const sessionId = 'claude-ask-authorship'
+  const ask = (options, answer, answerKey = 'Aprova?') =>
+    runScript(
+      postToolHook,
+      {
+        hook_event_name: 'PostToolUse',
+        session_id: sessionId,
+        tool_name: 'AskUserQuestion',
+        tool_input: {
+          questions: [
+            { question: 'Aprova?', header: 'Aprovação', options }
+          ],
+          answers: { [answerKey]: answer }
+        },
+        tool_response: 'ok'
+      },
+      state
+    )
+  const attemptWrite = () =>
+    runScript(
+      guard,
+      {
+        hook_event_name: 'PreToolUse',
+        session_id: sessionId,
+        cwd: root,
+        tool_name: 'mcp__plugin_voidr_voidr__test_plans_create_test_plan',
+        tool_input: { name: 'x' }
+      },
+      state
+    )
+
+  // Offering the phrase as a clickable option must not grant the approval:
+  // the gate exists to prove the user authored it.
+  const offered = [{ label: 'Aprovo este Test Plan', description: 'x' }]
+  ask(offered, 'Aprovo este Test Plan')
+  assert.equal(attemptWrite().hookSpecificOutput.permissionDecision, 'deny')
+
+  // Same click, but keyed by header instead of question text. Authorship must
+  // not hinge on which key Claude uses, or a click would read as typed.
+  ask(offered, 'Aprovo este Test Plan', 'Aprovação')
+  assert.equal(attemptWrite().hookSpecificOutput.permissionDecision, 'deny')
+
+  // Typed into a free-text field, the same phrase counts.
+  ask([], 'Aprovo este Test Plan')
+  const allowed = runScript(
+    guard,
+    {
+      hook_event_name: 'PreToolUse',
+      session_id: sessionId,
+      cwd: root,
+      tool_name: 'mcp__plugin_voidr_voidr__test_plans_create_test_plan',
+      tool_input: { name: 'x' }
+    },
+    state
+  )
+  assert.notEqual(
+    allowed.hookSpecificOutput?.permissionDecision,
+    'deny',
+    JSON.stringify(allowed)
+  )
+})
+
+test("Claude's editor tools cannot walk past the write and .env gates", () => {
+  const state = dataRoot()
+  const sessionId = 'claude-editor-tools'
+  runScript(
+    promptHook,
+    {
+      hook_event_name: 'UserPromptSubmit',
+      session_id: sessionId,
+      cwd: root,
+      prompt: 'Quero desenvolver testes na voidr'
+    },
+    state
+  )
+
+  // NotebookEdit has no separator before "Edit", so the snake_case-era
+  // heuristics saw neither a write nor a read and five gates opened.
+  const notebook = runScript(
+    guard,
+    {
+      hook_event_name: 'PreToolUse',
+      session_id: sessionId,
+      cwd: root,
+      tool_name: 'NotebookEdit',
+      tool_input: { notebook_path: '/tmp/anywhere.ipynb', new_source: 'x' }
+    },
+    state
+  )
+  assert.equal(
+    notebook.hookSpecificOutput.permissionDecision,
+    'deny',
+    JSON.stringify(notebook)
+  )
+
+  // Grep returns file contents, so it is a read of .env like any other.
+  for (const tool of ['Grep', 'Read']) {
+    const output = runScript(
+      guard,
+      {
+        hook_event_name: 'PreToolUse',
+        session_id: sessionId,
+        cwd: root,
+        tool_name: tool,
+        tool_input: { path: '/tmp/repo/.env', pattern: 'SECRET' }
+      },
+      state
+    )
+    assert.equal(
+      output.hookSpecificOutput.permissionDecision,
+      'deny',
+      `${tool}: ${JSON.stringify(output)}`
+    )
+  }
+})
+
+test('injecting defect evidence does not auto-approve the mutation', () => {
+  const state = dataRoot()
+  const executionId = '6a6a839850a27b89d2d7df2b'
+  const sessionId = 'claude-defect-evidence'
+  runScript(
+    postToolHook,
+    {
+      hook_event_name: 'PostToolUse',
+      session_id: sessionId,
+      tool_name: 'mcp__plugin_voidr_voidr__playwright_list_execution_failures',
+      tool_input: { executionId },
+      tool_response: { content: [] }
+    },
+    state
+  )
+  const output = runScript(
+    guard,
+    {
+      hook_event_name: 'PreToolUse',
+      session_id: sessionId,
+      cwd: root,
+      tool_name: 'mcp__plugin_voidr_voidr__defects_create_defect',
+      tool_input: { title: 'Falha' }
+    },
+    state
+  )
+  // The hook wants the evidence in the arguments, not to waive the permission
+  // prompt Claude would otherwise show for a platform mutation.
+  assert.ok(output.hookSpecificOutput.updatedInput)
+  assert.equal(output.hookSpecificOutput.permissionDecision, undefined)
+  assert.equal(output.permissionDecision, undefined)
+})
+
+test('the Claude routing note names the namespaced skill', () => {
+  const output = runScript(
+    promptHook,
+    {
+      hook_event_name: 'UserPromptSubmit',
+      session_id: 'claude-namespace-note',
+      cwd: root,
+      prompt: 'Quero desenvolver testes na voidr'
+    },
+    dataRoot()
+  )
+  assert.match(
+    output.hookSpecificOutput.additionalContext,
+    /\/voidr:voidr-<name>/
+  )
+})
+
 test('the connect flow arms its gate from a Claude-namespaced call', () => {
   // connectFirstToolRequired is set by the prompt hook recognizing the skill
   // call. Miss the namespace and /voidr:voidr-connect loses its gate.

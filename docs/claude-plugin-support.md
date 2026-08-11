@@ -30,7 +30,15 @@ O núcleo é agnóstico. O que quebra é só a **camada de integração com o ho
 | `session-state.mjs:21` | Já lê `session_id` além de `sessionId`. |
 | `recordAskUserSelections` (`session-state.mjs:216`) | Regex `/ask.*question/i` já casa `AskUserQuestion`. |
 | Saída dos hooks | Já emitem `hookSpecificOutput` + `hookEventName` — que é justamente o formato Claude. |
-| Heurísticas de tool no guard (`guard-hive-tools.mjs:87,479,485`) | `bash\|shell`, `create\|edit\|write`, `read\|view` casam com `Bash`, `Write`, `Edit`, `Read`. |
+| Heurísticas de tool no guard (`guard-hive-tools.mjs:87`) | `bash\|shell\|powershell` casa com `Bash`. |
+
+> **Correção.** A primeira versão desta análise listava também as heurísticas de
+> read/write (`isGenericWriteTool`/`isGenericReadTool`) como prontas, porque
+> `Write`, `Edit` e `Read` casam. Estava incompleto: os padrões exigem
+> fronteira `^`/`-`/`_`/`/` antes da palavra, então **`NotebookEdit`, `Grep` e
+> `Glob` não casavam com nada** — seis gates ficavam abertos no Claude, entre
+> eles a proteção de `.env` e o limite de escrita ao repositório selecionado.
+> Corrigido na implementação; ver [Resultado](#resultado-da-implementação).
 | `timeout: 360000` no `.mcp.json` | Campo suportado igual no Claude. |
 
 ### Bloqueadores reais (em ordem de esforço)
@@ -233,9 +241,47 @@ testes originais continuam passando sem edição.
   usuário, e o guard bloqueia escrita de Test Plan delegada
   (`guard-hive-tools.mjs:883`). Ou seja: só serviriam para brigar com os gates.
 
+### O que a revisão pegou depois
+
+Cinco achados, quatro reais. Nenhum aparecia nos testes porque nenhum teste
+exercitava o caminho.
+
+1. **Respostas do `AskUserQuestion` nunca eram gravadas** — bloqueante. O parser
+   só entendia o formato do Copilot (`{selected, freeText}`); o Claude devolve um
+   mapa plano `{pergunta: resposta}` no *input* do tool. Resultado: o usuário
+   clicava em "Criar novo Test Plan", nada era registrado, e todo tool call
+   seguinte era negado para sempre por `enforcePlanModeGate`. O fluxo inteiro
+   travava na primeira pergunta obrigatória.
+2. **`NotebookEdit`, `Grep` e `Glob` invisíveis** — seis gates abertos, incluindo
+   ler `.env` por `Grep` e escrever fora do repositório selecionado por
+   `NotebookEdit`. Nomes em PascalCase agora são quebrados em hífens antes do
+   match, e `grep|glob` entraram como leitura.
+3. **`??` no lugar de `||`** — regressão do Copilot que eu tinha achado sozinho.
+4. **`permissionDecision: 'allow'` junto do `updatedInput`** — no Claude o
+   `allow` pula o prompt de permissão, então injetar a evidência num defect
+   passava a aprovar a mutação automaticamente. Agora só o `updatedInput` volta.
+5. A nota de roteamento nomeia `/voidr-develop-tests`, que no Claude é
+   `/voidr:voidr-develop-tests`. Resolvido com uma linha de preâmbulo no caminho
+   Claude, sem bifurcar as quatro notas compartilhadas.
+
+Sobre o (1), uma decisão de projeto que vale registrar: os gates de aprovação
+dependem de saber se o texto foi **digitado** ou **clicado** — clique nunca é
+autoria. O Claude não marca nenhum dos dois, então a autoria é inferida das
+labels oferecidas em `questions[]`. As labels são reunidas num único conjunto,
+sem casar por pergunta, de propósito: casar por chave faria a inferência
+depender de `answers` usar exatamente aquela chave, e se a chave diferisse todo
+clique passaria por digitado — a única direção em que isso não pode falhar. Uma
+resposta só é aceita como digitada quando as labels foram vistas e ela não é
+nenhuma delas.
+
 ### Verificação feita
 
-- `npm run check` — 195 pass, 2 skipped, 0 fail (14 e2e à parte).
+- `npm run check` — 202 pass, 2 skipped, 0 fail (14 e2e à parte).
+- **Replay de regressão:** worktree em `6b85fcc`, 17 prompts e 15 payloads de
+  tool (estes últimos duas vezes: fora e dentro de um workflow ativo, que é onde
+  moram os gates de escrita) pelos dois conjuntos de hooks. 50 saídas idênticas
+  byte a byte. O estado gravado por um `ask_user` no formato Copilot também foi
+  comparado campo a campo, porque ali a saída é vazia e só o estado importa.
 - `claude plugin validate .claude-plugin/plugin.json --strict` e o mesmo para
   `marketplace.json` — ambos passam com o CLI real.
 - Handshake MCP contra `mcp/claude.json`: bridge sobe, 13 tools locais + 40

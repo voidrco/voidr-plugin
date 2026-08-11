@@ -67,10 +67,13 @@ export function userPromptOutput(host, { transformedPrompt, guidance }) {
     // UserPromptSubmit cannot rewrite the prompt. additionalContext reaches
     // the model alongside the prompt, which is the same effect the Copilot
     // rewrite produced by appending the note to the transformed prompt.
+    //
+    // The shared note names skills as /voidr-<name>. Claude namespaces plugin
+    // skills, so say that once here instead of forking every note.
     return {
       hookSpecificOutput: {
         hookEventName: 'UserPromptSubmit',
-        additionalContext: guidance
+        additionalContext: `Skills named below as /voidr-<name> are this plugin's, invoked as /voidr:voidr-<name>.\n\n${guidance}`
       }
     }
   }

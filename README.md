@@ -79,19 +79,34 @@ copilot plugin list
 copilot mcp get voidr --json
 ```
 
-On Claude Code:
+On Claude Code, test without installing anything — the plugin loads for that
+session only:
 
 ```sh
 claude plugin validate .claude-plugin/plugin.json --strict
 claude plugin validate .claude-plugin/marketplace.json --strict
-claude plugin marketplace add .
-claude plugin install voidr@voidrco
+cd /path/to/a/scratch/project
+claude --plugin-dir /path/to/voidr-copilot-plugin
 ```
 
-Install into a throwaway workspace first. The `PreToolUse` gate denies writes
-before a test repository is explicitly selected, which is correct inside the
-Voidr workflow and disruptive in an unrelated session. `/plugin` disables it
-again without uninstalling.
+Skills appear as `/voidr:voidr-<name>` and MCP tools as
+`mcp__plugin_voidr_voidr__<tool>`.
+
+To install it for real:
+
+```sh
+claude plugin marketplace add .
+claude plugin install voidr@voidrco     # --scope project to limit it to one repo
+```
+
+Prefer `--scope project`, or `--plugin-dir`, over a user-scoped install while
+developing. A clean session is untouched — every workflow gate checks
+`workflowActive` first — but the prompt hook arms that flag from wording alone,
+and `isDevTestFlowPrompt` matches ordinary requests like "escreve os testes
+dessa funcionalidade" with no mention of Voidr. Once armed,
+`enforcePreSelectionWriteGate` denies every file write until a Voidr test
+repository is selected, which is correct inside the workflow and surprising in
+an unrelated repo. `/plugin` disables it again without uninstalling.
 
 After every `copilot plugin install`, reload every open VS Code window
 (`Developer: Reload Window`). The MCP bridge and the prompt hook keep

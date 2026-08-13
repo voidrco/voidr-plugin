@@ -65,7 +65,10 @@ MCP application discovery, and repository-ordering rules are mandatory.
 Render every workflow choice (plan mode, application, environment, Test Plan,
 repository, planning inputs) with the native ask_user selectable options when
 available; free text is only a fallback. Only the two runtime confirmations
-must be typed in chat.`
+must be typed in chat.
+Before planning the work, call skills_list_skills once: the organization may
+have a team-authored procedure for exactly this job, and following it beats
+improvising. Read the descriptions, then skills_get_skill on at most one match.`
   }
 
   if (isGenericTestCreationPrompt(prompt)) {

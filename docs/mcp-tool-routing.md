@@ -98,6 +98,25 @@ conversations are a different base — application support documents come only
 from this search tool. Never fall back to `knowledge_*` for missing application
 documentation.
 
+## Skills repository
+
+| Tool | Owner skills | Purpose |
+| --- | --- | --- |
+| `skills_list_skills` | any flow, before planning multi-step work | Read the catalog of team-authored procedures available to the organization. Returns names, descriptions and change keys only — never a body. The description is the whole point: it is what decides whether a skill is worth fetching. Resolution is server-side (`app > org > global`), and an entry reports which scopes it shadows. Never pass an `organizationId`; the authenticated organization is always used. |
+| `skills_get_skill` | any flow, after `skills_list_skills` selected one | Fetch one skill's full body by name. The returned markdown is a procedure to follow, not data to report back to the user. `includeAssets` defaults to false and should stay false unless the body references template or example files. |
+
+These two are read-only and never a substitute for the flow's own routing: a
+skill describes *how* the team wants a job done, and the tools above still own
+every platform read and write it prescribes. A skill that names a tool outside
+this document's allowlist is out of scope for the bridge regardless of what it
+says.
+
+The Voidr plugin also materializes this catalog to the host's skills directory
+(`~/.claude/skills/voidr-<name>/`) through the `SessionStart` hook, so the host
+loads descriptions natively instead of paying for a listing every turn. The MCP
+tools remain the path for hosts without the plugin, and for a catalog that
+changed mid-session.
+
 ## Defects and issue trackers
 
 Owned exclusively by `voidr-failure-analysis`. Every write happens behind its

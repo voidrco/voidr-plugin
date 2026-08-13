@@ -64,6 +64,52 @@ Three host differences are worth knowing when changing hook code:
 `npm run validate` asserts both hosts stay in step: same version, same Voidr
 endpoints, and every hook event wired to its script.
 
+## Skills served by the platform
+
+The Voidr platform hosts a catalog of team-authored procedures — how to collect
+a baseline, diagnose a failing spec, map selectors. The plugin reaches it two
+ways, and they are not redundant:
+
+- **MCP tools** `skills_list_skills` and `skills_get_skill`. Work in any
+  session, immediately, and are what the routing note tells the model to consult
+  before planning multi-step work.
+- **Sync to disk.** `scripts/sync-voidr-skills.mjs` materializes the catalog as
+  real host skills under `~/.claude/skills/voidr-<name>/`, so the host loads only
+  the description until a skill actually fires. Wired to Claude Code's
+  `SessionStart`; new skills become callable on the next session.
+
+```sh
+node scripts/sync-voidr-skills.mjs --standalone --force   # sync now
+node scripts/sync-voidr-skills.mjs --standalone --force --project   # into ./.claude/skills
+```
+
+| Variable | Default | What it does |
+|---|---|---|
+| `VOIDR_SKILLS_SYNC_SCOPES` | `global` | Which scopes are written to disk. `global,org,app` opts customer-authored skills in. |
+| `VOIDR_SKILLS_SYNC_MIN_INTERVAL_MS` | `900000` | Throttle, so ten sessions are not ten catalog calls. `--force` ignores it. |
+
+Only the Voidr catalog syncs by default. An `org` or `app` skill is text a
+customer wrote, and materializing it gives it the same standing as a
+Voidr-authored skill inside an agent that has a shell and your credentials —
+that is a decision to make deliberately, not a default. Synced files carry a
+provenance banner saying which scope they came from.
+
+Two safety properties worth knowing, both covered by tests:
+
+- Removal only ever touches names recorded in
+  `~/.claude/skills/.voidr-skills-manifest.json`. A skill you wrote by hand, or
+  one another tool installed, is invisible to the sync.
+- The hook **fails open**. No credential, no network, or a broken catalog leaves
+  what is on disk alone and exits 0. A stale skill is a smaller problem than a
+  session that will not start.
+
+**On GitHub Copilot CLI the sync is manual.** The plugin's Copilot hooks cover
+`userPromptTransformed`, `preToolUse`, `postToolUse` and `stop`, and no
+session-start equivalent is confirmed. Running the sync from the prompt hook was
+rejected: that hook has a 5s budget and a network call risks timing it out,
+which would drop the routing note the workflow gates depend on. Run the command
+above instead.
+
 ## Local development
 
 ```sh

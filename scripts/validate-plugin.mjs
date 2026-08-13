@@ -186,6 +186,9 @@ assert(
 )
 
 const claudeHookEvents = {
+  // Materializes the platform skill catalog. Not a gate, but wiring it here
+  // keeps it from being silently dropped.
+  SessionStart: 'sync-voidr-skills.mjs',
   UserPromptSubmit: 'route-voidr-prompt.mjs',
   PreToolUse: 'guard-hive-tools.mjs',
   PostToolUse: 'post-tool-execution-links.mjs',

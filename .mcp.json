@@ -68,7 +68,9 @@
         "defects_create_defect_with_issue",
         "defects_update_defect",
         "defects_update_defect_status",
-        "defects_assign_defect"
+        "defects_assign_defect",
+        "skills_list_skills",
+        "skills_get_skill"
       ],
       "timeout": 360000,
       "disableToolCache": true

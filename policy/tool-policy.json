@@ -40,7 +40,9 @@
     "defects_create_defect_with_issue",
     "defects_update_defect",
     "defects_update_defect_status",
-    "defects_assign_defect"
+    "defects_assign_defect",
+    "skills_list_skills",
+    "skills_get_skill"
   ],
   "writeRemoteTools": [
     "test_plans_create_test_plan",

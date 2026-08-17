@@ -1,4 +1,0 @@
-interface:
-  display_name: "Voidr Create Execution"
-  short_description: "Create a confirmed Voidr test execution"
-  default_prompt: "Use $voidr-create-execution to start a confirmed test execution on the Voidr platform."

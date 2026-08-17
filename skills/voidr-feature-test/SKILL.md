@@ -10,7 +10,7 @@ description: Fluxo dev-first para criar e rodar testes da feature que o desenvol
 > says `ask_user`, use that tool with selectable options; plain chat text is
 > never a substitute.
 
-Never call a tool that starts a Hive process.
+Obey the shared contracts in `../CONTRACTS.md`. Never call a tool that starts a Hive process.
 
 ## Non-negotiables
 
@@ -83,7 +83,7 @@ When the flow starts:
 
 1. Call `voidr_auth_status`. If `authenticated: false`, reply only:
 
-   > A Voidr não está conectada. Execute `/copilot voidr-connect` (Claude Code: `/voidr:voidr-connect`) para
+   > A Voidr não está conectada. Execute `/copilot voidr-setup` (Claude Code: `/voidr:voidr-setup`) para
    > conectar. Depois volte e peça os testes de novo.
 
    If multiple organizations exist, ask which one with `ask_user`, then call
@@ -233,8 +233,8 @@ Only after `Criar testes`:
      missing, do not create the module, suite, or cases — say in plain
      language that this set of tests has no repository attached yet, and
      offer the remaining plans plus `Criar um novo`. If the user still wants
-     that plan, direct them to `/voidr-develop-tests`, which handles
-     repository selection; never pick or create a repository inside this
+     that plan, direct them to `/voidr-context`, which materializes the
+     plan's linked repository; never pick or create a repository inside this
      flow.
    - With the repository confirmed, add the feature as a new module with
      `test_plans_create_module`, a suite with `test_plans_create_suite`, and
@@ -416,9 +416,9 @@ When all scenarios pass locally:
 2. After the user confirms the PR is merged, call `voidr_release_inspect`
    on the test repository to rediscover the merged PR, Test Plan ID, and
    repository URL — never ask the user for identifiers — then load
-   `/voidr-deploy-run` and
-   follow its gates to publish the merged commit as an immutable release and
-   create the platform execution. Translate its questions into simple terms
+   `/voidr-execute` and
+   follow its validation-run gates to publish the merged commit as an
+   immutable release and create the platform execution. Translate its questions into simple terms
    ("Publicar os testes na Voidr?", "Rodar os testes na plataforma?") but keep
    its confirmations and verifications exactly as specified. The translation
    changes vocabulary only: the deploy gate and the execution gate remain two
@@ -451,7 +451,7 @@ out of scope for this flow.
 | Assimilate indexed application documentation for scenario design and implementation (read-only, never blocking) | `file_embeddings_search_documents` |
 | Run the new specs locally | `voidr_smoke_build` |
 | Publish branch, commit, and pull request | `voidr_workspace_publish_tests` |
-| Rediscover the merged PR and IDs before deploy | `voidr_release_inspect`, then load `/voidr-deploy-run` |
+| Rediscover the merged PR and IDs before deploy | `voidr_release_inspect`, then load `/voidr-execute` |
 
 Disambiguation:
 
@@ -466,10 +466,10 @@ Disambiguation:
   created and that came back without a repository. A reused plan whose
   `gitProviderConfig.repositoryUrl` is missing follows the reuse rule instead:
   offer the other plans plus `Criar um novo`, and direct the user to
-  `/voidr-develop-tests` for repository selection.
+  `/voidr-context` to materialize the plan's linked repository.
 - Deploy and execution tools (`voidr_release_deploy_merged_pr`,
   `executions_create_execution`, `executions_get_execution`,
-  `test_plans_get_test_counts`) run only inside `/voidr-deploy-run` and its
+  `test_plans_get_test_counts`) run only inside `/voidr-execute` and its
   gates.
 - Never call `playwright_*` or `defects_*` tools; failure analysis belongs to
   `/voidr-failure-analysis`.

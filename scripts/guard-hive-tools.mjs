@@ -839,7 +839,7 @@ function enforceConnectFirstTool(hookPayload, rawName, canonicalName, args) {
 
   const loadingConnectSkill =
     /skill/i.test(rawName) &&
-    /voidr-connect/i.test(`${rawName}\n${args}`)
+    /voidr-(?:connect|setup)/i.test(`${rawName}\n${args}`)
   if (loadingConnectSkill) return
 
   if (canonicalName !== 'voidr_auth_status') {

@@ -18,10 +18,11 @@ test('routes natural Portuguese Voidr testing intents to the entry skill', () =>
       prompt,
       transformedPrompt: prompt
     })
-    assert.match(routed.modifiedTransformedPrompt, /\/voidr-develop-tests/)
+    assert.match(routed.modifiedTransformedPrompt, /\/voidr-context/)
+    assert.match(routed.modifiedTransformedPrompt, /\/voidr-generate/)
     assert.match(
       routed.modifiedTransformedPrompt,
-      /before[\s\S]*inspecting files or calling any tool/i
+      /before inspecting[\s\S]*files or calling any tool/i
     )
   }
 })
@@ -38,7 +39,7 @@ test('routes English handoff intents to the entry skill', () => {
     })
     assert.match(
       routed.modifiedTransformedPrompt || '',
-      /\/voidr-develop-tests/,
+      /\/voidr-context/,
       prompt
     )
   }
@@ -54,18 +55,19 @@ test('routes bare test-creation intents to a Voidr triage note', () => {
       prompt,
       transformedPrompt: prompt
     })
-    assert.match(routed.modifiedTransformedPrompt, /\/voidr-develop-tests/)
+    assert.match(routed.modifiedTransformedPrompt, /\/voidr-test-plan/)
+    assert.match(routed.modifiedTransformedPrompt, /\/voidr-context/)
     assert.match(
       routed.modifiedTransformedPrompt,
       /never invent your own triage\s+options/i
     )
     assert.match(
       routed.modifiedTransformedPrompt,
-      /clearly about plain local tests unrelated to Voidr,\s+ignore/i
+      /clearly about plain local tests\s+unrelated to Voidr,\s+ignore/i
     )
     assert.match(
       routed.modifiedTransformedPrompt,
-      /never a\s+request to implement cases that already exist/i
+      /implementing cases that already exist\s+belongs to/i
     )
   }
 })
@@ -128,7 +130,7 @@ test('prompt hook resolves its script when VS Code omits PLUGIN_ROOT', () => {
   })
   assert.equal(result.status, 0, result.stderr)
   const output = JSON.parse(result.stdout)
-  assert.match(output.modifiedTransformedPrompt, /\/voidr-develop-tests/)
+  assert.match(output.modifiedTransformedPrompt, /\/voidr-context/)
 })
 
 test('plan-mode choices are recognized in natural phrasings', async () => {

@@ -102,6 +102,7 @@ export async function buildTestRepository({
   testPlanId,
   specs,
   baseUrl,
+  mode = 'validation',
   workspaceRoot = process.cwd(),
   cliEnvironment = voidrCliEnvironment(),
   run = runCommand,
@@ -133,6 +134,22 @@ export async function buildTestRepository({
     workspaceRoot,
     run: testRun
   })
+
+  // Exploration mode: run the selected probe specs to INSPECT the deployed
+  // application (dumped console output, DOM findings, traces). Failures are
+  // expected and informative; nothing is gated and nothing is built — an
+  // exploration never counts as validation and never publishes.
+  if (mode === 'exploration') {
+    return {
+      completed: true,
+      exploration: true,
+      buildCompleted: false,
+      repositoryPath: selected.path,
+      testPlanId: String(testPlanId),
+      validation
+    }
+  }
+
   if (!validation.completed) {
     return {
       completed: false,
@@ -275,6 +292,7 @@ export async function validateSelectedPlaywrightTests({
     flaky: Number(stats.flaky || 0),
     failures,
     traces,
+    output: collectPlaywrightStdout(report),
     traceHint:
       'Analyze each run in the Playwright trace viewer: npx playwright show-trace <trace path>, executed from the test repository. Always share these commands with the user, failures first.'
   }
@@ -359,6 +377,39 @@ function collectPlaywrightFailures(report) {
     })
   }
   return failures
+}
+
+// Per-test stdout, bounded: this is how exploration probes report their DOM
+// and console findings back to the agent without any artifact round trip.
+const STDOUT_LIMIT_PER_TEST = 6000
+
+function collectPlaywrightStdout(report) {
+  const outputs = []
+  const visitSuite = suite => {
+    for (const spec of suite?.specs || []) {
+      for (const test of spec?.tests || []) {
+        for (const result of test?.results || []) {
+          const text = (result?.stdout || [])
+            .map(chunk => String(chunk?.text || ''))
+            .join('')
+            .trim()
+          if (!text) continue
+          outputs.push({
+            spec: String(spec.file || suite.file || ''),
+            title: String(spec.title || test.title || ''),
+            status: String(result.status || ''),
+            stdout:
+              text.length > STDOUT_LIMIT_PER_TEST
+                ? `${text.slice(0, STDOUT_LIMIT_PER_TEST)}\n[stdout truncated]`
+                : text
+          })
+        }
+      }
+    }
+    for (const child of suite?.suites || []) visitSuite(child)
+  }
+  for (const suite of report?.suites || []) visitSuite(suite)
+  return outputs
 }
 
 function collectPlaywrightTraces(report) {

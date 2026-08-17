@@ -77,15 +77,15 @@ test('routes developer intent to /voidr-feature-test and keeps the classic route
   const classic = routeVoidrPrompt({
     prompt: 'quero desenvolver testes na Voidr'
   })
-  assert.match(classic.modifiedTransformedPrompt, /\/voidr-develop-tests/)
+  assert.match(classic.modifiedTransformedPrompt, /\/voidr-context/)
 
   const deploy = routeVoidrPrompt({
     prompt: 'faca o deploy dos testes que desenvolvemos'
   })
-  assert.match(deploy.modifiedTransformedPrompt, /\/voidr-deploy-run/)
+  assert.match(deploy.modifiedTransformedPrompt, /\/voidr-execute/)
   assert.match(
     deploy.modifiedTransformedPrompt,
-    /Never call\s+executions_create_execution before the deploy/
+    /Never call executions_create_execution before the\s+sync verification/
   )
   assert.match(deploy.modifiedTransformedPrompt, /voidr_release_inspect/)
 

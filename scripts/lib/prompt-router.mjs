@@ -45,40 +45,38 @@ user.`
   }
 
   if (isDeployTestsPrompt(prompt)) {
-    return `Use the /voidr-deploy-run skill for this request and follow its gates in
-order: merged-PR evidence, immutable deploy with
-voidr_release_deploy_merged_pr, independent sync verification
-(test_plans_get_test_plan + test_plans_get_test_counts), and only then the
-execution. Start by calling voidr_release_inspect on the selected test
-repository — never ask the user for the Test Plan ID, repository URL, or PR
-number; the inspection discovers all of them. Never call
-executions_create_execution before the deploy and sync verification, and
-never create or re-create Test Plan modules, suites, or cases during a
-deploy — an "Only automated test cases can be executed" error means the
-cases need the deploy, not re-creation.`
+    return `Use the /voidr-execute skill for this request and follow its gates in
+order. LIVE run: sync verification (test_plans_get_test_plan +
+test_plans_get_test_counts), the user's confirmation, and only then
+executions_create_execution. Validation run: local smoke evidence, publish
+with voidr_workspace_publish_tests, merged-PR verification with
+voidr_release_inspect, immutable deploy with voidr_release_deploy_merged_pr,
+and a SHADOW execution. Never call executions_create_execution before the
+sync verification, and never create or re-create Test Plan modules, suites,
+or cases during a deploy — an "Only automated test cases can be executed"
+error means the cases need the deploy, not re-creation.`
   }
 
   if (voidrTestingIntent.test(prompt) || englishVoidrTestingIntent.test(prompt)) {
-    return `Use the /voidr-develop-tests skill for this request. Load that skill before
-inspecting files or calling any tool. Its first-turn Test Plan mode question,
-MCP application discovery, and repository-ordering rules are mandatory.
-Render every workflow choice (plan mode, application, environment, Test Plan,
-repository, planning inputs) with the native ask_user selectable options when
-available; free text is only a fallback. Only the two runtime confirmations
-must be typed in chat.`
+    return `This is a Voidr platform testing request. Route it through the restructured
+skills: /voidr-context first when there is no manifest-context.json in the
+test repository (it selects the Test Plan, materializes the checkout, and
+writes the manifest), /voidr-generate to implement existing cases from that
+manifest, /voidr-execute to run on the platform, and /voidr-test-plan only to
+create or change plan content. Load the matching skill before inspecting
+files or calling any tool. Render every workflow choice with the native
+ask_user selectable options when available; free text is only a fallback.`
   }
 
   if (isGenericTestCreationPrompt(prompt)) {
     return `If this request is about tests managed on the Voidr platform (Test Plans and
-Playwright suites run by Voidr), load the /voidr-develop-tests skill before
-asking anything or calling any tool, and start with its mandatory
-new-versus-existing Test Plan question. A request to create a new test or
-case means creating new platform content — inside an existing plan, use the
-"Add cases to an existing plan" route of /voidr-test-plan; it is never a
-request to implement cases that already exist. Never invent your own triage
-options and never ask the user to type IDs or repository paths. If the
-request is clearly about plain local tests unrelated to Voidr, ignore this
-note.`
+Playwright suites run by Voidr): creating NEW platform content (a new plan or
+new cases) belongs to /voidr-test-plan; implementing cases that already exist
+belongs to /voidr-context (when no manifest-context.json exists yet) followed
+by /voidr-generate. Load the matching skill before asking anything or calling
+any tool. Never invent your own triage options and never ask the user to type
+IDs or repository paths. If the request is clearly about plain local tests
+unrelated to Voidr, ignore this note.`
   }
 
   return null

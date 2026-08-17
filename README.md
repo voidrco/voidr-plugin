@@ -21,13 +21,13 @@ discovery, Test Plans, repository provisioning, deploy, and execution. Service
 Accounts use the standard production store at
 `~/.voidr/service-accounts.json`, shared with the Playwright framework. It does
 not call `npx voidr login` and never returns a client secret to Copilot.
-`/voidr-connect` opens the official Voidr connect page, which persists the local
+`/voidr-setup` opens the official Voidr connect page, which persists the local
 callback state before starting Auth0 and asks the user to choose an organization
 when necessary. The temporary user token is kept only in the local Node process
 and discarded after the account is created and validated.
 
 To run an already-automated plan without the development workflow, invoke
-`/copilot:voidr-create-execution` on Copilot, or `/voidr:voidr-create-execution`
+`/copilot:voidr-execute` on Copilot, or `/voidr:voidr-execute`
 on Claude Code.
 
 ## Host support
@@ -40,7 +40,7 @@ on Claude Code.
 | Hooks | `hooks.json` | `hooks/hooks.json` |
 | MCP config | `.mcp.json` | `mcp/claude.json` |
 | Plugin root | `${PLUGIN_ROOT}` | `${CLAUDE_PLUGIN_ROOT}` |
-| Skill call | `/copilot:voidr-connect` | `/voidr:voidr-connect` |
+| Skill call | `/copilot:voidr-setup` | `/voidr:voidr-setup` |
 
 Everything else is shared: `skills/`, `scripts/`, `policy/`, and
 `templates/`. `scripts/lib/host.mjs` detects the host from the hook payload
@@ -205,7 +205,7 @@ deployment-related synchronization, and execution creation. If it is absent
 or read-only, the plugin stops before a mutation.
 
 Never paste a Service Account secret into the chat. Provision or rotate it in
-the Voidr platform, or run `/copilot voidr-connect` and complete the official
+the Voidr platform, or run `/copilot voidr-setup` and complete the official
 browser login.
 
 `voidr_auth_status` reports the active `credentialStore` path and

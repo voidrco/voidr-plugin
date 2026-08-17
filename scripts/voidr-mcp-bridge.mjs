@@ -22,6 +22,7 @@ import { connectWithBrowser } from './lib/browser-auth.mjs'
 import { applySystemCaTrust } from './lib/network-trust.mjs'
 import { buildTestRepository, scaffoldTestCases } from './lib/scaffold.mjs'
 import { prepareTestRepository } from './lib/prepare.mjs'
+import { contextBootstrap } from './lib/context.mjs'
 import { publishTests } from './lib/publish.mjs'
 import { inspectReleaseReadiness } from './lib/release-inspect.mjs'
 import { collectGitContext } from './lib/git-context.mjs'
@@ -208,6 +209,23 @@ const localTools = [
     }
   },
   {
+    name: 'voidr_context_bootstrap',
+    description:
+      'Build the whole working context of a Test Plan in one atomic call: read the plan from the platform (IDs and linked repository), resolve the platform environment, list the recorded session IDs of the application, locate the checkout by Git origin (the clone itself is always done by the user — a missing checkout returns the clone handover message), write the gitignored manifest-context.json at the repository root, and run the framework preparation (npm install, Service Account auth in child processes only, link when project.json is absent, scaffold, env pull without exposing values). Idempotent: call it again after the user clones or after a failure and it continues from the manifest. Pass environmentSlug when the application has more than one environment; without it the tool returns the environment listing to render with ask_user.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        planId: {
+          type: 'string',
+          pattern: '^[a-fA-F0-9]{24}$'
+        },
+        environmentSlug: { type: 'string' },
+        workspaceRoot: { type: 'string' }
+      },
+      required: ['planId']
+    }
+  },
+  {
     name: 'voidr_workspace_scaffold_test_cases',
     description:
       'Run the Voidr CLI scaffold for explicitly selected Test Plan case slugs inside the selected repository while injecting the selected Service Account and the plugin environment without exposing credentials.',
@@ -259,6 +277,12 @@ const localTools = [
         baseUrl: {
           type: 'string',
           pattern: '^https?://'
+        },
+        mode: {
+          type: 'string',
+          enum: ['validation', 'exploration'],
+          description:
+            'validation (default) gates on zero failures/skips and builds. exploration runs throwaway inspection specs against the deployed app, tolerates failures, returns per-test stdout/traces, never builds and never counts as validation.'
         }
       },
       required: [
@@ -1533,6 +1557,33 @@ async function callLocal(name, args) {
       preparedRepositoryPath = prepared.repositoryPath
       return textResult(prepared)
     }
+    case 'voidr_context_bootstrap': {
+      // The internal platform reads feed the same provenance state as if the
+      // model had called them, so downstream tools see a consistent session.
+      const callRemote = async (remoteName, remoteArgs) => {
+        const result = await remote.callTool(remoteName, remoteArgs)
+        recordProvenance(remoteName, remoteArgs, result)
+        recordPlanSlugs(
+          bridgeTestPlanId(remoteArgs),
+          remoteResultData(result)
+        )
+        return result
+      }
+      const bootstrapped = await contextBootstrap({
+        planId: String(args.planId || ''),
+        environmentSlug: args.environmentSlug
+          ? String(args.environmentSlug)
+          : undefined,
+        workspaceRoot: args.workspaceRoot
+          ? String(args.workspaceRoot)
+          : undefined,
+        callRemote
+      })
+      if (bootstrapped?.prepared?.repositoryPath) {
+        preparedRepositoryPath = bootstrapped.prepared.repositoryPath
+      }
+      return textResult(bootstrapped)
+    }
     case 'voidr_workspace_scaffold_test_cases':
       return textResult(
         await scaffoldTestCases({
@@ -1550,7 +1601,8 @@ async function callLocal(name, args) {
           repositoryUrl: String(args.repositoryUrl || ''),
           testPlanId: String(args.testPlanId || ''),
           specs: Array.isArray(args.specs) ? args.specs : [],
-          baseUrl: String(args.baseUrl || '')
+          baseUrl: String(args.baseUrl || ''),
+          mode: args.mode === 'exploration' ? 'exploration' : 'validation'
         })
       )
     case 'voidr_workspace_git_context':

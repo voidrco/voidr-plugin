@@ -10,7 +10,7 @@ description: Analyzes a failed Voidr Playwright execution or test using ClickHou
 > says `ask_user`, use that tool with selectable options; plain chat text is
 > never a substitute.
 
-Never call a tool that starts a Hive process. Do not trigger self-healing,
+Obey the shared contracts in `../CONTRACTS.md`. Never call a tool that starts a Hive process. Do not trigger self-healing,
 automation generation, video generation, or another agent workflow.
 
 A routed tool missing from your available tools is grouped, not absent, and
@@ -31,7 +31,7 @@ Call `voidr_auth_status` before any remote tool.
 
 If it returns `authenticated: false`, stop and reply only:
 
-> A Voidr não está conectada. Execute `/copilot voidr-connect` (Claude Code: `/voidr:voidr-connect`) para conectar
+> A Voidr não está conectada. Execute `/copilot voidr-setup` (Claude Code: `/voidr:voidr-setup`) para conectar
 > uma Service Account. Depois volte e continue este fluxo.
 
 Read-only analysis does not require write access. Every defect mutation and
@@ -268,7 +268,7 @@ Disambiguation:
   `executions_list_executions` or `executions_get_execution`, which report
   platform lifecycle status without the evidence this skill requires.
 - Never call `executions_create_execution`; re-running belongs to
-  `/voidr-create-execution` or `/voidr-deploy-run` after a new user request.
+  `/voidr-execute` after a new user request.
 - Never call `test_plans_create_*`, `test_plans_update_test_plan`,
   `test_plans_update_module`, `test_plans_update_suite`,
   `test_plans_update_case`, or `test_plans_populate_test_plan`; the only

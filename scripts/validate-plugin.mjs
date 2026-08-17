@@ -294,338 +294,196 @@ if (existsSync(routingDocPath)) {
   }
 }
 
-const entrySkill = readFileSync(
-  join(root, 'skills/voidr-develop-tests/SKILL.md'),
+// --- Restructured skill contracts (setup / context / generate / execute) ---
+// The shared contracts live once in skills/CONTRACTS.md; every voidr-* skill
+// references that file instead of repeating them.
+
+const contracts = readFileSync(join(root, 'skills/CONTRACTS.md'), 'utf8')
+const contractsFlat = contracts.replace(/\s+/g, ' ')
+assert(
+  /Never call a tool that starts a Hive process/i.test(contracts),
+  'CONTRACTS.md must state the Hive invariant.'
+)
+assert(
+  /grouped, not absent/i.test(contractsFlat) &&
+    /activation entry whose summary lists that tool/i.test(contractsFlat) &&
+    /never invent an activation name/i.test(contractsFlat) &&
+    /never fall back to a terminal command/i.test(contractsFlat) &&
+    /ToolSearch/.test(contractsFlat) &&
+    /before the host's own mechanism has been tried/i.test(contractsFlat),
+  'CONTRACTS.md must carry the grouped/deferred tool contract for both hosts.'
+)
+assert(
+  /Never run Git, npm, npx, Playwright, or the Voidr CLI in the terminal/i.test(
+    contracts
+  ),
+  'CONTRACTS.md must keep framework commands inside the bridge.'
+)
+assert(
+  /Never reproduce credentials/i.test(contractsFlat) &&
+    /\{\{env\.VARIABLE_NAME\}\}/.test(contractsFlat) &&
+    /Never read or print `\.env` contents/i.test(contractsFlat),
+  'CONTRACTS.md must carry the secrets contract.'
+)
+assert(
+  /returned it in this session/i.test(contracts),
+  'CONTRACTS.md must carry the data-provenance contract.'
+)
+assert(
+  /never clones the test repository/i.test(contracts) &&
+    /clone handover message/i.test(contracts),
+  'CONTRACTS.md must hand the clone to the user.'
+)
+assert(
+  /Never install, switch, or pin a Node runtime/i.test(contracts),
+  'CONTRACTS.md must carry the Node runtime contract.'
+)
+
+const setupSkill = readFileSync(join(root, 'skills/voidr-setup/SKILL.md'), 'utf8')
+const setupFlat = setupSkill.replace(/\s+/g, ' ')
+const contextSkill = readFileSync(join(root, 'skills/voidr-context/SKILL.md'), 'utf8')
+const generateSkill = readFileSync(join(root, 'skills/voidr-generate/SKILL.md'), 'utf8')
+const executeSkill = readFileSync(join(root, 'skills/voidr-execute/SKILL.md'), 'utf8')
+const testPlanSkill = readFileSync(join(root, 'skills/voidr-test-plan/SKILL.md'), 'utf8')
+const failureSkill = readFileSync(
+  join(root, 'skills/voidr-failure-analysis/SKILL.md'),
   'utf8'
 )
-const entryFrontmatter = parseFrontmatter(entrySkill)
-const connectSkill = readFileSync(
-  join(root, 'skills/voidr-connect/SKILL.md'),
-  'utf8'
-)
-const testPlanSkill = readFileSync(
-  join(root, 'skills/voidr-test-plan/SKILL.md'),
-  'utf8'
-)
-const questionIndex = entrySkill.indexOf(
-  'Você quer criar um novo Test Plan ou trabalhar em um Test Plan existente?'
-)
-const firstToolIndex = entrySkill.indexOf('voidr_auth_status')
-assert(questionIndex >= 0, 'Entry skill must ask new versus existing.')
+
+// Setup absorbs the connection: machine dependencies AND authentication.
 assert(
-  questionIndex < firstToolIndex,
-  'Entry skill must ask new versus existing before the first tool.'
+  /voidr_environment_doctor/.test(setupSkill) &&
+    /voidr_auth_status/.test(setupSkill) &&
+    /voidr_auth_select_organization/.test(setupSkill) &&
+    /voidr_auth_login/.test(setupSkill),
+  'Setup skill must cover machine dependencies and Voidr authentication.'
 )
 assert(
-  /Do not inspect `project\.json`[\s\S]*?before the user answers/i.test(entrySkill),
-  'Entry skill must prohibit project.json inference before intent.'
+  /Never ask for a Client ID or Client Secret/i.test(setupFlat) &&
+    /never read credential files/i.test(setupFlat),
+  'Setup skill must protect CLI and credential files.'
 )
 assert(
-  /first response must ask exactly one decision/i.test(entrySkill),
-  'Entry skill must keep plan mode as the only first-turn decision.'
+  /Never suggest disabling the security product/i.test(setupSkill),
+  'Setup skill must respect corporate security products.'
+)
+
+// Context: the atomic bootstrap is the only setup path and writes the
+// gitignored manifest at the repository root.
+assert(
+  /voidr_context_bootstrap/.test(contextSkill) &&
+    /manifest-context\.json/.test(contextSkill) &&
+    /\.gitignore/.test(contextSkill),
+  'Context skill must route the atomic bootstrap and the gitignored manifest.'
 )
 assert(
-  /selects either option, immediately call `voidr_auth_status`[\s\S]*?requires no confirmation[\s\S]*?Do not ask\s+whether to validate authentication/i.test(
-    entrySkill
-  ),
-  'Entry skill must continue directly to the read-only auth check after plan-mode selection.'
+  /needsEnvironmentSelection/.test(contextSkill) &&
+    /Clone handover message/i.test(contextSkill) &&
+    /idempotent/i.test(contextSkill),
+  'Context skill must handle environment selection, clone handover, and retries.'
 )
 assert(
-  /quero desenvolver testes na Voidr/i.test(entryFrontmatter.description || '') &&
-    /automatizar testes na Voidr/i.test(entryFrontmatter.description || ''),
-  'Entry skill description must include natural Portuguese routing triggers.'
+  /ONLY setup path/i.test(contextSkill) &&
+    /never run npm, git, or the Voidr CLI in the terminal/i.test(contextSkill),
+  'Context skill must forbid separate setup tools and terminal commands.'
 )
 assert(
-  /native `ask_user` question UI[\s\S]*?Criar novo Test Plan[\s\S]*?Usar Test Plan existente/i.test(
-    entrySkill
-  ),
-  'Entry skill must render new-versus-existing as selectable options.'
+  /never creates or changes Test\s+Plan content/i.test(contextSkill.replace(/\n/g, ' ')) ||
+    /never creates or changes Test Plan content/i.test(contextSkill),
+  'Context skill must stay read-only on plan content.'
 )
-const applicationDiscoveryIndex = entrySkill.indexOf(
-  'applications_list_applications'
-)
-const workspaceDiscoveryIndex = entrySkill.indexOf('voidr_workspace_inspect')
+
+// Generate: manifest-anchored, evidence-driven implementation.
 assert(
-  applicationDiscoveryIndex >= 0 &&
-    workspaceDiscoveryIndex >= 0 &&
-    applicationDiscoveryIndex < workspaceDiscoveryIndex,
-  'Entry skill must discover Voidr applications before workspace repositories.'
+  /manifest-context\.json/.test(generateSkill) &&
+    /\/voidr-context/.test(generateSkill),
+  'Generate skill must require the context manifest before any work.'
 )
 assert(
-  /Build application choices exclusively from that tool response/i.test(
-    entrySkill
-  ) &&
-    /workspace folder is a repository candidate, never an application candidate/i.test(
-      entrySkill
-    ),
-  'Entry skill must separate MCP applications from workspace repositories.'
+  /test_plans_get_case/.test(generateSkill) &&
+    /Arrange\/Act\/Assert literally/i.test(generateSkill),
+  'Generate skill must read the approved AAA per selected case.'
 )
 assert(
-  /Always use `ask_user`[\s\S]*?returned application name[\s\S]*?`type`[\s\S]*?never ask the user to provide an `applicationId` manually/i.test(
-    entrySkill
-  ) &&
-    /test_plans_list_test_plans[\s\S]*?selectable options[\s\S]*?never ask the user to type a `testPlanId`/i.test(
-      entrySkill
-    ),
-  'Entry skill must use MCP-backed selectable application and Test Plan choices.'
+  /sessions_get_session_actions/.test(generateSkill) &&
+    /sessions_get_session_digest/.test(generateSkill) &&
+    /"no evidence", never an error/i.test(generateSkill) &&
+    /Never copy recorded input VALUES/i.test(generateSkill),
+  'Generate skill must consume recorded-session evidence safely.'
 )
 assert(
-  /selected application's MCP `type` as authoritative[\s\S]*?Never ask the user to decide WEB versus API/i.test(
-    entrySkill
-  ),
-  'Entry skill must derive WEB/API from the selected Voidr application.'
+  /mode: "exploration"/.test(generateSkill) &&
+    /never counts as validation/i.test(generateSkill) &&
+    /DELETE the probe/i.test(generateSkill),
+  'Generate skill must scope exploration probes as throwaway inspection.'
 )
 assert(
-  /applications_list_environments[\s\S]*?name[\s\S]*?slug[\s\S]*?applicationUrl/i.test(
-    entrySkill
-  ) &&
-    /A single[\s\S]*?environment must still be confirmed/i.test(entrySkill),
-  'Entry skill must select and confirm a Voidr environment from MCP.'
+  /zero failures and zero skips/i.test(generateSkill) &&
+    /Never weaken an assertion/i.test(generateSkill),
+  'Generate skill must gate validation on a clean run.'
 )
 assert(
-  /platform environment and local smoke target are different values/i.test(
-    entrySkill
-  ) &&
-    /Usar ambiente Voidr[\s\S]*?Usar localhost[\s\S]*?localSmokeBaseUrl/i.test(
-      entrySkill
-    ),
-  'Entry skill must keep the platform environment separate from local smoke.'
-)
-const planningInputQuestionIndex = entrySkill.indexOf(
-  'Com base em quais insumos devo montar o Test Plan?'
-)
-const testPlanDraftIndex = entrySkill.indexOf(
-  'present a complete Test Plan draft'
+  /test_plans_update_case/.test(generateSkill) &&
+    /explicit approval/i.test(generateSkill) &&
+    /honestly failing/i.test(generateSkill),
+  'Generate skill must gate AAA updates behind explicit human approval.'
 )
 assert(
-  planningInputQuestionIndex >= 0 &&
-    testPlanDraftIndex > planningInputQuestionIndex &&
-    /Analisar código-fonte do workspace[\s\S]*?Usar documentação ou requisitos[\s\S]*?Descrever regras e cenários no chat[\s\S]*?Combinar código, documentação e contexto do negócio/i.test(
-      entrySkill
-    ),
-  'Entry skill must select planning inputs before showing a Test Plan draft.'
+  /never invents a case/i.test(generateSkill) &&
+    /never\s+expands into unselected ones/i.test(generateSkill.replace(/\n/g, ' ')),
+  'Generate skill must implement only existing selected cases.'
+)
+
+// Execute: sync verification before any execution write; SHADOW validation.
+assert(
+  /test_plans_get_test_counts/.test(executeSkill) &&
+    /sync verification/i.test(executeSkill.replace(/\n/g, ' ')),
+  'Execute skill must verify automation sync before executing.'
 )
 assert(
-  /Application name, application type, environment,[\s\S]*?routing metadata, never sufficient test-design\s+evidence/i.test(
-    entrySkill
-  ) &&
-    /Resumo dos insumos do planejamento[\s\S]*?type exactly[\s\S]*?Confirmar insumos do planejamento[\s\S]*?normal chat input[\s\S]*?Do not use `ask_user`[\s\S]*?Do not show a Test Plan draft yet/i.test(
-      entrySkill
-    ),
-  'Entry skill must reject routing metadata as evidence and confirm collected inputs before drafting.'
+  /executionType: "SHADOW"/.test(executeSkill),
+  'Execute skill must run validation executions as SHADOW.'
 )
 assert(
-  /Com base em quais insumos devo montar o Test Plan\?[\s\S]*?routing metadata[\s\S]*?never sufficient\s+evidence/i.test(
-    testPlanSkill
-  ) &&
-    /type exactly `Confirmar insumos do planejamento`[\s\S]*?normal chat input[\s\S]*?Do not use `ask_user`[\s\S]*?new user-authored\s+chat\s+message[\s\S]*?Do not render a Test Plan\s+draft\s+before it/i.test(
-      testPlanSkill
-    ),
-  'Test Plan skill must enforce the planning-input evidence gate before its visible draft.'
+  /voidr_workspace_publish_tests/.test(executeSkill) &&
+    /voidr_release_inspect/.test(executeSkill) &&
+    /voidr_release_deploy_merged_pr/.test(executeSkill),
+  'Execute skill must publish and deploy through the release gates.'
 )
 assert(
-  /Before calling any Test Plan mutation tool, explicitly load the[\s\S]*?`\/voidr-test-plan` skill/i.test(
-    entrySkill
-  ) &&
-    /Qual feature ou jornada da aplicação selecionada você quer testar[\s\S]*?primeiro/i.test(
-      entrySkill
-    ) &&
-    /Do not infer a feature from the application name, product repository, route,[\s\S]*?README/i.test(
-      entrySkill
-    ),
-  'Entry skill must explicitly load the Test Plan skill and require a user-selected feature.'
+  /Never deploy code that did not pass/i.test(executeSkill),
+  'Execute skill must require local smoke evidence before a deploy.'
 )
 assert(
-  /Only after explicit approval may the agent call[\s\S]*?test_plans_create_test_plan[\s\S]*?test_plans_populate_test_plan/i.test(
-    entrySkill
-  ),
-  'Entry skill must block Test Plan writes until feature-scoped draft approval.'
+  /at least 30 seconds/i.test(executeSkill) &&
+    /never a tight loop/i.test(executeSkill),
+  'Execute skill must monitor executions with a bounded polling cadence.'
 )
 assert(
-  /repository returned by[\s\S]*?test_plans_create_test_plan[\s\S]*?authoritative/i.test(
-    entrySkill
-  ) &&
-    /allowExistingGitRepository: true[\s\S]*?server-returned[\s\S]*?repositoryUrl/i.test(
-      entrySkill
-    ),
-  'Entry skill must consume the repository provisioned by the Voidr MCP.'
-)
-assert(
-  /gitProviderConfig\.repositoryUrl[\s\S]*?equals[\s\S]*?repository\.url/i.test(
-    testPlanSkill
-  ) &&
-    /Repositório vinculado:\s*\[<owner>\/<repository-name>\]\(<repository\.url>\)/i.test(
-      testPlanSkill
-    ) &&
-    /has not completed successfully until this clickable repository link/i.test(
-      testPlanSkill
-    ),
-  'Test Plan skill must verify and return the linked repository as a clickable URL.'
-)
-assert(
-  /type exactly `Aprovo este Test Plan`[\s\S]*?normal chat input[\s\S]*?Do not use `ask_user`[\s\S]*?generic `Sim` is not[\s\S]*?new user-authored chat message/i.test(
-    entrySkill
-  ) &&
-    /type exactly[\s\S]*?`Aprovo este Test Plan`[\s\S]*?normal chat input[\s\S]*?Do not use `ask_user`[\s\S]*?tool-result selections do not reach the runtime approval hook/i.test(
-      testPlanSkill
-    ),
-  'Both Test Plan skills must require a user-typed post-draft approval message.'
-)
-assert(
-  /user already named\s+a repository[\s\S]*?read-only inspection[\s\S]*?not ask permission again/i.test(
-    entrySkill
-  ) &&
-    /For combined context,[\s\S]*?distinguish which\s+conclusion came from which source/i.test(
-      entrySkill
-    ),
-  'Entry skill must honor explicitly authorized repositories and preserve evidence provenance.'
-)
-assert(
-  /Present this question[\s\S]*?immediately after the feature answer[\s\S]*?do not ask whether the user wants to[\s\S]*?see the options/i.test(
-    entrySkill
-  ) &&
-    /Immediately after the local smoke answer, ask exactly:[\s\S]*?Com base em quais insumos devo montar o Test Plan\?[\s\S]*?End the response and wait/i.test(
-      entrySkill
-    ),
-  'Entry skill must ask smoke and planning-input questions without meta-confirmations.'
-)
-assert(
-  /explicitly load[\s\S]*?`\/voidr-implement-tests` skill/i.test(entrySkill),
-  'Entry skill must explicitly load the implementation skill before code work.'
-)
-assert(
-  /voidr_workspace_prepare_test_repository[\s\S]*?install repository dependencies[\s\S]*?Service Account[\s\S]*?link[\s\S]*?project\.json[\s\S]*?scaffold[\s\S]*?env pull/i.test(
-    entrySkill
-  ),
-  'Entry skill must require the deterministic repository setup gate.'
-)
-assert(
-  /Never run `npx voidr login`[\s\S]*?Never run[\s\S]*?npm install[\s\S]*?npx voidr link[\s\S]*?npx voidr scaffold[\s\S]*?npx voidr env pull/i.test(
-    entrySkill
-  ),
-  'Entry skill must keep framework setup and Service Account injection inside the bridge.'
-)
-const implementationSkill = readFileSync(
-  join(root, 'skills/voidr-implement-tests/SKILL.md'),
-  'utf8'
-)
-assert(
-  /Before reading or editing a generated spec, call[\s\S]*?voidr_workspace_prepare_test_repository/i.test(
-    implementationSkill
-  ) &&
-    /dependency installation[\s\S]*?Service Account[\s\S]*?link[\s\S]*?scaffold[\s\S]*?environment pull/i.test(
-      implementationSkill
-    ),
-  'Implementation skill must block code work until repository preparation completes.'
-)
-assert(
-  /Never run `npx voidr login`[\s\S]*?Never ask for a Client ID or Client Secret[\s\S]*?never read or print `\.env` values/i.test(
-    implementationSkill
-  ),
-  'Implementation skill must protect CLI and environment credentials.'
-)
-assert(
-  /If it returns `authenticated: false`, stop the current workflow and reply[\s\S]*?\/copilot voidr-connect/i.test(
-    entrySkill
-  ),
-  'Entry skill must stop and redirect missing authentication to /copilot voidr-connect.'
-)
-assert(
-  /if `serviceAccountSelectionRequired` is true, ask which local[\s\S]*?Service Account/i.test(
-    connectSkill
-  ),
-  'Connect skill must ask which locally available Service Account to use.'
-)
-assert(
-  /request identifies exactly one organization name or ID returned[\s\S]*?call `voidr_auth_select_organization`[\s\S]*?do not ask the user to choose it again/i.test(
-    connectSkill
-  ) &&
-    /Never call `voidr_auth_login` to switch to an organization present in[\s\S]*?`serviceAccounts`/i.test(
-      connectSkill
-    ) &&
-    /requested organization is absent from `serviceAccounts`[\s\S]*?replace a rejected credential/i.test(
-      connectSkill
-    ),
-  'Connect skill must prefer an existing local account over browser login when switching organizations.'
-)
-assert(
-  /Call `voidr_auth_login` only when the requested organization has no entry in[\s\S]*?no local account exists[\s\S]*?selected local credential[\s\S]*?rejected/i.test(
-    connectSkill
-  ),
-  'Connect skill must start the official browser login when authentication is unavailable.'
-)
-assert(
-  /browser flow handles user login and explicit organization selection/i.test(
-    connectSkill
-  ),
-  'Connect skill must delegate organization selection to the browser flow.'
-)
-assert(
-  /Never ask the user to create or edit a credential JSON/i.test(
-    connectSkill
-  ),
-  'Connect skill must prohibit the legacy credential JSON flow.'
-)
-assert(
-  /If this status call fails,[\s\S]*?call `voidr_auth_login` directly/i.test(
-    connectSkill
-  ) &&
-    /Never pass `default`[\s\S]*?not returned[\s\S]*?`serviceAccounts`/i.test(
-      connectSkill
-    ),
-  'Connect skill must not invent an organization when status fails.'
-)
-assert(
-  /first operational action must be a direct MCP call to[\s\S]*?`voidr_auth_status` with `\{\}`/i.test(
-    connectSkill
-  ) &&
-    /Do not search, read, or inspect workspace files[\s\S]*?MCP bridge implementation/i.test(
-      connectSkill
-    ) &&
-    /Never use a shell, terminal, `node`, `npx`, `curl`[\s\S]*?`voidr-mcp-bridge\.mjs`/i.test(
-      connectSkill
-    ),
-  'Connect skill must force MCP-first authentication without filesystem or shell fallbacks.'
-)
-assert(
-  /voidr_auth_status` is not available as an MCP tool[\s\S]*?reload the plugin and start a new chat[\s\S]*?Do not investigate through\s+files or the terminal/i.test(
-    connectSkill
-  ),
-  'Connect skill must stop cleanly when its MCP tools are unavailable.'
+  /never trigger\s+self-healing/i.test(executeSkill.replace(/\n/g, ' ')),
+  'Execute skill must never trigger self-healing.'
 )
 
 const devSkill = readFileSync(join(root, 'skills/voidr-feature-test/SKILL.md'), 'utf8')
 
-// A tool the editor collapsed into a virtual group must be expanded, never
-// treated as missing and never replaced by a terminal command.
+// The grouped/deferred tool contract lives once in CONTRACTS.md (asserted
+// above); every voidr-* skill has to reference the shared contracts file.
 for (const skillName of [
-  'voidr-develop-tests',
+  'voidr-setup',
+  'voidr-context',
+  'voidr-generate',
+  'voidr-execute',
   'voidr-test-plan',
   'voidr-feature-test',
-  'voidr-implement-tests',
-  'voidr-deploy-run',
-  'voidr-create-execution',
   'voidr-failure-analysis'
 ]) {
-  // Line wrapping differs per skill, so match on whitespace-normalized text.
   const skillText = readFileSync(
     join(root, `skills/${skillName}/SKILL.md`),
     'utf8'
-  ).replace(/\s+/g, ' ')
-  assert(
-    /grouped, not absent/i.test(skillText) &&
-      /activation entry whose summary lists that tool/i.test(skillText) &&
-      /never invent an activation name/i.test(skillText) &&
-      /never fall back to a terminal command/i.test(skillText),
-    `${skillName} must expand a collapsed tool group instead of treating the tool as unavailable.`
   )
-  // Claude has no activation entry: its Voidr tools are deferred and load
-  // through ToolSearch. Naming only the Copilot mechanism made the paragraph's
-  // closing sentence read as "give up" on Claude.
   assert(
-    /ToolSearch/.test(skillText) &&
-      /before the host's own mechanism has been tried/i.test(skillText),
-    `${skillName} must route a deferred tool through ToolSearch before reporting it unreachable.`
+    /CONTRACTS\.md/.test(skillText),
+    `${skillName} must reference the shared contracts file.`
   )
 }
 
@@ -648,9 +506,7 @@ for (const [skillName, skillText] of [
 // Voidr's organization is proven. No skill may offer to clone it.
 for (const [skillName, skillText] of [
   ['voidr-feature-test', devSkill.replace(/\s+/g, ' ')],
-  ['voidr-test-plan', testPlanSkill.replace(/\s+/g, ' ')],
-  ['voidr-implement-tests', implementationSkill.replace(/\s+/g, ' ')],
-  ['voidr-develop-tests', entrySkill.replace(/\s+/g, ' ')]
+  ['voidr-test-plan', testPlanSkill.replace(/\s+/g, ' ')]
 ]) {
   assert(
     /Handing the clone to the user/i.test(skillText) &&
@@ -666,7 +522,7 @@ for (const [skillName, skillText] of [
 // and the four rules below each come from a failure observed in a real run.
 for (const [skillName, skillText] of [
   ['voidr-feature-test', devSkill.replace(/\s+/g, ' ')],
-  ['voidr-implement-tests', implementationSkill.replace(/\s+/g, ' ')]
+  ['voidr-generate', generateSkill.replace(/\s+/g, ' ')]
 ]) {
   assert(
     /read the test repository's own convention file/i.test(skillText) &&
@@ -680,10 +536,9 @@ for (const [skillName, skillText] of [
 }
 
 for (const [skillName, skillText] of [
-  ['voidr-develop-tests', entrySkill],
   ['voidr-test-plan', testPlanSkill],
   ['voidr-feature-test', devSkill],
-  ['voidr-implement-tests', implementationSkill]
+  ['voidr-generate', generateSkill]
 ]) {
   assert(
     /file_embeddings_search_documents/i.test(skillText) &&
@@ -714,12 +569,11 @@ assert(
   'Dev skill must assimilate functional documentation before scenario design.'
 )
 assert(
-  /Application documentation assimilation/i.test(implementationSkill) &&
-    /user manuals[\s\S]*?product and operations guides[\s\S]*?business-rule references/i.test(
-      implementationSkill
-    ) &&
-    /Documentation cannot add an unselected case/i.test(implementationSkill),
-  'Implementation skill must use product documentation without expanding approved scope.'
+  /user manuals[\s\S]*?product and operations guides[\s\S]*?business-rule references/i.test(
+    generateSkill
+  ) &&
+    /Documentation cannot add an unselected case/i.test(generateSkill),
+  'Generate skill must use product documentation without expanding approved scope.'
 )
 assert(
   /Never expose platform vocabulary/i.test(devSkill) &&

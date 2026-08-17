@@ -10,7 +10,7 @@ description: Creates or selects a Voidr Test Plan with mandatory user-selected f
 > says `ask_user`, use that tool with selectable options; plain chat text is
 > never a substitute.
 
-Never call a tool that starts a Hive process. Draft plans locally from the
+Obey the shared contracts in `../CONTRACTS.md`. Never call a tool that starts a Hive process. Draft plans locally from the
 user's answers and repository context; use only Test Plan CRUD tools to
 persist an approved result.
 
@@ -56,7 +56,7 @@ authentication or continue.
 
 If it returns `authenticated: false`, stop and reply only:
 
-> A Voidr não está conectada. Execute `/copilot voidr-connect` (Claude Code: `/voidr:voidr-connect`) para conectar
+> A Voidr não está conectada. Execute `/copilot voidr-setup` (Claude Code: `/voidr:voidr-setup`) para conectar
 > uma Service Account. Depois volte e continue este fluxo.
 
 Do not ask for application details or continue drafting until authentication
@@ -174,7 +174,7 @@ creation tool directly:
    content, and report it.
 
 New cases enter the plan as not automated. Implementing and deploying them
-follows the normal `/voidr-implement-tests` and `/voidr-deploy-run` gates.
+follows the normal `/voidr-context` → `/voidr-generate` → `/voidr-execute` gates.
 
 ## New plan
 
@@ -515,5 +515,5 @@ Disambiguation:
   `voidr_workspace_bootstrap_test_repository`,
   `voidr_workspace_select_test_repository`,
   `voidr_workspace_scaffold_test_cases`, or `voidr_smoke_build`; repository
-  setup and implementation belong to `/voidr-develop-tests` and
-  `/voidr-implement-tests`.
+  setup and implementation belong to `/voidr-context` and
+  `/voidr-generate`.

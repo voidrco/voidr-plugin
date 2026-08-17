@@ -51,7 +51,7 @@ test('the prompt hook answers each host in its own dialect', () => {
   )
   assert.match(
     claude.hookSpecificOutput.additionalContext,
-    /\/voidr-develop-tests/
+    /\/voidr-context/
   )
   assert.equal(claude.modifiedTransformedPrompt, undefined)
   // The note must stand on its own: Claude never sees it glued to the prompt.
@@ -70,7 +70,7 @@ test('the prompt hook answers each host in its own dialect', () => {
     },
     dataRoot()
   )
-  assert.match(copilot.modifiedTransformedPrompt, /\/voidr-develop-tests/)
+  assert.match(copilot.modifiedTransformedPrompt, /\/voidr-context/)
   assert.match(copilot.modifiedTransformedPrompt, /^Quero desenvolver testes/)
   assert.equal(copilot.hookSpecificOutput, undefined)
 })
@@ -100,10 +100,10 @@ test('both hosts route the same prompts and stay silent on the same ones', () =>
 
 test('an explicit skill call is recognized in every host namespace', () => {
   for (const prompt of [
-    '/voidr-develop-tests',
-    '/copilot voidr-develop-tests',
-    '/copilot:voidr-develop-tests',
-    '/voidr:voidr-develop-tests'
+    '/voidr-context',
+    '/copilot voidr-context',
+    '/copilot:voidr-context',
+    '/voidr:voidr-context'
   ]) {
     assert.deepEqual(
       routeVoidrPrompt({ prompt, transformedPrompt: prompt }),
@@ -338,7 +338,7 @@ test('the Claude hook commands resolve and run the real scripts', () => {
   assert.equal(result.status, 0, result.stderr)
   assert.match(
     JSON.parse(result.stdout).hookSpecificOutput.additionalContext,
-    /\/voidr-develop-tests/
+    /\/voidr-context/
   )
 })
 
@@ -621,7 +621,7 @@ test('an empty transformed prompt keeps the user message', () => {
   )
   assert.match(
     output.modifiedTransformedPrompt,
-    /^Quero desenvolver testes na voidr\n\nUse the \/voidr-develop-tests/
+    /^Quero desenvolver testes na voidr\n\nThis is a Voidr platform testing request/
   )
 })
 

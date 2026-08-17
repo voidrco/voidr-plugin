@@ -5,12 +5,9 @@ import { join, resolve } from 'node:path'
 import { loadPolicy } from '../scripts/lib/policy.mjs'
 
 const root = resolve(import.meta.dirname, '..')
-const skill = readFileSync(
-  join(root, 'skills/voidr-create-execution/SKILL.md'),
-  'utf8'
-)
+const skill = readFileSync(join(root, 'skills/voidr-execute/SKILL.md'), 'utf8')
 
-test('standalone execution skill exposes one write action plus the sync reads', () => {
+test('execute skill routes only its execution, release, and sync tools', () => {
   const policy = loadPolicy()
   const allTools = [
     ...policy.localTools,
@@ -19,10 +16,16 @@ test('standalone execution skill exposes one write action plus the sync reads', 
   ]
   const referencedTools = allTools.filter(tool => skill.includes(tool))
 
-  assert.deepEqual(referencedTools, [
+  assert.deepEqual(referencedTools.sort(), [
+    'executions_create_execution',
+    'executions_get_execution',
+    'playwright_get_execution_analytics',
     'test_plans_get_test_counts',
     'test_plans_get_test_plan',
-    'executions_create_execution'
+    'voidr_release_deploy_merged_pr',
+    'voidr_release_inspect',
+    'voidr_smoke_build',
+    'voidr_workspace_publish_tests'
   ])
   assert.equal(
     policy.writeRemoteTools.includes('executions_create_execution'),
@@ -38,7 +41,7 @@ test('standalone execution skill exposes one write action plus the sync reads', 
   )
 })
 
-test('standalone execution requires complete scope and confirmation', () => {
+test('execution requires complete scope and confirmation', () => {
   assert.match(skill, /applicationId/)
   assert.match(skill, /planId/)
   assert.match(skill, /environment/)
@@ -49,15 +52,22 @@ test('standalone execution requires complete scope and confirmation', () => {
   assert.match(skill, /suiteSlug/)
   assert.match(skill, /moduleSlug/)
   assert.match(skill, /Do not call another tool to discover/)
-  assert.match(skill, /Do not call the tool until the user confirms/)
+  assert.match(skill, /Do not call the tool until the user\s+confirms/)
   assert.match(skill, /exactly once/)
 })
 
-test('standalone execution preserves idempotency and returns its URL', () => {
-  assert.match(skill, /Create one idempotency key/)
+test('execution preserves idempotency and returns its URL', () => {
+  assert.match(skill, /Create one\s+idempotency key/)
   assert.match(skill, /Keep that same\s+key if the confirmed call must be retried/)
   assert.match(
     skill,
     /Execution: \[Open execution\]\(<VOIDR_PLATFORM_URL>\/execution\/<executionId>\)/
   )
+})
+
+test('validation runs are SHADOW executions behind release gates', () => {
+  assert.match(skill, /executionType: "SHADOW"/)
+  assert.match(skill, /Never deploy code that did not pass/i)
+  assert.match(skill, /at least 30 seconds/i)
+  assert.match(skill, /never a tight loop/i)
 })

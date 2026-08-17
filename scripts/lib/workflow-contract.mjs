@@ -100,7 +100,7 @@ export function transition(workflow, event) {
       requireState(next, States.PLAN_MODE_SELECTED)
       next.state = States.AUTHENTICATION_REQUIRED
       next.prompt =
-        'A Voidr não está conectada. Execute `/copilot voidr-connect` para conectar uma Service Account. Depois volte e continue este fluxo.'
+        'A Voidr não está conectada. Execute `/copilot voidr-setup` para conectar uma Service Account. Depois volte e continue este fluxo.'
       return next
 
     case 'APPLICATION_SELECTED':

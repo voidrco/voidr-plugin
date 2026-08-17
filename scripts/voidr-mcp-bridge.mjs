@@ -20,6 +20,7 @@ import {
 import { deployMergedPullRequest } from './lib/release-deploy.mjs'
 import { connectWithBrowser } from './lib/browser-auth.mjs'
 import { applySystemCaTrust } from './lib/network-trust.mjs'
+import { environmentDoctor } from './lib/environment-doctor.mjs'
 import { buildTestRepository, scaffoldTestCases } from './lib/scaffold.mjs'
 import { prepareTestRepository } from './lib/prepare.mjs'
 import { contextBootstrap } from './lib/context.mjs'
@@ -84,6 +85,21 @@ let countsReadAt = null
 let executionNeedsDeploy = false
 
 const localTools = [
+  {
+    name: 'voidr_environment_doctor',
+    description:
+      'Diagnose the local machine against what the Voidr Playwright framework requires: Node runtime and compatible major, npm/npx resolution, Playwright launchability, and proxy/TLS trust. Read-only — it never installs, switches, or pins anything; each check reports its own remediation and whether the user or the plugin owns it.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        repositoryPath: {
+          type: 'string',
+          description:
+            'Absolute path to check. Defaults to the bridge working directory; pass the selected test repository to also verify its Playwright install.'
+        }
+      }
+    }
+  },
   {
     name: 'voidr_auth_status',
     description:
@@ -1481,6 +1497,12 @@ function remoteResultData(result) {
 
 async function callLocal(name, args) {
   switch (name) {
+    case 'voidr_environment_doctor':
+      return textResult(
+        await environmentDoctor({
+          repositoryPath: canonicalizePotentialPath(args.repositoryPath) || undefined
+        })
+      )
     case 'voidr_auth_status':
       return textResult(await validatedAuthStatus())
     case 'voidr_auth_select_organization': {

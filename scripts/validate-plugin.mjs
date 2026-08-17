@@ -97,6 +97,30 @@ assert(
   'Every local write tool must also be an allowed local tool.'
 )
 
+// A local tool that is allowlisted, documented, and called by a skill but never
+// registered by the bridge fails only at runtime, as a tool the agent cannot
+// find — and the skill step that depends on it is silently skipped. That is how
+// `voidr_environment_doctor` shipped declared-but-absent: every other check here
+// reads manifests, and manifests agreed with each other.
+const bridgeSource = readFileSync(
+  join(root, 'scripts/voidr-mcp-bridge.mjs'),
+  'utf8'
+)
+const unregisteredLocalTools = policy.localTools.filter(
+  tool => !new RegExp(`name:\\s*['"]${tool}['"]`).test(bridgeSource)
+)
+assert(
+  unregisteredLocalTools.length === 0,
+  `Local tools are allowlisted but not registered in the bridge: ${unregisteredLocalTools.join(', ')}.`
+)
+const undispatchedLocalTools = policy.localTools.filter(
+  tool => !new RegExp(`case\\s*['"]${tool}['"]`).test(bridgeSource)
+)
+assert(
+  undispatchedLocalTools.length === 0,
+  `Local tools are registered but have no dispatch case: ${undispatchedLocalTools.join(', ')}.`
+)
+
 assert(hooks.version === 1, 'hooks.json version must be 1.')
 const preToolHooks = hooks.hooks?.preToolUse
 assert(

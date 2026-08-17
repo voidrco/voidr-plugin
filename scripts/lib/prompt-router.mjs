@@ -33,15 +33,14 @@ export function voidrPromptGuidance(input) {
   if (isDevTestsApproval(prompt)) return null
 
   if (isDevTestFlowPrompt(prompt)) {
-    return `Use the /voidr-feature-test skill for this request. Load that skill before inspecting
-files or calling any tool. It is the developer-first flow: infer the feature
-with the voidr_workspace_git_context tool (never cd or run git in the
-terminal — workspace paths with spaces break shell quoting), confirm
-everything on one ask_user card, show plain-language test scenarios, and wait
-for the typed “Criar testes” approval. Never ask whether the Test Plan is new
-or existing — the flow decides that silently — and never expose platform
-vocabulary such as Test Plan, scaffold, module, suite, or case slug to the
-user.`
+    return `Use the /voidr-context skill for this request, then /voidr-generate. Load the
+matching skill before inspecting files or calling any tool. /voidr-context
+selects the Test Plan, materializes the checkout, and writes
+manifest-context.json; /voidr-generate implements the selected cases from that
+manifest. Infer repository state with the voidr_workspace_git_context tool
+(never cd or run git in the terminal — workspace paths with spaces break shell
+quoting). Render every workflow choice with the native ask_user selectable
+options when available; free text is only a fallback.`
   }
 
   if (isDeployTestsPrompt(prompt)) {
@@ -62,17 +61,16 @@ error means the cases need the deploy, not re-creation.`
 skills: /voidr-context first when there is no manifest-context.json in the
 test repository (it selects the Test Plan, materializes the checkout, and
 writes the manifest), /voidr-generate to implement existing cases from that
-manifest, /voidr-execute to run on the platform, and /voidr-test-plan only to
-create or change plan content. Load the matching skill before inspecting
-files or calling any tool. Render every workflow choice with the native
-ask_user selectable options when available; free text is only a fallback.`
+manifest, and /voidr-execute to run on the platform. Load the matching skill
+before inspecting files or calling any tool. Render every workflow choice with
+the native ask_user selectable options when available; free text is only a
+fallback.`
   }
 
   if (isGenericTestCreationPrompt(prompt)) {
     return `If this request is about tests managed on the Voidr platform (Test Plans and
-Playwright suites run by Voidr): creating NEW platform content (a new plan or
-new cases) belongs to /voidr-test-plan; implementing cases that already exist
-belongs to /voidr-context (when no manifest-context.json exists yet) followed
+Playwright suites run by Voidr): implementing cases that already exist
+belongs to /voidr-context (when no manifest-context.json exists yet), followed
 by /voidr-generate. Load the matching skill before asking anything or calling
 any tool. Never invent your own triage options and never ask the user to type
 IDs or repository paths. If the request is clearly about plain local tests

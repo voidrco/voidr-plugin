@@ -27,22 +27,22 @@ Routing invariants:
 
 | Tool | Owner skills | Purpose |
 | --- | --- | --- |
-| `applications_list_applications` | `voidr-context`, `voidr-test-plan`, `voidr-feature-test`, `voidr-failure-analysis` | Build application choices exclusively from the platform. |
-| `applications_get_application` | `voidr-context`, `voidr-test-plan` | Fallback only when the list response omits `type` for the selected ID. |
-| `applications_list_environments` | `voidr-context`, `voidr-test-plan`, `voidr-feature-test` | Environment choices for the selected application. |
+| `applications_list_applications` | `voidr-context`, `voidr-failure-analysis` | Build application choices exclusively from the platform. |
+| `applications_get_application` | `voidr-context` | Fallback only when the list response omits `type` for the selected ID. |
+| `applications_list_environments` | `voidr-context` | Environment choices for the selected application. |
 
 ## Test Plans
 
 | Tool | Owner skills | Purpose |
 | --- | --- | --- |
-| `test_plans_list_test_plans` | `voidr-context`, `voidr-test-plan`, `voidr-feature-test` | User selection of an existing plan. Never an error fallback. |
-| `test_plans_get_test_plan` | `voidr-test-plan`, `voidr-generate`, `voidr-execute`, `voidr-feature-test` | Read one explicitly selected plan; verify persisted content and real slugs. |
+| `test_plans_list_test_plans` | `voidr-context` | User selection of an existing plan. Never an error fallback. |
+| `test_plans_get_test_plan` | `voidr-generate`, `voidr-execute` | Read one explicitly selected plan; verify persisted content and real slugs. |
 | `test_plans_get_test_counts` | `voidr-execute` | Post-deploy synchronization verification only. |
-| `test_plans_create_test_plan` | `voidr-test-plan`, `voidr-feature-test` | First mutation of an approved new plan; must return the linked `repository`. |
-| `test_plans_populate_test_plan` | `voidr-test-plan`, `voidr-feature-test` | Bulk write immediately after a complete creation response, same approved flow. |
-| `test_plans_provision_repository` | `voidr-test-plan`, `voidr-feature-test` | Provision and link the repository of a plan that was created while provisioning was unavailable, so automation can start later without creating a second plan. Idempotent: a plan that already has a repository returns the stored result. |
-| `test_plans_create_module` / `test_plans_create_suite` / `test_plans_create_case` | `voidr-test-plan`, `voidr-feature-test` | Incremental additions to an already-persisted plan. |
-| `test_plans_update_test_plan` / `test_plans_update_module` / `test_plans_update_suite` / `test_plans_update_case` | `voidr-test-plan` | Edits explicitly requested by the user on persisted entities. Never error repair. |
+| `test_plans_create_test_plan` | — (nenhuma skill) | First mutation of an approved new plan; must return the linked `repository`. |
+| `test_plans_populate_test_plan` | — (nenhuma skill) | Bulk write immediately after a complete creation response, same approved flow. |
+| `test_plans_provision_repository` | — (nenhuma skill) | Provision and link the repository of a plan that was created while provisioning was unavailable, so automation can start later without creating a second plan. Idempotent: a plan that already has a repository returns the stored result. |
+| `test_plans_create_module` / `test_plans_create_suite` / `test_plans_create_case` | — (nenhuma skill) | Incremental additions to an already-persisted plan. |
+| `test_plans_update_test_plan` / `test_plans_update_module` / `test_plans_update_suite` / `test_plans_update_case` | — (nenhuma skill) | Edits explicitly requested by the user on persisted entities. Never error repair. |
 | `test_plans_get_case` | `voidr-failure-analysis` | Expected behavior of one case; read-back after a tag change. |
 | `test_plans_get_tag_history` | `voidr-failure-analysis` | Governance tag history. |
 | `test_plans_update_test_case_tag` | `voidr-failure-analysis` | Confirmed governance tag change only. |
@@ -51,20 +51,20 @@ Routing invariants:
 
 | Tool | Owner skills | Purpose |
 | --- | --- | --- |
-| `voidr_workspace_inspect` | `voidr-context`, `voidr-test-plan` | List workspace checkouts: origin matching and read-only context candidates. |
-| `voidr_workspace_git_context` | `voidr-feature-test` | Branch/diff feature inference for the developer-first flow only. Returns the changed hunks so scenarios stay scoped to the change, and reports `repositoriesNotInspected` when the workspace holds more repositories than one call covers (re-call with `repositoryPath`). |
+| `voidr_workspace_inspect` | `voidr-context` | List workspace checkouts: origin matching and read-only context candidates. |
+| `voidr_workspace_git_context` | — (nenhuma skill) | Branch/diff feature inference for the developer-first flow only. Returns the changed hunks so scenarios stay scoped to the change, and reports `repositoriesNotInspected` when the workspace holds more repositories than one call covers (re-call with `repositoryPath`). |
 | `voidr_workspace_bootstrap_test_repository` | `voidr-context` | Initialize the test-project skeleton in a confirmed empty destination, or in an origin-matching checkout that lacks test-project files. Never clones, and no tool does: a plan whose repository Voidr already provisioned is refused here, because that checkout is created by the user cloning it — the clone proves their access to a repository living in Voidr's organization. Detects an existing checkout by origin and returns `reusedExistingCheckout`. |
 | `voidr_workspace_select_test_repository` | `voidr-context` | Register a user-selected existing repository when the plan has no linked repository. |
-| `voidr_workspace_prepare_test_repository` | `voidr-context`, `voidr-generate`, `voidr-feature-test` | The single mandatory setup gate: install, CLI auth, link, scaffold, env pull. Locates the linked checkout by Git origin inside the workspace and never clones it: when it is absent, the response carries the HTTPS and SSH commands for the user to clone it themselves, and the gate is called again afterwards. |
+| `voidr_workspace_prepare_test_repository` | `voidr-context`, `voidr-generate` | The single mandatory setup gate: install, CLI auth, link, scaffold, env pull. Locates the linked checkout by Git origin inside the workspace and never clones it: when it is absent, the response carries the HTTPS and SSH commands for the user to clone it themselves, and the gate is called again afterwards. |
 | `voidr_workspace_scaffold_test_cases` | `voidr-generate` | Scaffold a case added after the preparation gate completed. |
-| `voidr_smoke_build` | `voidr-generate`, `voidr-feature-test` | Local validation and authenticated build, outside the agent shell. |
-| `voidr_workspace_publish_tests` | `voidr-feature-test` | Branch, commit, and pull request through user credentials. |
+| `voidr_smoke_build` | `voidr-generate` | Local validation and authenticated build, outside the agent shell. |
+| `voidr_workspace_publish_tests` | `voidr-execute` | Branch, commit, and pull request through user credentials. |
 
 ## Release and executions
 
 | Tool | Owner skills | Purpose |
 | --- | --- | --- |
-| `voidr_release_inspect` | `voidr-execute`, `voidr-feature-test` | Rediscover repository, plan, and merged PR from the checkout. Never ask the user for these IDs. |
+| `voidr_release_inspect` | `voidr-execute` | Rediscover repository, plan, and merged PR from the checkout. Never ask the user for these IDs. |
 | `voidr_release_deploy_merged_pr` | `voidr-execute` | Fast-forward the clean checkout and publish the immutable release. |
 | `executions_create_execution` | `voidr-execute`, `voidr-execute` | The only tool that starts a platform execution, always behind a typed confirmation. |
 | `executions_get_execution` | `voidr-execute` | Lifecycle status of the execution just created. |
@@ -90,7 +90,7 @@ store; they never report or change platform lifecycle state.
 
 | Tool | Owner skills | Purpose |
 | --- | --- | --- |
-| `file_embeddings_search_documents` | `voidr-context`, `voidr-test-plan`, `voidr-feature-test`, `voidr-generate` | Read-only, never-blocking assimilation of indexed application documents. Planning uses up to three feature-scoped perspectives: actors/preconditions/user flow; rules/states/outcomes; errors/alternatives/fallbacks. Implementation may also retrieve selectors and QA guidance, plus at most one refined follow-up query per selected case whose flows, rules, or automation guidance the shared baseline does not cover. Every call is scoped by `applicationId` with `limit: 5`, `minScore: 0.5`, and `includeContent: true`; consumers read `results[].chunks[].contentPreview`, deduplicate by `fileId` + `chunkIndex`, and preserve file/page provenance. User manuals, product/operations guides, business rules, walkthroughs, and QA docs are valid; marketing, contracts, meetings, and unrelated content are rejected. Product code and observed runtime behavior are authoritative; documentation is supporting evidence that may be stale. Conflicts follow code/runtime and are reported as documentation drift. Empty results and errors continue without blocking. |
+| `file_embeddings_search_documents` | `voidr-context`, `voidr-generate` | Read-only, never-blocking assimilation of indexed application documents. Planning uses up to three feature-scoped perspectives: actors/preconditions/user flow; rules/states/outcomes; errors/alternatives/fallbacks. Implementation may also retrieve selectors and QA guidance, plus at most one refined follow-up query per selected case whose flows, rules, or automation guidance the shared baseline does not cover. Every call is scoped by `applicationId` with `limit: 5`, `minScore: 0.5`, and `includeContent: true`; consumers read `results[].chunks[].contentPreview`, deduplicate by `fileId` + `chunkIndex`, and preserve file/page provenance. User manuals, product/operations guides, business rules, walkthroughs, and QA docs are valid; marketing, contracts, meetings, and unrelated content are rejected. Product code and observed runtime behavior are authoritative; documentation is supporting evidence that may be stale. Conflicts follow code/runtime and are reported as documentation drift. Empty results and errors continue without blocking. |
 
 The indexing and deletion counterparts of this family are deliberately not
 exposed by the bridge, and the platform's knowledge tools for customer

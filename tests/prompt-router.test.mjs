@@ -55,8 +55,8 @@ test('routes bare test-creation intents to a Voidr triage note', () => {
       prompt,
       transformedPrompt: prompt
     })
-    assert.match(routed.modifiedTransformedPrompt, /\/voidr-test-plan/)
     assert.match(routed.modifiedTransformedPrompt, /\/voidr-context/)
+    assert.match(routed.modifiedTransformedPrompt, /\/voidr-generate/)
     assert.match(
       routed.modifiedTransformedPrompt,
       /never invent your own triage\s+options/i

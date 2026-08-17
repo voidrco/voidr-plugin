@@ -368,7 +368,6 @@ const setupFlat = setupSkill.replace(/\s+/g, ' ')
 const contextSkill = readFileSync(join(root, 'skills/voidr-context/SKILL.md'), 'utf8')
 const generateSkill = readFileSync(join(root, 'skills/voidr-generate/SKILL.md'), 'utf8')
 const executeSkill = readFileSync(join(root, 'skills/voidr-execute/SKILL.md'), 'utf8')
-const testPlanSkill = readFileSync(join(root, 'skills/voidr-test-plan/SKILL.md'), 'utf8')
 const failureSkill = readFileSync(
   join(root, 'skills/voidr-failure-analysis/SKILL.md'),
   'utf8'
@@ -488,8 +487,6 @@ assert(
   'Execute skill must never trigger self-healing.'
 )
 
-const devSkill = readFileSync(join(root, 'skills/voidr-feature-test/SKILL.md'), 'utf8')
-
 // The grouped/deferred tool contract lives once in CONTRACTS.md (asserted
 // above); every voidr-* skill has to reference the shared contracts file.
 for (const skillName of [
@@ -497,8 +494,6 @@ for (const skillName of [
   'voidr-context',
   'voidr-generate',
   'voidr-execute',
-  'voidr-test-plan',
-  'voidr-feature-test',
   'voidr-failure-analysis'
 ]) {
   const skillText = readFileSync(
@@ -511,41 +506,9 @@ for (const skillName of [
   )
 }
 
-// A plan without a repository is reported as a partial delivery, in the user's
-// terms, and never as an instruction to change infrastructure.
-for (const [skillName, skillText] of [
-  ['voidr-feature-test', devSkill.replace(/\s+/g, ' ')],
-  ['voidr-test-plan', testPlanSkill.replace(/\s+/g, ' ')]
-]) {
-  assert(
-    /Reporting a missing test repository/i.test(skillText) &&
-      /Lead with the state/i.test(skillText) &&
-      /never a tool name/i.test(skillText) &&
-      /never advise changing an environment variable/i.test(skillText),
-    `${skillName} must report a missing test repository as a partial delivery instead of success.`
-  )
-}
-
-// The clone is the user's, and it is also how access to a repository living in
-// Voidr's organization is proven. No skill may offer to clone it.
-for (const [skillName, skillText] of [
-  ['voidr-feature-test', devSkill.replace(/\s+/g, ' ')],
-  ['voidr-test-plan', testPlanSkill.replace(/\s+/g, ' ')]
-]) {
-  assert(
-    /Handing the clone to the user/i.test(skillText) &&
-      /HTTPS first and SSH after it/i.test(skillText) &&
-      /inside the open workspace folder/i.test(skillText) &&
-      /never run the clone yourself/i.test(skillText) &&
-      /administrator of their own\s+organization in the Voidr platform/i.test(skillText),
-    `${skillName} must hand the clone to the user with both commands, and never clone it.`
-  )
-}
-
 // The framework's own convention file is the source of truth for test style,
 // and the four rules below each come from a failure observed in a real run.
 for (const [skillName, skillText] of [
-  ['voidr-feature-test', devSkill.replace(/\s+/g, ' ')],
   ['voidr-generate', generateSkill.replace(/\s+/g, ' ')]
 ]) {
   assert(
@@ -560,8 +523,6 @@ for (const [skillName, skillText] of [
 }
 
 for (const [skillName, skillText] of [
-  ['voidr-test-plan', testPlanSkill],
-  ['voidr-feature-test', devSkill],
   ['voidr-generate', generateSkill]
 ]) {
   assert(
@@ -578,55 +539,12 @@ for (const [skillName, skillText] of [
   )
 }
 assert(
-  /Assimilate indexed application documentation before deriving scenarios/i.test(
-    devSkill
-  ) &&
-    ['actors', 'permissions', 'preconditions', 'user flow'].every(term =>
-      new RegExp(term, 'i').test(devSkill)
-    ) &&
-    ['business rules', 'states', 'transitions', 'expected outcomes'].every(
-      term => new RegExp(term, 'i').test(devSkill)
-    ) &&
-    ['errors', 'alternatives', 'fallbacks', 'edge cases'].every(term =>
-      new RegExp(term, 'i').test(devSkill)
-    ),
-  'Dev skill must assimilate functional documentation before scenario design.'
-)
-assert(
   /user manuals[\s\S]*?product and operations guides[\s\S]*?business-rule references/i.test(
     generateSkill
   ) &&
     /Documentation cannot add an unselected case/i.test(generateSkill),
   'Generate skill must use product documentation without expanding approved scope.'
 )
-assert(
-  /Never expose platform vocabulary/i.test(devSkill) &&
-    /Do not say Test Plan, module,\s+suite, case slug, scaffold/i.test(devSkill),
-  'Dev skill must hide platform vocabulary from the user.'
-)
-assert(
-  /reply exactly `Criar testes`/i.test(devSkill) &&
-    /Do not use `ask_user` for this approval/i.test(devSkill),
-  'Dev skill must gate platform writes behind the typed “Criar testes” approval.'
-)
-assert(
-  /Infer the feature|current branch name/i.test(devSkill) &&
-    /changedHunksVsDefault/.test(devSkill) &&
-    /repositoryPath/.test(devSkill),
-  'Dev skill must infer the feature from the Git branch and diff hunks, and re-scope by repositoryPath.'
-)
-assert(
-  /The diff is the scope/i.test(devSkill) &&
-    /drop every one the change does not affect/i.test(devSkill) &&
-    /never put it in the\s+checklist/i.test(devSkill),
-  'Dev skill must scope scenarios to the diff and drop untouched rules.'
-)
-assert(
-  /One smoke run per user message/i.test(devSkill) &&
-    /Never auto-deploy, never auto-execute/i.test(devSkill),
-  'Dev skill must keep the smoke-stop and deploy/execution gates.'
-)
-
 const allRepositoryText = findFiles(root)
   .filter(path => !path.includes(`${join(root, 'tests')}/`))
   .map(path => {

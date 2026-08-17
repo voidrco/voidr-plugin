@@ -67,12 +67,12 @@ test('the single dev approval must be the whole message', () => {
   assert.equal(isDevTestsApproval('sim'), false)
 })
 
-test('routes developer intent to /voidr-feature-test and keeps the classic route', () => {
+test('routes developer intent into the pipeline and keeps the classic route', () => {
   const dev = routeVoidrPrompt({
     prompt: 'cria os testes da minha feature de login'
   })
-  assert.match(dev.modifiedTransformedPrompt, /\/voidr-feature-test skill/)
-  assert.match(dev.modifiedTransformedPrompt, /Criar testes/)
+  assert.match(dev.modifiedTransformedPrompt, /\/voidr-context skill/)
+  assert.match(dev.modifiedTransformedPrompt, /\/voidr-generate/)
 
   const classic = routeVoidrPrompt({
     prompt: 'quero desenvolver testes na Voidr'
@@ -908,22 +908,6 @@ test('Criar testes never approves a write in the plan-first flow', () => {
   )
   assert.equal(blocked.permissionDecision, 'deny')
   assert.match(blocked.permissionDecisionReason, /Aprovo este Test Plan/)
-})
-
-test('the dev flow verifies the linked repository before writing cases', () => {
-  const skill = readFileSync(
-    join(root, 'skills/voidr-feature-test/SKILL.md'),
-    'utf8'
-  )
-  const verification = skill.indexOf('gitProviderConfig.repositoryUrl')
-  const firstWrite = skill.indexOf('test_plans_create_module')
-  assert.ok(verification > 0, 'the repository check must exist')
-  assert.ok(
-    verification < firstWrite,
-    'the repository check must come before the first structure write'
-  )
-  assert.match(skill, /before writing anything/i)
-  assert.match(skill, /cases created in it are stranded/i)
 })
 
 test('the post-smoke stop never blocks the question that unlocks it', () => {

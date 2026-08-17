@@ -159,5 +159,5 @@ npm run check
 
 # Sem instalar nada: carrega o plugin só nessa sessão.
 cd /algum/projeto/descartável
-claude --plugin-dir /caminho/para/voidr-copilot-plugin
+claude --plugin-dir /caminho/para/voidr-plugin
 ```

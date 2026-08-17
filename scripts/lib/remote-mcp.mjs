@@ -27,7 +27,7 @@ export class RemoteMcpClient {
       protocolVersion,
       capabilities: {},
       clientInfo: {
-        name: 'voidr-copilot-plugin',
+        name: 'voidr-plugin',
         version: '0.2.22'
       }
     })

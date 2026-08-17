@@ -86,7 +86,7 @@ session only:
 claude plugin validate .claude-plugin/plugin.json --strict
 claude plugin validate .claude-plugin/marketplace.json --strict
 cd /path/to/a/scratch/project
-claude --plugin-dir /path/to/voidr-copilot-plugin
+claude --plugin-dir /path/to/voidr-plugin
 ```
 
 Skills appear as `/voidr:voidr-<name>` and MCP tools as

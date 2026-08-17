@@ -488,6 +488,15 @@ function isGenericWriteTool(name) {
   )
 }
 
+// Copilot renders it as "Search tools", Claude as ToolSearch; both are
+// read-only schema lookups that call nothing.
+function isToolDiscovery(name) {
+  const words = toolNameWords(name)
+  return (
+    /(^|[-_/])(search|list|find)(?:$|[-_/])/i.test(words) && /tool/i.test(words)
+  )
+}
+
 function isGenericReadTool(name) {
   // Grep and Glob return file contents and paths on Claude, so the .env and
   // sensitive-product gates have to see them as reads.
@@ -842,9 +851,16 @@ function enforceConnectFirstTool(hookPayload, rawName, canonicalName, args) {
     /voidr-(?:connect|setup)/i.test(`${rawName}\n${args}`)
   if (loadingConnectSkill) return
 
+  // Discovery has to stay open or the gate is unsatisfiable: where the host
+  // defers or groups MCP tools, `voidr_auth_status` cannot be called until a
+  // tool search loads its schema — which is the very thing this gate used to
+  // deny. CONTRACTS.md requires that search, so denying it deadlocked the whole
+  // session, and the flag persists across prompts until auth status runs.
+  if (isToolDiscovery(rawName)) return
+
   if (canonicalName !== 'voidr_auth_status') {
     deny(
-      'Blocked by Voidr connect workflow: the first operational action must be the MCP tool voidr_auth_status. Do not inspect files, search for tools, or use the terminal.'
+      'Blocked by Voidr connect workflow: the first operational action must be the MCP tool voidr_auth_status. Search for it if the host defers tools, but do not inspect files or use the terminal before it.'
     )
   }
 

@@ -6,7 +6,7 @@ import {
   readFileSync,
   writeFileSync
 } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 
@@ -323,6 +323,34 @@ test('blocks platform and codebase tools until plan mode is selected', () => {
     ),
     {}
   )
+})
+
+test('the credential directory is protected beyond the named files', () => {
+  // Observed: an agent ran `cat ~/.voidr/auth.json`. It was allowed, because the
+  // policy lists file names and that one is not among them; it failed only
+  // because the file does not exist. A test repository's own `.voidr/` holds
+  // build output and must stay readable, so the guard anchors on the home one.
+  for (const command of [
+    'cat ~/.voidr/auth.json | jq .',
+    `cat ${homedir()}/.voidr/auth.json`,
+    'ls -la ~/.voidr/'
+  ]) {
+    assert.equal(
+      runHook({ toolName: 'bash', toolArgs: { command } }).permissionDecision,
+      'deny',
+      command
+    )
+  }
+  for (const command of [
+    'cat .voidr/.output/manifest.json',
+    'ls .voidr/test-results'
+  ]) {
+    assert.deepEqual(
+      runHook({ toolName: 'bash', toolArgs: { command } }),
+      {},
+      command
+    )
+  }
 })
 
 test('forces voidr_auth_status as the first operational connect action', () => {

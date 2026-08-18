@@ -6,6 +6,7 @@ import {
   realpathSync,
   statSync
 } from 'node:fs'
+import { homedir } from 'node:os'
 import { basename, dirname, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { CLAUDE, detectHost } from './lib/host.mjs'
@@ -58,9 +59,10 @@ enforceExplicitWorkspaceRoot(payload, toolName, toolArgs)
 enforceTestSpecContentPolicy(rawToolName, toolArgs)
 recordSmokeAttempt(payload, toolName)
 
-const protectedCredential = (policy.protectedCredentialFragments || []).find(
-  fragment => searchable.includes(fragment.toLowerCase())
-)
+const protectedCredential =
+  (policy.protectedCredentialFragments || []).find(fragment =>
+    searchable.includes(fragment.toLowerCase())
+  ) || (touchesCredentialDirectory(searchable) ? 'the credential store' : null)
 if (protectedCredential) {
   deny(
     'Blocked by Voidr policy: Service Account credential files can only be handled by the protected local authentication tools.'
@@ -480,6 +482,21 @@ function containsCredentialLiterals(content) {
 // Claude uses PascalCase (Write, NotebookEdit).
 function toolNameWords(name) {
   return String(name || '').replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+}
+
+
+// The fragment list names specific files, so anything else under the credential
+// directory was readable — `cat ~/.voidr/auth.json` passed and only failed
+// because that file does not exist. Anchor on the directory instead, and only
+// the one in the user's home: test repositories keep their own `.voidr/` for
+// build output and test results, which must stay readable.
+function touchesCredentialDirectory(searchable) {
+  const home = homedir().toLowerCase()
+  return (
+    searchable.includes('~/.voidr/') ||
+    searchable.includes('$home/.voidr/') ||
+    searchable.includes(`${home}/.voidr/`)
+  )
 }
 
 function isGenericWriteTool(name) {

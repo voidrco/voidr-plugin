@@ -177,6 +177,16 @@ test('bridge filters discovery, keeps secrets local, and blocks forbidden calls'
   assert.equal(statusText.includes(syntheticSecret), false)
   assert.equal(JSON.parse(statusText).canWrite, true)
 
+  // {} is what Copilot's first /voidr-setup call sends: the doctor must fall
+  // back to its own working directory instead of throwing on the absent path.
+  const doctorReport = await client.request('tools/call', {
+    name: 'voidr_environment_doctor',
+    arguments: {}
+  })
+  const doctorChecks = JSON.parse(doctorReport.content[0].text).checks
+  assert.equal(Array.isArray(doctorChecks), true)
+  assert.equal(doctorChecks.length > 0, true)
+
   const selectedPlanId = '0123456789abcdef01234567'
   const selectedPlan = await client.request('tools/call', {
     name: 'test_plans_get_test_plan',

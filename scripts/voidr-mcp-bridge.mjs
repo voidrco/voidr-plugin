@@ -1498,9 +1498,13 @@ function remoteResultData(result) {
 async function callLocal(name, args) {
   switch (name) {
     case 'voidr_environment_doctor':
+      // The schema promises a default: canonicalizing an absent path would
+      // throw before environmentDoctor could fall back to its own cwd.
       return textResult(
         await environmentDoctor({
-          repositoryPath: canonicalizePotentialPath(args.repositoryPath) || undefined
+          repositoryPath: args.repositoryPath
+            ? canonicalizePotentialPath(args.repositoryPath)
+            : undefined
         })
       )
     case 'voidr_auth_status':

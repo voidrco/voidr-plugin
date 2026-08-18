@@ -210,13 +210,19 @@ async function locateLinkedCheckout({ workspaceRoot, repositoryUrl, run }) {
 
   const canonical = normalizeGitHubRepositoryUrl(repositoryUrl)
   const destination = join(workspaceRoot, basename(canonical))
+  let cloneFailure = ''
   try {
     await run('git', ['clone', `${canonical}.git`, destination], {
       cwd: workspaceRoot,
       timeout: 300_000,
       env: process.env
     })
-  } catch {
+  } catch (error) {
+    // Git's own words, or the reason is lost: "could not be cloned" reads as an
+    // authorization problem, and a clone that works in the user's terminal but
+    // not here is an environment problem instead — a credential helper this
+    // process cannot reach. Telling them apart requires what git said.
+    cloneFailure = String(error?.message || error).trim()
     throw new Error(
       cloneRequestMessage({
         workspaceRoot,
@@ -224,7 +230,8 @@ async function locateLinkedCheckout({ workspaceRoot, repositoryUrl, run }) {
         // The administrator has to authorize an account, so naming it saves a
         // round trip. Best effort only: this is a failure path, and the message
         // stands without it.
-        githubAccount: await githubAccountLogin(run)
+        githubAccount: await githubAccountLogin(run),
+        cloneFailure
       })
     )
   }
@@ -262,7 +269,8 @@ async function githubAccountLogin(run) {
 export function cloneRequestMessage({
   workspaceRoot,
   repositoryUrl,
-  githubAccount
+  githubAccount,
+  cloneFailure
 }) {
   const canonical = normalizeGitHubRepositoryUrl(repositoryUrl)
   const slug = canonical.replace(/^https:\/\/github\.com\//i, '')
@@ -271,7 +279,9 @@ export function cloneRequestMessage({
   // workspace is not found by the retry.
   const destination = `"${join(workspaceRoot, basename(canonical))}"`
   return (
-    `The Test Plan repository could not be cloned into this workspace with the credentials on this machine. Ask the user to clone ${canonical} inside the open workspace (${workspaceRoot}) and to say when it is done, then call this tool again — the checkout is found by its Git origin.\n` +
+    (cloneFailure ? `git failed: ${cloneFailure}\n` : '') +
+    `The Test Plan repository could not be cloned into this workspace with the credentials available to this process. If the same command works in the user's own terminal, the repository is authorized and this process simply cannot reach the credential helper — ask the user to clone it themselves rather than requesting authorization.\n` +
+    `Ask the user to clone ${canonical} inside the open workspace (${workspaceRoot}) and to say when it is done, then call this tool again — the checkout is found by its Git origin.\n` +
     `HTTPS: git clone ${canonical}.git ${destination}\n` +
     `SSH: git clone git@github.com:${slug}.git ${destination}\n` +
     `If the clone fails with "Repository not found" or a permission error, the GitHub account${githubAccount ? ` (${githubAccount})` : ''} is not authorized on this repository, which lives in Voidr's organization. The authorization is granted by an administrator of the user's own organization in the Voidr platform — not by GitHub, and not by retrying here. Tell the user to ask their Voidr administrator to authorize ${githubAccount ? `the GitHub account ${githubAccount}` : 'their GitHub account on this repository, telling the administrator which account it is'}${githubAccount ? ' on this repository' : ''}, and stop: no tool and no retry grants access.`

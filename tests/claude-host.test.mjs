@@ -74,6 +74,51 @@ test('the prompt hook answers each host in its own dialect', () => {
   assert.match(copilot.modifiedTransformedPrompt, /\/voidr-context/)
   assert.match(copilot.modifiedTransformedPrompt, /^Quero desenvolver testes/)
   assert.equal(copilot.hookSpecificOutput, undefined)
+
+  // Copilot CLI 1.0.80+ exports CLAUDE_PLUGIN_ROOT/CLAUDE_PLUGIN_DATA as
+  // compatibility aliases; the answer must still be the Copilot dialect or
+  // the CLI records the hook output as null and drops the routing note.
+  const copilotWithAliases = runScript(
+    promptHook,
+    {
+      sessionId: 'copilot-prompt-aliases',
+      cwd: root,
+      prompt,
+      transformedPrompt: prompt
+    },
+    dataRoot(),
+    {
+      COPILOT_CLI: '1',
+      COPILOT_PLUGIN_ROOT: root,
+      CLAUDE_PLUGIN_ROOT: root,
+      CLAUDE_PLUGIN_DATA: dataRoot()
+    }
+  )
+  assert.match(copilotWithAliases.modifiedTransformedPrompt, /\/voidr-context/)
+  assert.equal(copilotWithAliases.hookSpecificOutput, undefined)
+
+  // Claude's env fallback still wins when no Copilot marker is present, even
+  // without the payload stamp.
+  const claudeEnvOnly = runScript(
+    promptHook,
+    {
+      sessionId: 'claude-prompt-env',
+      cwd: root,
+      prompt,
+      transformedPrompt: prompt
+    },
+    dataRoot(),
+    {
+      COPILOT_CLI: '',
+      COPILOT_PLUGIN_ROOT: '',
+      CLAUDE_PLUGIN_ROOT: root
+    }
+  )
+  assert.match(
+    claudeEnvOnly.hookSpecificOutput.additionalContext,
+    /\/voidr-context/
+  )
+  assert.equal(claudeEnvOnly.modifiedTransformedPrompt, undefined)
 })
 
 test('both hosts route the same prompts and stay silent on the same ones', () => {

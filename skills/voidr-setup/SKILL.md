@@ -21,7 +21,11 @@ selected and valid.
 
 ## 1. Machine dependencies
 
-Run `voidr_environment_doctor` and relay its findings as they came:
+Run `voidr_environment_doctor`, passing `workspaceRoot` with the open
+workspace folder (and `repositoryPath` when a test repository is already
+selected). Without either, the report covers only the machine-level checks:
+the bridge runs from the plugin installation, so an unscoped call can never
+verify a test repository. Relay its findings as they came:
 
 - it names each dependency check (Node runtime and compatible major, npm/npx
   resolution, Playwright launchability, proxy/TLS trust) with a pass/fail and

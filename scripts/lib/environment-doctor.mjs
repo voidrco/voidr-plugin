@@ -9,6 +9,10 @@ import {
 } from './command.mjs'
 import { applySystemCaTrust } from './network-trust.mjs'
 import {
+  assertOutsidePluginInstallation,
+  resolveWorkspaceRoot
+} from './workspace.mjs'
+import {
   declaredNodeVersion,
   describeNodeRuntime,
   detectNodeManagers,
@@ -35,7 +39,9 @@ const OWNER_PLUGIN = 'plugin'
  * check carries its own remediation and the owner who may apply it.
  */
 export async function environmentDoctor(options = {}) {
-  const { repositoryPath = process.cwd(), run = runCommand } = options
+  const { run = runCommand } = options
+  const target = resolveInspectionTarget(options)
+  const repositoryPath = target.path
   const checks = []
 
   const nodeCheck = await checkNodeRuntime({ repositoryPath, run })
@@ -51,22 +57,68 @@ export async function environmentDoctor(options = {}) {
     checks.push(await checkNodeCli({ binary, repositoryPath, run, env }))
   }
 
-  checks.push(await checkPlaywright({ repositoryPath, run, env }))
+  checks.push(
+    target.scope === 'unresolved'
+      ? {
+          name: 'playwright-launchable',
+          status: 'skip',
+          owner: OWNER_PLUGIN,
+          detail:
+            'No workspace was resolved, so no test repository was inspected. ' +
+            'Call the tool again passing repositoryPath (the test repository) ' +
+            'or workspaceRoot (the open workspace folder) to verify Playwright.'
+        }
+      : await checkPlaywright({ repositoryPath, run, env })
+  )
   checks.push(checkTlsTrust())
 
   const failed = checks.filter(check => check.status === 'fail')
+  // The machine checks (runtime, npm/npx, TLS) hold wherever they ran, but a
+  // verdict must never imply a repository the caller never named: the bridge
+  // process starts inside the plugin installation, and reporting APT about it
+  // is a green light for the wrong directory.
+  const scopeNote =
+    target.scope === 'repository'
+      ? ''
+      : target.scope === 'workspace'
+        ? ` Checks ran in the resolved workspace (${repositoryPath}); no test repository was named.`
+        : ' Machine checks only: no workspace was resolved, so no test repository was inspected.'
   return {
     apt: failed.length === 0,
     supportedNodeMajor: SUPPORTED_NODE_MAJOR,
-    repositoryPath,
+    repositoryPath: target.scope === 'repository' ? repositoryPath : null,
+    inspectedPath: repositoryPath,
+    inspectionScope: target.scope,
     checks,
     failedChecks: failed.map(check => check.name),
     // The skill reports a verdict, so the summary must survive being read alone.
     summary: failed.length
       ? `NOT APT: ${failed.length} of ${checks.length} checks failed (${failed
           .map(check => check.name)
-          .join(', ')}).`
-      : `APT: all ${checks.length} environment checks passed.`
+          .join(', ')}).${scopeNote}`
+      : `APT: all ${checks.length} environment checks passed.${scopeNote}`
+  }
+}
+
+// An absent path used to fall back to the process cwd, which is the plugin
+// installation itself — the doctor then answered APT about the plugin's own
+// directory. `voidr_context_bootstrap` already refuses that; the doctor keeps
+// running the machine-level checks (they hold anywhere) but says so instead of
+// claiming a repository it never saw.
+function resolveInspectionTarget({ repositoryPath, workspaceRoot, env, cwd }) {
+  if (repositoryPath) {
+    return {
+      path: assertOutsidePluginInstallation(repositoryPath, 'repository path'),
+      scope: 'repository'
+    }
+  }
+  try {
+    return {
+      path: resolveWorkspaceRoot({ explicit: workspaceRoot, env, cwd }),
+      scope: 'workspace'
+    }
+  } catch {
+    return { path: cwd || process.cwd(), scope: 'unresolved' }
   }
 }
 

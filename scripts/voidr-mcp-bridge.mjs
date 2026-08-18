@@ -103,7 +103,12 @@ const localTools = [
         repositoryPath: {
           type: 'string',
           description:
-            'Absolute path to check. Defaults to the bridge working directory; pass the selected test repository to also verify its Playwright install.'
+            'Absolute path of the selected test repository, to also verify its Playwright install.'
+        },
+        workspaceRoot: {
+          type: 'string',
+          description:
+            'Absolute path of the open workspace folder. Without either path the report covers only the machine-level checks and says so — it never inspects the plugin installation the bridge runs from.'
         }
       }
     }
@@ -1573,12 +1578,15 @@ function remoteResultData(result) {
 async function callLocal(name, args) {
   switch (name) {
     case 'voidr_environment_doctor':
-      // The schema promises a default: canonicalizing an absent path would
-      // throw before environmentDoctor could fall back to its own cwd.
+      // Both paths stay optional: canonicalizing an absent one would throw
+      // before the doctor could resolve the workspace itself.
       return textResult(
         await environmentDoctor({
           repositoryPath: args.repositoryPath
             ? canonicalizePotentialPath(args.repositoryPath)
+            : undefined,
+          workspaceRoot: args.workspaceRoot
+            ? canonicalizePotentialPath(args.workspaceRoot)
             : undefined
         })
       )

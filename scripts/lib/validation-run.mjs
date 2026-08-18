@@ -58,12 +58,13 @@ export async function deployValidationCandidate({
   } catch (error) {
     if (/unknown\s*command/i.test(String(error?.message || error))) {
       throw new Error(
-        'The Voidr CLI installed in this test repository has no ' +
-          'deploy-candidate command, so a validation candidate cannot be ' +
-          'uploaded without promoting it. Ask the user to update the ' +
-          'framework in the repository (npm install @voidrco/playwright@latest) ' +
-          'and run the validation again. Do not fall back to deploy-latest: ' +
-          'it would overwrite the promoted release the main pipeline runs.'
+        'The Voidr CLI in this test repository has no deploy-candidate ' +
+          'command, so a validation candidate cannot be uploaded without ' +
+          'promoting it. Updating the framework does not help yet: the ' +
+          'command is not in any published @voidrco/playwright release, so ' +
+          'it has to be released first. Report this to the user and stop. Do ' +
+          'not fall back to deploy-latest: it would overwrite the promoted ' +
+          'release the main pipeline runs.'
       )
     }
     throw error

@@ -40,8 +40,11 @@ test('an old CLI without deploy-candidate is explained, not dumped raw', async (
       }
     }),
     error => {
-      assert.match(error.message, /has no\s+deploy-candidate command/)
-      assert.match(error.message, /@voidrco\/playwright@latest/)
+      assert.match(error.message, /has no deploy-candidate\s+command/)
+      // Telling the user to update would waste their time: the command is on
+      // an unmerged framework branch, not in any published release.
+      assert.match(error.message, /not in any published/)
+      assert.doesNotMatch(error.message, /npm install @voidrco/)
       // The wrong fix has to be named, or the agent reaches for deploy-latest.
       assert.match(error.message, /Do not fall back to deploy-latest/)
       assert.doesNotMatch(error.message, /commander\.unknownCommand/)

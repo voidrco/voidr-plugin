@@ -359,6 +359,51 @@ test('lists and runs only selected Playwright specs outside the agent shell', as
   assert.match(result.traceHint, /show-trace/)
 })
 
+test('a failed spec listing surfaces Playwright words instead of a bare verdict', async () => {
+  const repositoryPath = mkdtempSync(join(tmpdir(), 'voidr-playwright-list-'))
+  const repositoryUrl = 'https://github.com/acme/selected-tests.git'
+  const testPlanId = 'abcdef0123456789abcdef01'
+  mkdirSync(join(repositoryPath, 'modules'), { recursive: true })
+  writeFileSync(join(repositoryPath, 'package.json'), '{}')
+  writeFileSync(
+    join(repositoryPath, 'project.json'),
+    JSON.stringify({ testPlanId })
+  )
+  writeFileSync(
+    join(repositoryPath, 'modules', 'broken.spec.js'),
+    'const stateParam = null; stateParam!.length'
+  )
+  initializeOrigin(repositoryPath, repositoryUrl)
+
+  await assert.rejects(
+    validateSelectedPlaywrightTests({
+      repositoryPath,
+      repositoryUrl,
+      testPlanId,
+      specs: ['modules/broken.spec.js'],
+      baseUrl: 'https://app.example.test/',
+      run: async (file, args) => {
+        if (file === 'node' && args[0] === '--version') {
+          return { stdout: 'v22.22.0\n', stderr: '', exitCode: 0 }
+        }
+        return {
+          stdout: '',
+          stderr:
+            'Error: modules/broken.spec.js:1:41: Unexpected token "!"\n' +
+            '> 1 | const stateParam = null; stateParam!.length\n',
+          exitCode: 1
+        }
+      }
+    }),
+    error => {
+      assert.match(error.message, /could not list the selected specs/)
+      assert.match(error.message, /broken\.spec\.js:1:41/)
+      assert.match(error.message, /Unexpected token/)
+      return true
+    }
+  )
+})
+
 test('rejects selected specs outside the linked repository', async () => {
   const repositoryPath = mkdtempSync(join(tmpdir(), 'voidr-playwright-path-'))
   const repositoryUrl = 'https://github.com/acme/selected-tests.git'

@@ -246,7 +246,13 @@ export async function validateSelectedPlaywrightTests({
     }
   )
   if (listResult.exitCode !== 0) {
-    throw new Error('Playwright could not list the selected specs.')
+    // Playwright already names the broken file and line (a syntax error in a
+    // spec is the common cause); without its words the failure reads as an
+    // infrastructure problem nobody can act on.
+    throw new Error(
+      'Playwright could not list the selected specs. Playwright reported:\n' +
+        playwrightOutputExcerpt(listResult)
+    )
   }
 
   const testResult = await run(
@@ -296,6 +302,13 @@ export async function validateSelectedPlaywrightTests({
     traceHint:
       'Analyze each run in the Playwright trace viewer: npx playwright show-trace <trace path>, executed from the test repository. Always share these commands with the user, failures first.'
   }
+}
+
+function playwrightOutputExcerpt({ stderr, stdout } = {}) {
+  const text = `${stderr || ''}\n${stdout || ''}`.trim()
+  if (!text) return 'Playwright produced no output.'
+  const excerpt = text.split('\n').slice(0, 20).join('\n')
+  return excerpt.length > 2000 ? `${excerpt.slice(0, 2000)}…` : excerpt
 }
 
 async function runPlaywrightCommand(file, args, options = {}) {

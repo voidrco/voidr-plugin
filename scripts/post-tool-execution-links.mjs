@@ -26,6 +26,19 @@ recordAskUserSelections(payload, {
   toolInput: toolArgs,
   toolResult
 })
+// The post-build stop exists to keep a FAILED build from being silently
+// diagnosed and retried. A build that completed has nothing to remediate, and
+// leaving the stop armed blocked the very next step of the flow — the
+// validation run — behind a remediation phrase nobody would type after a
+// green build.
+if (toolName === 'voidr_build' && buildCompleted(toolResult)) {
+  updateSessionState(payload, current => ({
+    ...current,
+    smokeAttemptedAt: null,
+    smokeRemediationAt: Date.now()
+  }))
+}
+
 const state = readSessionState(payload)
 const inputIds = executionIdsFromToolInput(
   toolName,
@@ -70,6 +83,14 @@ process.stdout.write(
     )
   )}\n`
 )
+
+function buildCompleted(result) {
+  const text =
+    typeof result === 'string' ? result : JSON.stringify(result ?? '')
+  // The bridge answers with the build report; a failure arrives as an MCP
+  // error instead, so the flag is only present on the successful path.
+  return /"buildCompleted"\s*:\s*true/.test(text)
+}
 
 async function readPayload() {
   let input = ''

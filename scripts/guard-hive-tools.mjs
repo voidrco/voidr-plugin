@@ -612,8 +612,13 @@ function enforcePostSmokeStop(hookPayload, rawName, canonicalName) {
   }
   // Asking the user is the documented way out of this stop, so the question
   // tool itself must never be blocked — the editor names it askQuestions, not
-  // ask_user, and matching only the latter deadlocked the flow.
+  // ask_user, and matching only the latter deadlocked the flow. Loading a
+  // skill is not an investigation either: blocking it stopped the agent from
+  // even reading the instructions that describe the authorized next step.
   if (/ask.*question|ask_user|todo/i.test(rawName)) return
+  if (/^(?:mcp__[a-z_]+__)?(?:load_)?skill$/i.test(String(rawName).trim())) {
+    return
+  }
   // A chat authorization only reaches this gate through the prompt hook. When
   // that hook is behind the smoke run it can never unlock the stop, so the
   // denial has to name the free-text fallback instead of telling the agent to

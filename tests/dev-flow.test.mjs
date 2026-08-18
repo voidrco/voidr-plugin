@@ -947,6 +947,73 @@ test('the post-smoke stop never blocks the question that unlocks it', () => {
   }
 })
 
+test('a completed build clears the stop, a failed one keeps it', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-post-build-'))
+  const postHook = join(root, 'scripts/post-tool-execution-links.mjs')
+  const buildCall = sessionId => ({
+    sessionId,
+    cwd: process.cwd(),
+    toolName: 'voidr-voidr_build',
+    toolArgs: { repositoryPath: process.cwd() }
+  })
+  const nextStep = sessionId => ({
+    sessionId,
+    cwd: process.cwd(),
+    toolName: 'skill',
+    toolArgs: { skill: 'voidr-execute' }
+  })
+  const reportResult = (sessionId, result) => {
+    const outcome = spawnSync(process.execPath, [postHook], {
+      input: JSON.stringify({
+        sessionId,
+        toolName: 'voidr-voidr_build',
+        toolResult: result
+      }),
+      encoding: 'utf8',
+      env: { ...process.env, COPILOT_PLUGIN_DATA: dataRoot }
+    })
+    assert.equal(outcome.status, 0, outcome.stderr)
+  }
+
+  // A green build has nothing to remediate: the validation run must follow
+  // without the user typing a remediation phrase.
+  const passed = 'build-passed'
+  runHook(buildCall(passed), dataRoot)
+  reportResult(passed, JSON.stringify({ completed: true, buildCompleted: true }))
+  assert.deepEqual(runHook(nextStep(passed), dataRoot), {})
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId: passed,
+        cwd: process.cwd(),
+        toolName: 'voidr-voidr_release_deploy_validation',
+        toolArgs: { repositoryPath: process.cwd() }
+      },
+      dataRoot
+    ),
+    {}
+  )
+
+  // A failed build still stops the turn: no silent diagnosis or retry.
+  const failed = 'build-failed'
+  runHook(buildCall(failed), dataRoot)
+  reportResult(failed, 'MCP error -32000: voidr build failed.')
+  const blocked = runHook(
+    {
+      sessionId: failed,
+      cwd: process.cwd(),
+      toolName: 'read_file',
+      toolArgs: { filePath: join(process.cwd(), 'package.json') }
+    },
+    dataRoot
+  )
+  assert.equal(blocked.permissionDecision, 'deny')
+  assert.match(blocked.permissionDecisionReason, /after voidr_build/)
+  // Loading the skill that describes the authorized next step is never an
+  // investigation, so it stays allowed even while the stop is armed.
+  assert.deepEqual(runHook(nextStep(failed), dataRoot), {})
+})
+
 test('a bare remediation verb authorizes the post-smoke fix', async () => {
   const { isSmokeRemediationPrompt } = await import(
     '../scripts/lib/session-state.mjs'

@@ -976,10 +976,14 @@ test('a completed build clears the stop, a failed one keeps it', () => {
   }
 
   // A green build has nothing to remediate: the validation run must follow
-  // without the user typing a remediation phrase.
+  // without the user typing a remediation phrase. Copilot elides the report
+  // text in post-hook payloads, so resultType is the only surviving verdict.
   const passed = 'build-passed'
   runHook(buildCall(passed), dataRoot)
-  reportResult(passed, JSON.stringify({ completed: true, buildCompleted: true }))
+  reportResult(passed, {
+    textResultForLlm: '[copilot:elided textResultForLlm (252 bytes)]',
+    resultType: 'success'
+  })
   assert.deepEqual(runHook(nextStep(passed), dataRoot), {})
   assert.deepEqual(
     runHook(
@@ -997,7 +1001,10 @@ test('a completed build clears the stop, a failed one keeps it', () => {
   // A failed build still stops the turn: no silent diagnosis or retry.
   const failed = 'build-failed'
   runHook(buildCall(failed), dataRoot)
-  reportResult(failed, 'MCP error -32000: voidr build failed.')
+  reportResult(failed, {
+    textResultForLlm: '[copilot:elided textResultForLlm (120 bytes)]',
+    resultType: 'error'
+  })
   const blocked = runHook(
     {
       sessionId: failed,

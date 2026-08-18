@@ -41,15 +41,33 @@ export async function deployValidationCandidate({
     timeout: 180_000,
     env: effectiveCliEnvironment
   })
-  const candidateOutput = await run(
-    'npx',
-    ['--no-install', 'voidr', 'deploy-candidate', '--json'],
-    {
-      cwd: selected.path,
-      timeout: 180_000,
-      env: effectiveCliEnvironment
+  // An older CLI has no deploy-candidate at all: commander exits with
+  // "unknownCommand" before printing anything, so the parse below never gets
+  // to explain it. Without this the user reads raw commander JSON.
+  let candidateOutput
+  try {
+    candidateOutput = await run(
+      'npx',
+      ['--no-install', 'voidr', 'deploy-candidate', '--json'],
+      {
+        cwd: selected.path,
+        timeout: 180_000,
+        env: effectiveCliEnvironment
+      }
+    )
+  } catch (error) {
+    if (/unknown\s*command/i.test(String(error?.message || error))) {
+      throw new Error(
+        'The Voidr CLI installed in this test repository has no ' +
+          'deploy-candidate command, so a validation candidate cannot be ' +
+          'uploaded without promoting it. Ask the user to update the ' +
+          'framework in the repository (npm install @voidrco/playwright@latest) ' +
+          'and run the validation again. Do not fall back to deploy-latest: ' +
+          'it would overwrite the promoted release the main pipeline runs.'
+      )
     }
-  )
+    throw error
+  }
   const candidate = parseCandidateOutput(candidateOutput.stdout)
   const manifest = JSON.parse(
     await readFile(

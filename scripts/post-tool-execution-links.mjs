@@ -31,7 +31,7 @@ recordAskUserSelections(payload, {
 // leaving the stop armed blocked the very next step of the flow — the
 // validation run — behind a remediation phrase nobody would type after a
 // green build.
-if (toolName === 'voidr_build' && buildCompleted(toolResult)) {
+if (toolName === 'voidr_build' && buildSucceeded(toolResult)) {
   updateSessionState(payload, current => ({
     ...current,
     smokeAttemptedAt: null,
@@ -84,11 +84,16 @@ process.stdout.write(
   )}\n`
 )
 
-function buildCompleted(result) {
-  const text =
-    typeof result === 'string' ? result : JSON.stringify(result ?? '')
-  // The bridge answers with the build report; a failure arrives as an MCP
-  // error instead, so the flag is only present on the successful path.
+function buildSucceeded(result) {
+  if (!result) return false
+  // Copilot hands post-hooks an elided result — the report text is replaced by
+  // a placeholder — so reading the payload for buildCompleted found nothing
+  // and the stop stayed armed. resultType survives the elision and is the
+  // host's own verdict on the call.
+  if (typeof result === 'object' && !Array.isArray(result) && result.resultType) {
+    return result.resultType === 'success'
+  }
+  const text = typeof result === 'string' ? result : JSON.stringify(result)
   return /"buildCompleted"\s*:\s*true/.test(text)
 }
 

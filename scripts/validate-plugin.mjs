@@ -435,15 +435,16 @@ assert(
   'Generate skill must consume recorded-session evidence safely.'
 )
 assert(
-  /mode: "exploration"/.test(generateSkill) &&
-    /never counts as validation/i.test(generateSkill) &&
+  /voidr_explore/.test(generateSkill) &&
+    /never counts\s+as validation/i.test(generateSkill) &&
     /DELETE the probe/i.test(generateSkill),
   'Generate skill must scope exploration probes as throwaway inspection.'
 )
 assert(
-  /zero failures and zero skips/i.test(generateSkill) &&
-    /Never weaken an assertion/i.test(generateSkill),
-  'Generate skill must gate validation on a clean run.'
+  /voidr_build/.test(generateSkill) &&
+    /Tests never run locally/i.test(generateSkill) &&
+    /Never weaken an\s+assertion/i.test(generateSkill),
+  'Generate skill must gate on the local build, never on a local test run.'
 )
 assert(
   /test_plans_update_case/.test(generateSkill) &&
@@ -464,18 +465,26 @@ assert(
   'Execute skill must verify automation sync before executing.'
 )
 assert(
-  /executionType: "SHADOW"/.test(executeSkill),
-  'Execute skill must run validation executions as SHADOW.'
+  /voidr_release_deploy_validation/.test(executeSkill) &&
+    /voidr_create_validation_execution/.test(executeSkill) &&
+    /SHADOW/.test(executeSkill) &&
+    /codebaseVersion/.test(executeSkill),
+  'Execute skill must run validations as SHADOW pinned to the candidate version.'
+)
+assert(
+  /no pull\s+request or merge/i.test(executeSkill) &&
+    /latest/.test(executeSkill),
+  'Execute skill must keep validation runs off the promoted latest release.'
 )
 assert(
   /voidr_workspace_publish_tests/.test(executeSkill) &&
     /voidr_release_inspect/.test(executeSkill) &&
     /voidr_release_deploy_merged_pr/.test(executeSkill),
-  'Execute skill must publish and deploy through the release gates.'
+  'Execute skill must keep the reviewed promotion path through the release gates.'
 )
 assert(
-  /Never deploy code that did not pass/i.test(executeSkill),
-  'Execute skill must require local smoke evidence before a deploy.'
+  /Never deploy a\s+repository that did not build/i.test(executeSkill),
+  'Execute skill must require the local build gate before a deploy.'
 )
 assert(
   /at least 30 seconds/i.test(executeSkill) &&

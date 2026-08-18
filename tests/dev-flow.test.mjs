@@ -87,7 +87,8 @@ test('routes developer intent into the pipeline and keeps the classic route', ()
     deploy.modifiedTransformedPrompt,
     /Never call executions_create_execution before the\s+sync verification/
   )
-  assert.match(deploy.modifiedTransformedPrompt, /voidr_release_inspect/)
+  assert.match(deploy.modifiedTransformedPrompt, /voidr_release_deploy_validation/)
+  assert.match(deploy.modifiedTransformedPrompt, /codebaseVersion/)
 
   assert.deepEqual(routeVoidrPrompt({ prompt: 'Criar testes' }), {})
 })
@@ -696,7 +697,7 @@ test('post-smoke remediation crosses hook session ids and ask_user answers', () 
       {
         sessionId: chatSession,
         cwd: process.cwd(),
-        toolName: 'voidr-voidr_smoke_build',
+        toolName: 'voidr-voidr_build',
         toolArgs: {
           repositoryPath: '/tmp/tests',
           repositoryUrl: 'https://github.com/voidrco/tests',
@@ -720,7 +721,7 @@ test('post-smoke remediation crosses hook session ids and ask_user answers', () 
     dataRoot
   )
   assert.equal(blocked.permissionDecision, 'deny')
-  assert.match(blocked.permissionDecisionReason, /after voidr_smoke_build/)
+  assert.match(blocked.permissionDecisionReason, /after voidr_build/)
 
   submitPrompt(
     {
@@ -756,7 +757,7 @@ test('an ask_user answer authorizing the fix clears the post-smoke stop', () => 
       {
         sessionId,
         cwd: process.cwd(),
-        toolName: 'voidr-voidr_smoke_build',
+        toolName: 'voidr-voidr_build',
         toolArgs: {
           repositoryPath: '/tmp/tests',
           repositoryUrl: 'https://github.com/voidrco/tests',
@@ -917,7 +918,7 @@ test('the post-smoke stop never blocks the question that unlocks it', () => {
     {
       sessionId,
       cwd: process.cwd(),
-      toolName: 'voidr-voidr_smoke_build',
+      toolName: 'voidr-voidr_build',
       toolArgs: { repositoryPath: process.cwd() }
     },
     dataRoot
@@ -979,7 +980,7 @@ test('the post-smoke denial teaches the fallback when the prompt hook is behind'
     {
       sessionId,
       cwd: process.cwd(),
-      toolName: 'voidr-voidr_smoke_build',
+      toolName: 'voidr-voidr_build',
       toolArgs: { repositoryPath: process.cwd() }
     },
     dataRoot
@@ -1009,7 +1010,7 @@ test('a fresh prompt hook keeps the post-smoke denial free of the fallback', () 
     {
       sessionId,
       cwd: process.cwd(),
-      toolName: 'voidr-voidr_smoke_build',
+      toolName: 'voidr-voidr_build',
       toolArgs: { repositoryPath: process.cwd() }
     },
     dataRoot

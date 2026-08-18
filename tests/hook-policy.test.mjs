@@ -1300,7 +1300,7 @@ test('stops automatic diagnosis, edits, and retries after the first smoke call',
       {
         sessionId,
         cwd: workspace,
-        toolName: 'voidr-voidr_smoke_build',
+        toolName: 'voidr-voidr_build',
         toolArgs: { repositoryPath: workspace }
       },
       dataRoot
@@ -1321,7 +1321,7 @@ test('stops automatic diagnosis, edits, and retries after the first smoke call',
       }
     },
     {
-      toolName: 'voidr-voidr_smoke_build',
+      toolName: 'voidr-voidr_build',
       toolArgs: { repositoryPath: workspace }
     }
   ]) {
@@ -1330,7 +1330,7 @@ test('stops automatic diagnosis, edits, and retries after the first smoke call',
       dataRoot
     )
     assert.equal(output.permissionDecision, 'deny')
-    assert.match(output.permissionDecisionReason, /after voidr_smoke_build/i)
+    assert.match(output.permissionDecisionReason, /after voidr_build/i)
   }
 
   submitPrompt(

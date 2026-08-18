@@ -96,17 +96,16 @@ export async function scaffoldTestCases({
   }
 }
 
-export async function buildTestRepository({
+// The local gate is the build alone: `voidr build` bundles every spec with
+// esbuild, so a syntax error fails here with the file and line. Functional
+// validation happens on the platform, as a SHADOW execution pinned to the
+// deployed codebaseVersion — never as a local Playwright run.
+export async function buildRepository({
   repositoryPath,
   repositoryUrl,
   testPlanId,
-  specs,
-  baseUrl,
-  mode = 'validation',
-  workspaceRoot = process.cwd(),
   cliEnvironment = voidrCliEnvironment(),
-  run = runCommand,
-  testRun = runPlaywrightCommand
+  run = runCommand
 }) {
   if (!/^[a-f0-9]{24}$/i.test(String(testPlanId || ''))) {
     throw new Error('A valid Test Plan ID is required.')
@@ -125,52 +124,44 @@ export async function buildTestRepository({
     )
   }
 
-  const validation = await validateSelectedPlaywrightTests({
+  const runtime = await assertSupportedNodeRuntime({
     repositoryPath: selected.path,
-    repositoryUrl,
-    testPlanId,
-    specs,
-    baseUrl,
-    workspaceRoot,
-    run: testRun
+    run
   })
 
-  // Exploration mode: run the selected probe specs to INSPECT the deployed
-  // application (dumped console output, DOM findings, traces). Failures are
-  // expected and informative; nothing is gated and nothing is built — an
-  // exploration never counts as validation and never publishes.
-  if (mode === 'exploration') {
-    return {
-      completed: true,
-      exploration: true,
-      buildCompleted: false,
-      repositoryPath: selected.path,
-      testPlanId: String(testPlanId),
-      validation
-    }
-  }
-
-  if (!validation.completed) {
-    return {
-      completed: false,
-      buildCompleted: false,
-      repositoryPath: selected.path,
-      testPlanId: String(testPlanId),
-      validation
-    }
-  }
-
-  await run('npx', ['--no-install', 'voidr', 'build'], {
+  const buildResult = await run('npx', ['--no-install', 'voidr', 'build'], {
     cwd: selected.path,
     timeout: 180_000,
-    env: withToolchainPath(cliEnvironment, validation.nodeRuntime?.toolchain)
+    env: withToolchainPath(cliEnvironment, runtime.toolchain)
   })
+  if (buildResult?.exitCode !== undefined && buildResult.exitCode !== 0) {
+    throw new Error(
+      'voidr build failed. The build reported:\n' +
+        commandOutputExcerpt(buildResult)
+    )
+  }
 
   return {
     completed: true,
     buildCompleted: true,
     repositoryPath: selected.path,
     testPlanId: String(testPlanId),
+    nodeRuntime: describeNodeRuntime(runtime)
+  }
+}
+
+// Exploration probes: run throwaway inspection specs against the deployed
+// application to answer DOM questions the recorded sessions left open.
+// Failures are expected and informative; nothing is gated, nothing is built,
+// and an exploration never counts as validation.
+export async function exploreSelectedPlaywrightTests(options) {
+  const validation = await validateSelectedPlaywrightTests(options)
+  return {
+    completed: true,
+    exploration: true,
+    buildCompleted: false,
+    repositoryPath: validation.repositoryPath,
+    testPlanId: validation.testPlanId,
     validation
   }
 }
@@ -251,7 +242,7 @@ export async function validateSelectedPlaywrightTests({
     // infrastructure problem nobody can act on.
     throw new Error(
       'Playwright could not list the selected specs. Playwright reported:\n' +
-        playwrightOutputExcerpt(listResult)
+        commandOutputExcerpt(listResult)
     )
   }
 
@@ -304,7 +295,7 @@ export async function validateSelectedPlaywrightTests({
   }
 }
 
-function playwrightOutputExcerpt({ stderr, stdout } = {}) {
+function commandOutputExcerpt({ stderr, stdout } = {}) {
   const text = `${stderr || ''}\n${stdout || ''}`.trim()
   if (!text) return 'Playwright produced no output.'
   const excerpt = text.split('\n').slice(0, 20).join('\n')

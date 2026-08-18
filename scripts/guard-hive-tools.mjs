@@ -244,7 +244,7 @@ function enforceVoidrCliShellUsage(normalizedShell) {
     /(?:^|[\s;|&(])npx\b[^;&|\n]*\bplaywright\s+test\b/.test(normalizedShell)
   if (!invokesVoidrCli && !invokesPlaywrightRun) return
   deny(
-    'Blocked by Voidr policy: never run the Voidr CLI or Playwright from the terminal — it has no Service Account credentials there, and interactive voidr login is forbidden. Use the bridge tools, which inject the credentials automatically: voidr_workspace_prepare_test_repository (setup/link/scaffold/env pull), voidr_smoke_build (run selected tests + build), voidr_workspace_publish_tests (commit/push/PR), and voidr_release_deploy_merged_pr (immutable deploy).'
+    'Blocked by Voidr policy: never run the Voidr CLI or Playwright from the terminal — it has no Service Account credentials there, and interactive voidr login is forbidden. Use the bridge tools, which inject the credentials automatically: voidr_workspace_prepare_test_repository (setup/link/scaffold/env pull), voidr_build (syntax/packaging gate), voidr_explore (inspection probes), voidr_workspace_publish_tests (commit/push/PR), voidr_release_deploy_validation (validation candidate, no promote), and voidr_release_deploy_merged_pr (immutable LIVE deploy).'
   )
 }
 
@@ -356,7 +356,7 @@ function enforceRuntimeInstallProtection(hookPayload, normalizedShell) {
     /nodesource|nodejs\.org\/dist/.test(normalizedShell)
   if (!installsRuntime) return
   deny(
-    'Blocked by Voidr policy: never install, switch, or pin a Node runtime from the agent terminal. The Voidr framework requires the pinned Node 22; ask the user to activate it in their own terminal (for example nvm use 22 or volta pin node@22) and then retry voidr_workspace_prepare_test_repository or voidr_smoke_build once. Do not keep retrying and do not attempt any other runtime workaround.'
+    'Blocked by Voidr policy: never install, switch, or pin a Node runtime from the agent terminal. The Voidr framework requires the pinned Node 22; ask the user to activate it in their own terminal (for example nvm use 22 or volta pin node@22) and then retry voidr_workspace_prepare_test_repository or voidr_build once. Do not keep retrying and do not attempt any other runtime workaround.'
   )
 }
 
@@ -526,7 +526,8 @@ function enforceExplicitEnvironmentSelection(hookPayload, name, args) {
       'voidr_workspace_select_test_repository',
       'voidr_workspace_prepare_test_repository',
       'voidr_workspace_scaffold_test_cases',
-      'voidr_smoke_build'
+      'voidr_build',
+      'voidr_explore'
     ].includes(name)
   ) {
     return
@@ -550,7 +551,7 @@ function enforceExplicitEnvironmentSelection(hookPayload, name, args) {
       return
     }
     deny(
-      'Blocked by Voidr workflow: list environments with applications_list_environments, show the selected environment on the confirmation card, and wait for the user to type “Criar testes” before repository setup, scaffold, or smoke/build.'
+      'Blocked by Voidr workflow: list environments with applications_list_environments, show the selected environment on the confirmation card, and wait for the user to type “Criar testes” before repository setup, scaffold, build, or exploration.'
     )
   }
 
@@ -564,7 +565,7 @@ function enforceExplicitEnvironmentSelection(hookPayload, name, args) {
     Date.now() - state.environmentSelectionRequestedAt <= 4 * 60 * 60 * 1000
   if (!selectionFresh && !environmentsListed) {
     deny(
-      'Blocked by Voidr workflow: list environments with applications_list_environments and confirm one with the user before repository setup, selection, scaffold, or smoke/build.'
+      'Blocked by Voidr workflow: list environments with applications_list_environments and confirm one with the user before repository setup, selection, scaffold, build, or exploration.'
     )
   }
 
@@ -602,6 +603,8 @@ function enforcePostSmokeStop(hookPayload, rawName, canonicalName) {
   if (
     [
       'voidr_release_deploy_merged_pr',
+      'voidr_release_deploy_validation',
+      'voidr_create_validation_execution',
       'voidr_workspace_publish_tests'
     ].includes(canonicalName)
   ) {
@@ -622,12 +625,12 @@ function enforcePostSmokeStop(hookPayload, rawName, canonicalName) {
     ? ' The prompt hook has not recorded a user message since this smoke run, so a typed chat authorization is not reaching the runtime: collect it with an ask_user question containing a single free-text field where the user types the authorization (for example “corrige e roda de novo”). A clicked option never counts. If the user already typed it in chat, say that the plugin needs a VS Code window reload to record typed messages again.'
     : ''
   deny(
-    `Blocked by Voidr workflow: after voidr_smoke_build, stop and report its exact result. Do not inspect files, edit specs, retry smoke, or diagnose by guessing in the same turn. Wait for the user to authorize the investigation or correction in a new chat message or an ask_user answer (for example “corrige e roda de novo”) before continuing.${fallback}`
+    `Blocked by Voidr workflow: after voidr_build, stop and report its exact result. Do not inspect files, edit specs, retry the build, or diagnose by guessing in the same turn. Wait for the user to authorize the investigation or correction in a new chat message or an ask_user answer (for example “corrige e roda de novo”) before continuing.${fallback}`
   )
 }
 
 function recordSmokeAttempt(hookPayload, name) {
-  if (name !== 'voidr_smoke_build') return
+  if (name !== 'voidr_build') return
   updateSessionState(hookPayload, {
     smokeAttemptedAt: Date.now()
   })
@@ -809,8 +812,11 @@ function enforceSelectedTestPlanIdentity(hookPayload, canonicalName, args) {
       'test_plans_get_case',
       'voidr_workspace_prepare_test_repository',
       'voidr_workspace_scaffold_test_cases',
-      'voidr_smoke_build',
-      'voidr_release_deploy_merged_pr'
+      'voidr_build',
+      'voidr_explore',
+      'voidr_release_deploy_merged_pr',
+      'voidr_release_deploy_validation',
+      'voidr_create_validation_execution'
     ].includes(canonicalName)
   ) {
     return

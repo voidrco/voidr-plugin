@@ -463,7 +463,7 @@ function collectNewPlanScope(workflow, feature) {
   assert.equal(workflow.state, States.FEATURE_SELECTED)
   assert.deepEqual(workflow.actions, [])
   assert.equal(workflow.context.applicationType, 'WEB')
-  assert.match(workflow.prompt, /smoke local/i)
+  assert.match(workflow.prompt, /sondas locais de inspe/i)
   workflow = transition(workflow, {
     type: 'LOCAL_SMOKE_TARGET_SELECTED',
     mode: 'localhost',

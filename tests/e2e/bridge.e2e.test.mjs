@@ -1817,7 +1817,7 @@ test('a plan created without a repository continues in planning-only mode', asyn
 
   // Everything that needs a checkout is refused, naming the way out.
   for (const tool of [
-    'voidr_smoke_build',
+    'voidr_build',
     'voidr_workspace_publish_tests',
     'executions_create_execution'
   ]) {
@@ -1842,7 +1842,7 @@ test('a plan created without a repository continues in planning-only mode', asyn
     arguments: { planId: pendingId }
   })
   const afterProvision = await client.requestRaw('tools/call', {
-    name: 'voidr_smoke_build',
+    name: 'voidr_build',
     arguments: { testPlanId: pendingId, repositoryPath: temp }
   })
   assert.doesNotMatch(

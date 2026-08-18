@@ -18,10 +18,18 @@ import {
   validateRepositorySelection
 } from './lib/workspace.mjs'
 import { deployMergedPullRequest } from './lib/release-deploy.mjs'
+import {
+  createValidationExecution,
+  deployValidationCandidate
+} from './lib/validation-run.mjs'
 import { connectWithBrowser } from './lib/browser-auth.mjs'
 import { applySystemCaTrust } from './lib/network-trust.mjs'
 import { environmentDoctor } from './lib/environment-doctor.mjs'
-import { buildTestRepository, scaffoldTestCases } from './lib/scaffold.mjs'
+import {
+  buildRepository,
+  exploreSelectedPlaywrightTests,
+  scaffoldTestCases
+} from './lib/scaffold.mjs'
 import { prepareTestRepository } from './lib/prepare.mjs'
 import { contextBootstrap } from './lib/context.mjs'
 import { publishTests } from './lib/publish.mjs'
@@ -267,9 +275,29 @@ const localTools = [
     }
   },
   {
-    name: 'voidr_smoke_build',
+    name: 'voidr_build',
     description:
-      'Run only the explicitly selected Playwright specs outside the Copilot shell sandbox, require zero failures and skips, then validate and build the linked Voidr repository. This atomic authenticated gate keeps .env and Service Account credentials opaque and never builds when selected tests did not pass.',
+      'Build the linked Voidr repository with the framework bundler (voidr build): the local syntax and packaging gate before any deploy. It never runs tests locally — functional validation is a platform SHADOW execution pinned to the deployed codebaseVersion. This atomic authenticated gate keeps .env and Service Account credentials opaque.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        repositoryPath: { type: 'string' },
+        repositoryUrl: {
+          type: 'string',
+          pattern: '^https://github\\.com/[^/]+/[^/]+(?:\\.git)?$'
+        },
+        testPlanId: {
+          type: 'string',
+          pattern: '^[a-fA-F0-9]{24}$'
+        }
+      },
+      required: ['repositoryPath', 'repositoryUrl', 'testPlanId']
+    }
+  },
+  {
+    name: 'voidr_explore',
+    description:
+      'Run throwaway inspection specs (probes) against the deployed application to answer DOM questions recorded sessions left open — attributes, shadow-DOM structure, composed innerText. Failures are expected and informative: nothing is gated, nothing is built, and an exploration never counts as validation. Probes must never be published or deployed.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -293,12 +321,6 @@ const localTools = [
         baseUrl: {
           type: 'string',
           pattern: '^https?://'
-        },
-        mode: {
-          type: 'string',
-          enum: ['validation', 'exploration'],
-          description:
-            'validation (default) gates on zero failures/skips and builds. exploration runs throwaway inspection specs against the deployed app, tolerates failures, returns per-test stdout/traces, never builds and never counts as validation.'
         }
       },
       required: [
@@ -376,6 +398,56 @@ const localTools = [
         'repositoryUrl',
         'pullRequestNumber',
         'testPlanId'
+      ]
+    }
+  },
+  {
+    name: 'voidr_release_deploy_validation',
+    description:
+      'Build and upload a content-addressed validation candidate (voidr deploy-candidate) WITHOUT promoting it: latest — what monitoring, self-healing, and LIVE runs execute — stays untouched, so no pull request or merge is required. Returns the immutable codebaseVersion that voidr_create_validation_execution pins the SHADOW run to.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        repositoryPath: { type: 'string' },
+        repositoryUrl: {
+          type: 'string',
+          pattern: '^https://github\\.com/[^/]+/[^/]+(?:\\.git)?$'
+        },
+        testPlanId: { type: 'string', pattern: '^[a-fA-F0-9]{24}$' }
+      },
+      required: ['repositoryPath', 'repositoryUrl', 'testPlanId']
+    }
+  },
+  {
+    name: 'voidr_create_validation_execution',
+    description:
+      'Create a SHADOW execution pinned to the codebaseVersion returned by voidr_release_deploy_validation. It validates the candidate on the platform without entering LIVE governance or monitoring and never runs the promoted latest release. Requires the environment slug and, optionally, explicit targets.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        applicationId: { type: 'string', pattern: '^[a-fA-F0-9]{24}$' },
+        testPlanId: { type: 'string', pattern: '^[a-fA-F0-9]{24}$' },
+        environment: { type: 'string', minLength: 1 },
+        codebaseVersion: { type: 'string', pattern: '^[a-f0-9]{64}$' },
+        targets: {
+          type: 'array',
+          minItems: 1,
+          items: {
+            type: 'object',
+            properties: {
+              testCaseSlug: { type: 'string' },
+              suiteSlug: { type: 'string' },
+              moduleSlug: { type: 'string' }
+            },
+            required: ['testCaseSlug', 'suiteSlug', 'moduleSlug']
+          }
+        }
+      },
+      required: [
+        'applicationId',
+        'testPlanId',
+        'environment',
+        'codebaseVersion'
       ]
     }
   }
@@ -963,9 +1035,12 @@ function resetStructureTracking() {
 const REPOSITORY_DEPENDENT_TOOLS = new Set([
   'voidr_workspace_prepare_test_repository',
   'voidr_workspace_scaffold_test_cases',
-  'voidr_smoke_build',
+  'voidr_build',
+  'voidr_explore',
   'voidr_workspace_publish_tests',
   'voidr_release_deploy_merged_pr',
+  'voidr_release_deploy_validation',
+  'voidr_create_validation_execution',
   'executions_create_execution'
 ])
 
@@ -1619,16 +1694,24 @@ async function callLocal(name, args) {
           cases: Array.isArray(args.cases) ? args.cases : []
         })
       )
-    case 'voidr_smoke_build':
+    case 'voidr_build':
       enforcePreparedRepository(String(args.repositoryPath || ''))
       return textResult(
-        await buildTestRepository({
+        await buildRepository({
+          repositoryPath: String(args.repositoryPath || ''),
+          repositoryUrl: String(args.repositoryUrl || ''),
+          testPlanId: String(args.testPlanId || '')
+        })
+      )
+    case 'voidr_explore':
+      enforcePreparedRepository(String(args.repositoryPath || ''))
+      return textResult(
+        await exploreSelectedPlaywrightTests({
           repositoryPath: String(args.repositoryPath || ''),
           repositoryUrl: String(args.repositoryUrl || ''),
           testPlanId: String(args.testPlanId || ''),
           specs: Array.isArray(args.specs) ? args.specs : [],
-          baseUrl: String(args.baseUrl || ''),
-          mode: args.mode === 'exploration' ? 'exploration' : 'validation'
+          baseUrl: String(args.baseUrl || '')
         })
       )
     case 'voidr_workspace_git_context':
@@ -1677,6 +1760,25 @@ async function callLocal(name, args) {
       if (deployed?.completed) executionNeedsDeploy = false
       return textResult(deployed)
     }
+    case 'voidr_release_deploy_validation':
+      enforcePreparedRepository(String(args.repositoryPath || ''))
+      return textResult(
+        await deployValidationCandidate({
+          repositoryPath: String(args.repositoryPath || ''),
+          repositoryUrl: String(args.repositoryUrl || ''),
+          testPlanId: String(args.testPlanId || '')
+        })
+      )
+    case 'voidr_create_validation_execution':
+      return textResult(
+        await createValidationExecution({
+          applicationId: String(args.applicationId || ''),
+          testPlanId: String(args.testPlanId || ''),
+          environment: String(args.environment || ''),
+          codebaseVersion: String(args.codebaseVersion || ''),
+          targets: Array.isArray(args.targets) ? args.targets : undefined
+        })
+      )
     default:
       throw new Error(`Unknown local Voidr tool: ${name}`)
   }

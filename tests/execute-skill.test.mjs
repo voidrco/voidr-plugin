@@ -22,9 +22,11 @@ test('execute skill routes only its execution, release, and sync tools', () => {
     'playwright_get_execution_analytics',
     'test_plans_get_test_counts',
     'test_plans_get_test_plan',
+    'voidr_build',
+    'voidr_create_validation_execution',
     'voidr_release_deploy_merged_pr',
+    'voidr_release_deploy_validation',
     'voidr_release_inspect',
-    'voidr_smoke_build',
     'voidr_workspace_publish_tests'
   ])
   assert.equal(
@@ -57,17 +59,23 @@ test('execution requires complete scope and confirmation', () => {
 })
 
 test('execution preserves idempotency and returns its URL', () => {
-  assert.match(skill, /Create one\s+idempotency key/)
-  assert.match(skill, /Keep that same\s+key if the confirmed call must be retried/)
+  assert.match(skill, /create one\s+idempotency key/i)
+  assert.match(skill, /Keep that same\s+key if the confirmed\s+call must be retried/)
   assert.match(
     skill,
     /Execution: \[Open execution\]\(<VOIDR_PLATFORM_URL>\/execution\/<executionId>\)/
   )
 })
 
-test('validation runs are SHADOW executions behind release gates', () => {
-  assert.match(skill, /executionType: "SHADOW"/)
-  assert.match(skill, /Never deploy code that did not pass/i)
+test('validation runs are SHADOW executions pinned to the candidate version', () => {
+  assert.match(skill, /voidr_release_deploy_validation/)
+  assert.match(skill, /voidr_create_validation_execution/)
+  assert.match(skill, /SHADOW/)
+  assert.match(skill, /codebaseVersion/)
+  // No PR/merge on the validation path; latest stays untouched.
+  assert.match(skill.replace(/\n/g, ' '), /No pull\s+request or merge is involved/i)
+  assert.match(skill, /never touches\s+`latest`/i)
+  assert.match(skill, /Never deploy a\s+repository that did not build/i)
   assert.match(skill, /at least 30 seconds/i)
   assert.match(skill, /never a tight loop/i)
 })

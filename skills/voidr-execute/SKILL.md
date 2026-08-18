@@ -1,6 +1,6 @@
 ---
 name: voidr-execute
-description: Executa testes na plataforma Voidr em dois modos — LIVE run (casos já automatizados e publicados) ou validation run (publica a versão local via PR, faz o deploy imutável e executa como SHADOW) — e acompanha a execução até o estado terminal. Use quando o usuário pedir para "executar/rodar os testes na plataforma", "fazer um validation run", "rodar em shadow", ou depois que o /voidr-generate deixou os specs verdes. Cada escrita (deploy, execução) tem seu próprio gate de confirmação.
+description: Executa testes na plataforma Voidr em dois modos — LIVE run (casos já automatizados e publicados) ou validation run (build local, deploy de candidato versionado sem promote e execução SHADOW pinada na versão) — e acompanha a execução até o estado terminal. Use quando o usuário pedir para "executar/rodar os testes na plataforma", "fazer um validation run", "rodar em shadow", ou depois que o /voidr-generate deixou os specs buildando. Cada escrita (deploy, execução) tem seu próprio gate de confirmação.
 ---
 
 # Execute Voidr tests on the platform
@@ -10,9 +10,10 @@ description: Executa testes na plataforma Voidr em dois modos — LIVE run (caso
 > says `ask_user`, use that tool with selectable options; plain chat text is
 > never a substitute.
 
-Never call a tool that starts a Hive process. Obey the shared contracts in `../CONTRACTS.md`. Platform execution is created
-only with `executions_create_execution`, and every gate below is confirmed by
-the user before the write.
+Never call a tool that starts a Hive process. Obey the shared contracts in `../CONTRACTS.md`. Platform executions are
+created only with `executions_create_execution` (LIVE) or
+`voidr_create_validation_execution` (validation), and every gate below is
+confirmed by the user before the write.
 
 Read `manifest-context.json` at the test repository root for the plan,
 application, environment, and repository identity. Absent manifest →
@@ -25,8 +26,10 @@ Ask (or infer from the request) which mode applies:
 1. **LIVE run** — the selected cases are already automated and deployed;
    just execute them.
 2. **Validation run** — the local specs changed (typically after
-   `/voidr-generate`) and have to be published, deployed, and executed as a
-   SHADOW validation before touching LIVE governance.
+   `/voidr-generate`) and have to be validated on the platform. No pull
+   request or merge is involved: the candidate is deployed under its own
+   immutable version and never touches `latest`, so the main pipeline —
+   monitoring, self-healing, LIVE governance — is unaffected.
 
 ## Mode A — LIVE run
 
@@ -42,32 +45,41 @@ Ask (or infer from the request) which mode applies:
 
 ## Mode B — Validation run
 
-1. **Local gate**: the selected specs passed `voidr_smoke_build` in this
-   session (zero failures/skips). Never deploy code that did not pass.
-2. **Publish**: `voidr_workspace_publish_tests` — branch + pull request with
-   the implemented specs. Hand the PR to the user; the merge is theirs.
-3. **Immutable deploy**: after the merge, `voidr_release_inspect` to verify
-   the merged state, then `voidr_release_deploy_merged_pr` behind its own
+1. **Build gate**: `voidr_build` completed in this session. The build is the
+   local syntax and packaging gate; tests never run locally. Never deploy a
+   repository that did not build.
+2. **Validation deploy**: `voidr_release_deploy_validation` — uploads the
+   content-addressed candidate WITHOUT promoting it (`latest` stays exactly
+   as it was) and returns the immutable `codebaseVersion`. Behind its own
    confirmation gate.
-4. **Shadow execution**: `executions_create_execution` with
-   `executionType: "SHADOW"` so the run validates without affecting LIVE
-   governance/monitoring. If the platform rejects the parameter, fall back to
-   a normal execution tagged `validation-run` and tell the user the shadow
-   flag is not available yet.
-5. **Follow to completion** (see "Monitoring").
+3. **Validation execution**: `voidr_create_validation_execution` with that
+   `codebaseVersion` — a SHADOW run pinned to the candidate, outside LIVE
+   governance and monitoring. Confirm scope with the user first. Share the
+   execution link the platform returns.
+4. **Follow to completion** (see "Monitoring").
+5. **Promotion is a separate decision**: when the validation passes and the
+   user wants the version in the main pipeline, that is the reviewed path —
+   publish with `voidr_workspace_publish_tests`, merge by the user, then
+   `voidr_release_inspect` + `voidr_release_deploy_merged_pr`.
 
 ## Execution call contract
 
-`executions_create_execution` takes the manifest's `applicationId` and
+`executions_create_execution` (LIVE) takes the manifest's `applicationId` and
 `planId`, the selected Voidr `environment`, `provider: "PLAYWRIGHT"`, and
 `source: "STORAGE"`. For the full Test Plan, omit `targets`; for a subset,
 pass `targets` entries by `testCaseSlug`, `suiteSlug`, or `moduleSlug`
 exactly as the platform returned them. Do not call another tool to discover
 values the manifest already carries. Do not call the tool until the user
-confirms, and call it exactly once per confirmed request: Create one
-idempotency key per confirmed request. Keep that same
-key if the confirmed call must be retried after a network failure, and never
-reuse it for a new request. For validation runs add `executionType: "SHADOW"`.
+confirms, and call it exactly once per confirmed request: create one
+idempotency key per confirmed request. Keep that same key if the confirmed
+call must be retried after a network failure, and never reuse it for a new
+request.
+
+`voidr_create_validation_execution` (validation) takes the same
+`applicationId`, `testPlanId`, `environment`, and optional `targets`, plus
+the `codebaseVersion` returned by `voidr_release_deploy_validation` — never a
+version from memory or a previous session. The bridge pins the SHADOW run to
+that candidate and derives a stable idempotency key itself.
 
 Always end the report with the execution link:
 `Execution: [Open execution](<VOIDR_PLATFORM_URL>/execution/<executionId>)`.
@@ -90,11 +102,14 @@ self-healing or any Hive process.
 
 - `test_plans_get_test_plan` / `test_plans_get_test_counts` — sync
   verification reads.
-- `voidr_smoke_build` — local gate evidence (validation mode).
-- `voidr_workspace_publish_tests` — branch + PR publish.
-- `voidr_release_inspect` / `voidr_release_deploy_merged_pr` — merged-PR
-  verification and immutable deploy.
-- `executions_create_execution` — the ONLY execution write; SHADOW for
-  validation runs.
+- `voidr_build` — local build gate evidence (validation mode).
+- `voidr_release_deploy_validation` — candidate deploy, no promote; returns
+  the `codebaseVersion`.
+- `voidr_create_validation_execution` — the ONLY validation-execution write;
+  SHADOW pinned to the candidate.
+- `executions_create_execution` — the ONLY LIVE execution write.
+- `voidr_workspace_publish_tests` / `voidr_release_inspect` /
+  `voidr_release_deploy_merged_pr` — the reviewed promotion path, only after
+  a passing validation and an explicit user decision.
 - `executions_get_execution` / `playwright_get_execution_analytics` —
   monitoring and result reporting.

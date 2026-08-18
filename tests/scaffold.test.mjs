@@ -5,7 +5,8 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
-  buildTestRepository,
+  buildRepository,
+  exploreSelectedPlaywrightTests,
   playwrightSpecFilter,
   scaffoldTestCases,
   validateSelectedPlaywrightTests
@@ -106,13 +107,10 @@ test('builds through the same isolated preview CLI environment', async () => {
   initializeOrigin(repositoryPath, repositoryUrl)
 
   const calls = []
-  const result = await buildTestRepository({
+  const result = await buildRepository({
     repositoryPath,
     repositoryUrl,
     testPlanId,
-    specs: ['selected.spec.js'],
-    baseUrl: 'https://app.example.test/',
-    workspaceRoot: workspace,
     cliEnvironment: {
       VOIDR_API_URL: 'https://preview.example.test/v1',
       VOIDR_CLIENT_ID: 'synthetic-preview-client',
@@ -120,17 +118,25 @@ test('builds through the same isolated preview CLI environment', async () => {
     },
     run: async (file, args, options) => {
       calls.push({ file, args, options })
-      return { stdout: '' }
-    },
-    testRun: passingPlaywrightRun
+      if (file === 'node' && args[0] === '--version') {
+        return { stdout: 'v22.22.0\n', stderr: '', exitCode: 0 }
+      }
+      return { stdout: '', stderr: '', exitCode: 0 }
+    }
   })
 
   assert.equal(result.completed, true)
-  assert.equal(calls[0].file, 'npx')
-  assert.deepEqual(calls[0].args, ['--no-install', 'voidr', 'build'])
+  assert.equal(result.buildCompleted, true)
+  const build = calls.find(call => call.file === 'npx')
+  assert.deepEqual(build.args, ['--no-install', 'voidr', 'build'])
   assert.equal(
-    calls[0].options.env.VOIDR_API_URL,
+    build.options.env.VOIDR_API_URL,
     'https://preview.example.test/v1'
+  )
+  // The build gate never touches Playwright: no local test run of any kind.
+  assert.equal(
+    calls.some(call => call.args.includes('playwright')),
+    false
   )
 })
 
@@ -147,22 +153,21 @@ test('build accepts a provisioned checkout outside the MCP process cwd', async (
   writeFileSync(join(repositoryPath, 'selected.spec.js'), 'export default true')
   initializeOrigin(repositoryPath, `${repositoryUrl}.git`)
 
-  const result = await buildTestRepository({
+  const result = await buildRepository({
     repositoryPath,
     repositoryUrl,
     testPlanId,
-    specs: ['selected.spec.js'],
-    baseUrl: 'https://app.example.test/',
-    workspaceRoot: mcpRoot,
-    run: async () => ({ stdout: '' }),
-    testRun: passingPlaywrightRun
+    run: async (file, args) =>
+      file === 'node' && args[0] === '--version'
+        ? { stdout: 'v22.22.0\n', stderr: '', exitCode: 0 }
+        : { stdout: '', stderr: '', exitCode: 0 }
   })
 
   assert.equal(result.completed, true)
 })
 
-test('does not build when a selected Playwright test fails', async () => {
-  const repositoryPath = mkdtempSync(join(tmpdir(), 'voidr-build-failed-test-'))
+test('exploration tolerates failing probes and never builds', async () => {
+  const repositoryPath = mkdtempSync(join(tmpdir(), 'voidr-explore-failed-'))
   const repositoryUrl = 'https://github.com/acme/failed-tests.git'
   const testPlanId = 'abcdef0123456789abcdef01'
   writeFileSync(join(repositoryPath, 'package.json'), '{}')
@@ -173,18 +178,15 @@ test('does not build when a selected Playwright test fails', async () => {
   writeFileSync(join(repositoryPath, 'selected.spec.js'), 'export default true')
   initializeOrigin(repositoryPath, repositoryUrl)
 
-  let buildCalls = 0
-  const result = await buildTestRepository({
+  const commands = []
+  const result = await exploreSelectedPlaywrightTests({
     repositoryPath,
     repositoryUrl,
     testPlanId,
     specs: ['selected.spec.js'],
     baseUrl: 'https://app.example.test/',
-    run: async () => {
-      buildCalls += 1
-      return { stdout: '' }
-    },
-    testRun: async (file, args) => {
+    run: async (file, args) => {
+      commands.push([file, ...args])
       if (file === 'node' && args[0] === '--version') {
         return { stdout: 'v22.22.0\n', stderr: '', exitCode: 0 }
       }
@@ -228,14 +230,20 @@ test('does not build when a selected Playwright test fails', async () => {
     }
   })
 
-  assert.equal(result.completed, false)
+  // A failing probe is information, not a gate: the exploration completes,
+  // reports the failure, and never reaches voidr build.
+  assert.equal(result.completed, true)
+  assert.equal(result.exploration, true)
   assert.equal(result.buildCompleted, false)
   assert.equal(result.validation.failed, 1)
   assert.equal(
     result.validation.failures[0].category,
     'response-not-observed'
   )
-  assert.equal(buildCalls, 0)
+  assert.equal(
+    commands.some(command => command.includes('build')),
+    false
+  )
 })
 
 test('build rejects a checkout whose origin differs from the linked repository', async () => {
@@ -249,11 +257,10 @@ test('build rejects a checkout whose origin differs from the linked repository',
   initializeOrigin(repositoryPath, 'https://github.com/acme/wrong.git')
 
   await assert.rejects(
-    buildTestRepository({
+    buildRepository({
       repositoryPath,
       repositoryUrl: 'https://github.com/acme/expected.git',
       testPlanId,
-      baseUrl: 'https://app.example.test/',
       run: async () => ({ stdout: '' })
     }),
     /origin does not match/

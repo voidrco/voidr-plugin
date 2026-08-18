@@ -76,9 +76,11 @@
     "voidr_context_bootstrap",
     "voidr_workspace_prepare_test_repository",
     "voidr_workspace_scaffold_test_cases",
-    "voidr_smoke_build",
+    "voidr_build",
     "voidr_workspace_publish_tests",
-    "voidr_release_deploy_merged_pr"
+    "voidr_release_deploy_merged_pr",
+    "voidr_release_deploy_validation",
+    "voidr_create_validation_execution"
   ],
   "localTools": [
     "voidr_environment_doctor",
@@ -92,10 +94,13 @@
     "voidr_workspace_prepare_test_repository",
     "voidr_context_bootstrap",
     "voidr_workspace_scaffold_test_cases",
-    "voidr_smoke_build",
+    "voidr_build",
+    "voidr_explore",
     "voidr_release_inspect",
     "voidr_workspace_publish_tests",
-    "voidr_release_deploy_merged_pr"
+    "voidr_release_deploy_merged_pr",
+    "voidr_release_deploy_validation",
+    "voidr_create_validation_execution"
   ],
   "forbiddenTools": [
     "agent_jobs_trigger_automation",

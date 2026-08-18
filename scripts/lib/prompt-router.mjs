@@ -86,13 +86,14 @@ options when available; free text is only a fallback.`
     return `Use the /voidr-execute skill for this request and follow its gates in
 order. LIVE run: sync verification (test_plans_get_test_plan +
 test_plans_get_test_counts), the user's confirmation, and only then
-executions_create_execution. Validation run: local smoke evidence, publish
-with voidr_workspace_publish_tests, merged-PR verification with
-voidr_release_inspect, immutable deploy with voidr_release_deploy_merged_pr,
-and a SHADOW execution. Never call executions_create_execution before the
-sync verification, and never create or re-create Test Plan modules, suites,
-or cases during a deploy — an "Only automated test cases can be executed"
-error means the cases need the deploy, not re-creation.`
+executions_create_execution. Validation run: voidr_build evidence, candidate
+deploy with voidr_release_deploy_validation (no promote — latest stays
+untouched), and a SHADOW execution pinned to its codebaseVersion with
+voidr_create_validation_execution; no pull request or merge is involved.
+Never call executions_create_execution before the sync verification, and
+never create or re-create Test Plan modules, suites, or cases during a
+deploy — an "Only automated test cases can be executed" error means the
+cases need the deploy, not re-creation.`
   }
 
   // Checked before the pipeline intents so a failed execution named next to a

@@ -26,7 +26,7 @@ memory.
 Every precondition must come from an explicit selection in the current
 workflow — the manifest records the selections `/voidr-context` gated. Never
 infer an organization, application, environment, Test Plan, case, repository,
-or smoke target from `project.json`, `.env`, a workspace folder, a URL, a
+or probe target from `project.json`, `.env`, a workspace folder, a URL, a
 repository default, memory from another session, or a value found in source
 code. In particular, a `baseUrl` does not select a Voidr environment. If the
 selected environment slug is absent from the manifest, list environments
@@ -86,11 +86,10 @@ different data source.
 When AAA + sessions leave real questions open (is this text a DOM text or an
 attribute? does this click open a submenu?), write a THROWAWAY inspection
 spec under `modules/_probe/` that logs the answers (attributes, shadow-DOM
-structure, composed innerText) and run it with `voidr_smoke_build` in
-`mode: "exploration"` — it tolerates failures, returns per-test stdout and
-traces, never builds, and never counts as validation. Read the findings,
-refine, and DELETE the probe directory before validation. Probes must never
-be published or deployed.
+structure, composed innerText) and run it with `voidr_explore` — it tolerates
+failures, returns per-test stdout and traces, never builds, and never counts
+as validation. Read the findings, refine, and DELETE the probe directory
+before the build. Probes must never be published or deployed.
 
 ## 5. Implement
 
@@ -132,12 +131,15 @@ directly, derive the API base from the value exposed by the loaded deployed
 page, documented product runtime configuration, or an explicitly confirmed API
 environment. Do not overwrite that value before reading it.
 
-## 6. Validate
+## 6. Build gate
 
-`voidr_smoke_build` (default `validation` mode) with the exact selected
-specs: zero failures and zero skips required. On failure, use the returned
-failures/traces to iterate on steps 4–5. Never weaken an assertion just to
-pass.
+`voidr_build`: the framework bundles every spec, so a syntax or packaging
+error fails here with the file and line. Tests never run locally — the
+functional verdict comes from the platform validation run (`/voidr-execute`,
+Mode B: candidate deploy without promote + SHADOW execution pinned to the
+returned `codebaseVersion`). On a build failure, report the exact error and
+wait for the user's authorization before touching the specs. Never weaken an
+assertion just to make the validation pass.
 
 ## 7. AAA × product divergence — the update gate
 
@@ -161,6 +163,7 @@ documents the divergence.
 - `sessions_list_sessions` — only when the manifest's session list needs a
   refresh.
 - `file_embeddings_search_documents` — optional documentation evidence.
-- `voidr_smoke_build` — local validation (`validation`) and inspection
-  (`exploration`); the only way to run Playwright.
+- `voidr_build` — the local syntax/packaging gate; never runs tests.
+- `voidr_explore` — inspection probes; the only way to run Playwright, and
+  only for exploration.
 - `test_plans_update_case` — ONLY behind the explicit approval of step 7.

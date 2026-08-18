@@ -57,7 +57,8 @@ Routing invariants:
 | `voidr_workspace_select_test_repository` | `voidr-context` | Register a user-selected existing repository when the plan has no linked repository. |
 | `voidr_workspace_prepare_test_repository` | `voidr-context`, `voidr-generate` | The single mandatory setup gate: install, CLI auth, link, scaffold, env pull. Locates the linked checkout by Git origin inside the workspace and never clones it: when it is absent, the response carries the HTTPS and SSH commands for the user to clone it themselves, and the gate is called again afterwards. |
 | `voidr_workspace_scaffold_test_cases` | `voidr-generate` | Scaffold a case added after the preparation gate completed. |
-| `voidr_smoke_build` | `voidr-generate` | Local validation and authenticated build, outside the agent shell. |
+| `voidr_build` | `voidr-generate`, `voidr-execute` | The local syntax/packaging gate (`voidr build`), outside the agent shell. Never runs tests locally. |
+| `voidr_explore` | `voidr-generate` | Throwaway inspection probes against the deployed app; tolerates failures, never builds, never counts as validation. |
 | `voidr_workspace_publish_tests` | `voidr-execute` | Branch, commit, and pull request through user credentials. |
 
 ## Release and executions
@@ -65,8 +66,10 @@ Routing invariants:
 | Tool | Owner skills | Purpose |
 | --- | --- | --- |
 | `voidr_release_inspect` | `voidr-execute` | Rediscover repository, plan, and merged PR from the checkout. Never ask the user for these IDs. |
-| `voidr_release_deploy_merged_pr` | `voidr-execute` | Fast-forward the clean checkout and publish the immutable release. |
-| `executions_create_execution` | `voidr-execute`, `voidr-execute` | The only tool that starts a platform execution, always behind a typed confirmation. |
+| `voidr_release_deploy_merged_pr` | `voidr-execute` | Fast-forward the clean checkout and publish the immutable release (the reviewed promotion path). |
+| `voidr_release_deploy_validation` | `voidr-execute` | Upload the content-addressed validation candidate WITHOUT promoting it; `latest` stays untouched and no PR/merge is required. Returns the immutable `codebaseVersion`. |
+| `voidr_create_validation_execution` | `voidr-execute` | The only tool that starts a validation execution: SHADOW, pinned to the candidate `codebaseVersion`, outside LIVE governance. |
+| `executions_create_execution` | `voidr-execute` | The only tool that starts a LIVE platform execution, always behind a typed confirmation. |
 | `executions_get_execution` | `voidr-execute` | Lifecycle status of the execution just created. |
 | `executions_list_executions` | none | Reserved. No current skill routes to it; listing failed executions for analysis uses `playwright_list_executions`. |
 

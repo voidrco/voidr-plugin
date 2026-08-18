@@ -29,13 +29,14 @@ function runHook(payload, dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-')))
   return JSON.parse(result.stdout || '{}')
 }
 
-function submitPrompt(payload, dataRoot) {
+function submitPrompt(payload, dataRoot, extraEnv = {}) {
   const result = spawnSync(process.execPath, [promptHook], {
     input: JSON.stringify(payload),
     encoding: 'utf8',
     env: {
       ...process.env,
-      COPILOT_PLUGIN_DATA: dataRoot
+      COPILOT_PLUGIN_DATA: dataRoot,
+      ...extraEnv
     }
   })
   assert.equal(result.status, 0, result.stderr)
@@ -343,7 +344,10 @@ test('forces voidr_auth_status as the first operational connect action', () => {
       prompt: '/copilot voidr-connect',
       transformedPrompt: '/copilot voidr-connect'
     },
-    dataRoot
+    dataRoot,
+    // Empty credential store: the gate only arms when there is an account to
+    // create, so otherwise this asserts the machine, not the hook.
+    { VOIDR_SERVICE_ACCOUNTS_PATH: join(dataRoot, 'service-accounts.json') }
   )
 
   assert.deepEqual(

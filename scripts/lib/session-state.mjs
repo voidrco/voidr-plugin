@@ -7,6 +7,7 @@ import {
 import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { dirname, resolve } from 'node:path'
+import { authStatus } from './credentials.mjs'
 
 function stateDataRoot() {
   return (
@@ -154,9 +155,17 @@ export function recordUserPromptState(payload) {
         : workflowStarted
           ? false
           : current.connectWorkflowActive === true,
-      connectFirstToolRequired: connectStarted
-        ? true
-        : current.connectFirstToolRequired === true,
+      // Only arm when there is something to connect. The gate exists to force
+      // `voidr_auth_status` before anything else, but that tool's whole job is
+      // to answer "am I already connected?" — a question `authStatus()` answers
+      // synchronously, offline, from the local store. Arming it on an already
+      // authenticated machine demands a call whose result would immediately
+      // release the gate, and the flag survives across prompts, so a host that
+      // does not emit the call locks the whole session out.
+      connectFirstToolRequired:
+        connectStarted && !alreadyConnected()
+          ? true
+          : current.connectFirstToolRequired === true,
       selectedEnvironmentSlug: workflowStarted
         ? null
         : selectedEnvironmentSlug,
@@ -496,6 +505,18 @@ function isVoidrTestingPrompt(prompt) {
       ) &&
       /\b(?:teste|testes|test plan|plano de testes)\b/.test(text))
   )
+}
+
+// Read-only and offline: it never contacts the platform, so an expired account
+// still counts as connected here. Validating it is `voidr_auth_status`'s job,
+// and the connect skill still runs it as its first step — this only stops the
+// gate from making that step mandatory before anything else can happen.
+function alreadyConnected() {
+  try {
+    return authStatus().authenticated === true
+  } catch {
+    return false
+  }
 }
 
 function isVoidrConnectPrompt(prompt) {

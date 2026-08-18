@@ -56,7 +56,11 @@ or cases during a deploy — an "Only automated test cases can be executed"
 error means the cases need the deploy, not re-creation.`
   }
 
-  if (voidrTestingIntent.test(prompt) || englishVoidrTestingIntent.test(prompt)) {
+  if (
+    voidrTestingIntent.test(prompt) ||
+    englishVoidrTestingIntent.test(prompt) ||
+    namesATestPlanId(prompt)
+  ) {
     return `This is a Voidr platform testing request. Route it through the restructured
 skills: /voidr-context first when there is no manifest-context.json in the
 test repository (it selects the Test Plan, materializes the checkout, and
@@ -92,12 +96,24 @@ export function routeVoidrPrompt(input) {
   }
 }
 
+// A Test Plan named together with a 24-hex id is unambiguous: no other object
+// in this workflow is identified that way, so the pipeline route is safe even
+// when the prompt never says "voidr".
+function namesATestPlanId(prompt) {
+  const text = String(prompt || '').toLowerCase()
+  return /\btest\s*plans?\b[\s\S]{0,160}\b[a-f0-9]{24}\b/.test(text)
+}
+
 function isGenericTestCreationPrompt(prompt) {
   const text = String(prompt || '')
     .normalize('NFD')
     .replace(/\p{Diacritic}/gu, '')
     .toLowerCase()
-  return /\b(?:criar?|crie|desenvolver?|implementar?|escrever?|escreva|gerar?|gere|montar?|monte|automatizar?)\b[\s\S]{0,60}\btestes?\b/.test(
+  // `test plan` is the platform's own vocabulary, so a Portuguese sentence
+  // asking to automate one is a Voidr request even without the word "voidr" —
+  // and that phrasing used to match nothing, leaving the model to pick a skill
+  // by description alone.
+  return /\b(?:criar?|crie|desenvolver?|implementar?|escrever?|escreva|gerar?|gere|montar?|monte|automatizar?)\b[\s\S]{0,60}\b(?:testes?|test\s*plans?|planos?\s+de\s+testes?)\b/.test(
     text
   )
 }

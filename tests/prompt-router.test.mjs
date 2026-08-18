@@ -163,3 +163,26 @@ test('plan-mode choices are recognized in natural phrasings', async () => {
   assert.equal(isNewPlanChoice('criar novo test plan'), true)
   assert.equal(isNewPlanChoice('usar test plan existente'), false)
 })
+
+
+test('a Test Plan named with its id routes to the pipeline', () => {
+  // The phrasing that started this: Portuguese sentence, platform vocabulary,
+  // no "voidr" anywhere. It matched nothing, so the model picked a skill by
+  // description and landed on /voidr-generate with no manifest.
+  const routed = routeVoidrPrompt({
+    prompt:
+      'Quero automatizar o test plan "Cobertura — Analise de 1 sessao" (id: 6a833bfabbf47dc61a9484df)'
+  })
+  assert.match(routed.modifiedTransformedPrompt, /Voidr platform testing request/)
+  assert.match(routed.modifiedTransformedPrompt, /\/voidr-context/)
+
+  // Without the id it is still ambiguous, so it gets the conservative triage
+  // note rather than the pipeline route.
+  const generic = routeVoidrPrompt({ prompt: 'automatizar o test plan de checkout' })
+  assert.match(generic.modifiedTransformedPrompt, /If this request is about tests/)
+
+  // And unrelated work stays untouched.
+  for (const prompt of ['roda o lint do projeto', 'git status']) {
+    assert.deepEqual(routeVoidrPrompt({ prompt }), {}, prompt)
+  }
+})

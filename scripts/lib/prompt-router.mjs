@@ -15,13 +15,52 @@ const explicitVoidrSkill = new RegExp(
   'i'
 )
 
-function isDeployTestsPrompt(prompt) {
-  const text = String(prompt || '')
+function normalizePrompt(prompt) {
+  return String(prompt || '')
     .normalize('NFD')
     .replace(/\p{Diacritic}/gu, '')
     .toLowerCase()
-  return /\b(?:deploy|publicar?|subir|implantar?)\b[\s\S]{0,50}\btestes?\b|\btestes?\b[\s\S]{0,30}\b(?:deploy|deployados?)\b|\bexecutar?\b[\s\S]{0,40}\btestes?\b[\s\S]{0,40}\bplataforma\b/.test(
-    text
+}
+
+function isDeployTestsPrompt(prompt) {
+  return /\b(?:deploy|publicar?|subir|implantar?)\b[\s\S]{0,50}\btestes?\b|\btestes?\b[\s\S]{0,30}\b(?:deploy|deployados?)\b|\b(?:executar?|rodar?)\b[\s\S]{0,40}\btestes?\b[\s\S]{0,40}\bplataforma\b/.test(
+    normalizePrompt(prompt)
+  )
+}
+
+// `test plan` is platform vocabulary (see isGenericTestCreationPrompt), so a
+// run request against one is a platform execution even without "voidr".
+function isRunTestPlanPrompt(prompt) {
+  return /\b(?:rodar?|executar?|execute|run|disparar?)\b[\s\S]{0,50}\b(?:test\s*plans?|planos?\s+de\s+testes?)\b/.test(
+    normalizePrompt(prompt)
+  )
+}
+
+function isExecutionFailurePrompt(prompt) {
+  const text = normalizePrompt(prompt)
+  if (!/\bexecu(?:cao|coes|tions?)\b/.test(text)) return false
+  return (
+    /\b(?:falh\w*|fail\w*|erros?|quebr\w*|analis\w*|investig\w*|diagnos\w*)\b/.test(
+      text
+    ) || /\bpor\s+que\b|\bwhy\b/.test(text)
+  )
+}
+
+function isConnectPrompt(prompt) {
+  const text = normalizePrompt(prompt)
+  const namesServiceAccount = /\bservice\s*accounts?\b/.test(text)
+  // "login" and "conta" appear constantly inside test-writing requests, so a
+  // connect route without "voidr" (or the plugin's own "service account"
+  // vocabulary) would steal prompts like "cria testes de login".
+  if (!/\bvoidr\b/.test(text) && !namesServiceAccount) return false
+  return (
+    namesServiceAccount ||
+    /\b(?:conectar?|connect\w*|autenticar?|authenticat\w*|logar|login|log\s*in|credenc\w*)\b/.test(
+      text
+    ) ||
+    /\b(?:trocar?|mudar?|selecionar?|switch|change|select)\b[\s\S]{0,40}\b(?:organizacao|organizacoes|organizations?|contas?|accounts?)\b/.test(
+      text
+    )
   )
 }
 
@@ -43,7 +82,7 @@ quoting). Render every workflow choice with the native ask_user selectable
 options when available; free text is only a fallback.`
   }
 
-  if (isDeployTestsPrompt(prompt)) {
+  if (isDeployTestsPrompt(prompt) || isRunTestPlanPrompt(prompt)) {
     return `Use the /voidr-execute skill for this request and follow its gates in
 order. LIVE run: sync verification (test_plans_get_test_plan +
 test_plans_get_test_counts), the user's confirmation, and only then
@@ -54,6 +93,16 @@ and a SHADOW execution. Never call executions_create_execution before the
 sync verification, and never create or re-create Test Plan modules, suites,
 or cases during a deploy — an "Only automated test cases can be executed"
 error means the cases need the deploy, not re-creation.`
+  }
+
+  // Checked before the pipeline intents so a failed execution named next to a
+  // Test Plan id lands on diagnosis instead of the implementation pipeline.
+  if (isExecutionFailurePrompt(prompt)) {
+    return `If this request is about an execution created on the Voidr platform: use
+the /voidr-failure-analysis skill to diagnose it. Load the skill before
+inspecting files or calling any tool; it reads the execution's Playwright
+evidence from the platform. If the request is clearly about a local test run
+unrelated to Voidr, ignore this note.`
   }
 
   if (
@@ -79,6 +128,16 @@ by /voidr-generate. Load the matching skill before asking anything or calling
 any tool. Never invent your own triage options and never ask the user to type
 IDs or repository paths. If the request is clearly about plain local tests
 unrelated to Voidr, ignore this note.`
+  }
+
+  // Checked after the testing intents so prompts like "cria testes de login
+  // na voidr" keep the pipeline route instead of being read as authentication.
+  if (isConnectPrompt(prompt)) {
+    return `Use the /voidr-connect skill for this request. Load it before calling any
+tool: its contract starts with the voidr_auth_status MCP call, reuses an
+existing local Service Account when switching organizations, and opens the
+official browser login only when no valid local account exists. Never ask the
+user to type credentials, organization IDs, or JSON in chat.`
   }
 
   return null

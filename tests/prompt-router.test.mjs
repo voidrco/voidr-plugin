@@ -165,6 +165,72 @@ test('plan-mode choices are recognized in natural phrasings', async () => {
 })
 
 
+test('run intents against a Test Plan route to /voidr-execute', () => {
+  for (const prompt of [
+    'executa o test plan de login',
+    'roda o test plan 6a833bfabbf47dc61a9484df',
+    'roda os testes do plano de pagamento na plataforma'
+  ]) {
+    const routed = routeVoidrPrompt({ prompt })
+    assert.match(routed.modifiedTransformedPrompt || '', /\/voidr-execute/, prompt)
+    assert.match(
+      routed.modifiedTransformedPrompt || '',
+      /sync verification/,
+      prompt
+    )
+  }
+  // Running tests with no platform marker stays a local request.
+  for (const prompt of ['roda os testes do projeto', 'npm test falhou, roda de novo']) {
+    assert.deepEqual(routeVoidrPrompt({ prompt }), {}, prompt)
+  }
+})
+
+test('execution-failure intents route to /voidr-failure-analysis', () => {
+  for (const prompt of [
+    'analisa por que a execução 6a833bfabbf47dc61a9484df falhou',
+    'investiga a falha da execução de ontem',
+    'why did execution 6a833bfabbf47dc61a9484df fail?'
+  ]) {
+    const routed = routeVoidrPrompt({ prompt })
+    assert.match(
+      routed.modifiedTransformedPrompt || '',
+      /\/voidr-failure-analysis/,
+      prompt
+    )
+  }
+  // A failed execution named with a Test Plan id still means diagnosis, not
+  // the implementation pipeline.
+  const withPlanId = routeVoidrPrompt({
+    prompt:
+      'a execução do test plan 6a833bfabbf47dc61a9484df falhou, analisa pra mim'
+  })
+  assert.match(
+    withPlanId.modifiedTransformedPrompt || '',
+    /\/voidr-failure-analysis/
+  )
+  // A local failing test never mentions a platform execution.
+  assert.deepEqual(routeVoidrPrompt({ prompt: 'por que meu teste falhou?' }), {})
+})
+
+test('connect and organization-switch intents route to /voidr-connect', () => {
+  for (const prompt of [
+    'conecta minha conta voidr',
+    'troca para a organização serasa no voidr',
+    'preciso logar na voidr',
+    'troca a service account'
+  ]) {
+    const routed = routeVoidrPrompt({ prompt })
+    assert.match(routed.modifiedTransformedPrompt || '', /\/voidr-connect/, prompt)
+    assert.match(routed.modifiedTransformedPrompt || '', /voidr_auth_status/, prompt)
+  }
+  // "login" inside a test-writing request keeps the pipeline route.
+  const loginTests = routeVoidrPrompt({ prompt: 'cria testes de login na voidr' })
+  assert.doesNotMatch(loginTests.modifiedTransformedPrompt || '', /\/voidr-connect/)
+  assert.match(loginTests.modifiedTransformedPrompt || '', /\/voidr-context/)
+  // A generic login request without Voidr vocabulary stays untouched.
+  assert.deepEqual(routeVoidrPrompt({ prompt: 'faz login na aplicação e testa' }), {})
+})
+
 test('a Test Plan named with its id routes to the pipeline', () => {
   // The phrasing that started this: Portuguese sentence, platform vocabulary,
   // no "voidr" anywhere. It matched nothing, so the model picked a skill by

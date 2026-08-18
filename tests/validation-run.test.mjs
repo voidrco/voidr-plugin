@@ -77,7 +77,12 @@ test('a validation execution is SHADOW and pinned to the candidate version', asy
   assert.equal(posted[0].body.run_type, 'SHADOW')
   assert.equal(posted[0].body.source, 'STORAGE')
   assert.equal(posted[0].body.codebaseVersion, codebaseVersion)
-  assert.deepEqual(posted[0].body.tags, ['validation-run'])
+  // The platform only lets a not-yet-automated target run when the request
+  // carries this tag together with SHADOW + STORAGE + codebaseVersion
+  // (canRunNonAutomatedTargets). Dropping it makes a first automation
+  // impossible to validate.
+  assert.deepEqual(posted[0].body.tags, ['test-generation', 'validation-run'])
+  assert.equal(posted[0].body.provider, 'PLAYWRIGHT')
   assert.match(posted[0].body.idempotencyKey, /^validation-[a-f0-9]{32}$/)
   assert.equal(result.runType, 'SHADOW')
   assert.equal(result.execution._id, 'exec-1')
@@ -98,5 +103,24 @@ test('a validation execution refuses a version it was not given', async () => {
       restClient
     }),
     /requires the codebaseVersion returned by the validation deploy/
+  )
+})
+
+test('a validation execution without targets is refused before the platform', async () => {
+  await assert.rejects(
+    createValidationExecution({
+      applicationId: '0123456789abcdef01234567',
+      testPlanId,
+      environment: 'principal',
+      codebaseVersion: 'b'.repeat(64),
+      restClient: {
+        post: async () => {
+          throw new Error('must not reach the platform')
+        },
+      },
+    }),
+    // Without targets the platform runs "the whole plan" — only the cases it
+    // already lists as automated, which is none on a first automation.
+    /needs the targets of the deployed candidate/,
   )
 })

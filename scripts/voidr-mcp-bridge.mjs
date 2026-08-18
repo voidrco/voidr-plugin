@@ -426,7 +426,7 @@ const localTools = [
   {
     name: 'voidr_create_validation_execution',
     description:
-      'Create a SHADOW execution pinned to the codebaseVersion returned by voidr_release_deploy_validation. It validates the candidate on the platform without entering LIVE governance or monitoring and never runs the promoted latest release. Requires the environment slug and, optionally, explicit targets.',
+      'Create a SHADOW execution pinned to the codebaseVersion returned by voidr_release_deploy_validation. It validates the candidate on the platform without entering LIVE governance or monitoring and never runs the promoted latest release. Requires the environment slug, the codebaseVersion, and the targets — pass the ones voidr_release_deploy_validation returned, since an execution without targets covers only cases the platform already lists as automated.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -452,7 +452,8 @@ const localTools = [
         'applicationId',
         'testPlanId',
         'environment',
-        'codebaseVersion'
+        'codebaseVersion',
+        'targets'
       ]
     }
   }

@@ -92,7 +92,12 @@ export async function deployValidationCandidate({
     testPlanId: String(testPlanId),
     repositoryPath: selected.path,
     codebaseVersion: candidate.codebaseVersion,
-    storagePrefix: candidate.prefix || null
+    storagePrefix: candidate.prefix || null,
+    // The candidate's own manifest is the only honest scope for a validation
+    // run: the platform resolves an execution without targets as "the whole
+    // plan", which means only the cases already automated — none of them, for
+    // a plan being automated for the first time.
+    targets: normalizeTargets(candidate.targets) || []
   }
 }
 
@@ -123,6 +128,14 @@ export async function createValidationExecution({
     throw new Error('An environment slug is required.')
   }
   const selectedTargets = normalizeTargets(targets)
+  if (!selectedTargets) {
+    throw new Error(
+      'A validation execution needs the targets of the deployed candidate. ' +
+        'Pass the targets returned by voidr_release_deploy_validation: without ' +
+        'them the platform runs "the whole plan", which covers only cases ' +
+        'already automated and fails with "No test cases found for execution".'
+    )
+  }
 
   const idempotencyKey = createHash('sha256')
     .update(
@@ -144,7 +157,12 @@ export async function createValidationExecution({
     source: 'STORAGE',
     run_type: 'SHADOW',
     codebaseVersion: String(codebaseVersion),
-    tags: ['validation-run'],
+    // `test-generation` is not a label: it is the tag the platform requires to
+    // execute targets that are not automated yet (canRunNonAutomatedTargets,
+    // together with SHADOW + STORAGE + codebaseVersion). Without it a plan
+    // being automated for the first time can never be validated — every target
+    // is rejected with "Only automated test cases can be executed".
+    tags: ['test-generation', 'validation-run'],
     ...(selectedTargets ? { targets: selectedTargets } : {}),
     idempotencyKey: `validation-${idempotencyKey}`
   })

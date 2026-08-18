@@ -252,3 +252,43 @@ test('a Test Plan named with its id routes to the pipeline', () => {
     assert.deepEqual(routeVoidrPrompt({ prompt }), {}, prompt)
   }
 })
+
+test('correction intents route to /voidr-generate, not to another diagnosis', () => {
+  for (const prompt of [
+    'Faca o fix nas specs',
+    'corrige o seletor de senha',
+    'aplica o fix nos testes',
+    'conserta o TROCA-01',
+    'ajusta o assert do caso de login'
+  ]) {
+    const routed = routeVoidrPrompt({ prompt })
+    assert.match(routed.modifiedTransformedPrompt || '', /\/voidr-generate/, prompt)
+    // Correcting is implementation work: it ends on the build gate, and the
+    // re-run is a separate, later request.
+    assert.match(routed.modifiedTransformedPrompt || '', /voidr_build/, prompt)
+    assert.match(
+      routed.modifiedTransformedPrompt || '',
+      /never weaken an assertion/i,
+      prompt
+    )
+  }
+
+  // A unit test is the developer's own file; the platform never runs it.
+  assert.deepEqual(
+    routeVoidrPrompt({ prompt: 'Corrija o teste unitário deste arquivo' }),
+    {}
+  )
+  assert.deepEqual(
+    routeVoidrPrompt({ prompt: 'corrige esse bug no meu componente react' }),
+    {}
+  )
+
+  // Asking why it failed is still diagnosis, not correction.
+  const diagnosis = routeVoidrPrompt({
+    prompt: 'analisa por que a execução 6a833bfabbf47dc61a9484df falhou'
+  })
+  assert.match(
+    diagnosis.modifiedTransformedPrompt || '',
+    /\/voidr-failure-analysis/
+  )
+})

@@ -267,6 +267,11 @@ Disambiguation:
   `playwright_list_executions` and `playwright_get_execution_analytics`, never
   `executions_list_executions` or `executions_get_execution`, which report
   platform lifecycle status without the evidence this skill requires.
+- Never edit a spec, an action factory, or any repository file here. Applying
+  the correction this diagnosis points to belongs to `/voidr-generate`, which
+  carries the rules that keep the change honest: asserts backed by evidence,
+  no invented cases, no credentials written into specs, and the build gate at
+  the end. Hand the diagnosis over and say which skill continues.
 - Never call `executions_create_execution`; re-running belongs to
   `/voidr-execute` after a new user request.
 - Never call `test_plans_create_*`, `test_plans_update_test_plan`,

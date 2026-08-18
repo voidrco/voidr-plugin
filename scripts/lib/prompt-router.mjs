@@ -64,6 +64,20 @@ function isConnectPrompt(prompt) {
   )
 }
 
+// Correcting an implemented case is the same work as implementing it, so it
+// belongs to /voidr-generate. Without a route the model edited specs on its
+// own after a failure analysis — outside the rules that make the change safe
+// (evidence-backed asserts, no invented cases, no credentials in specs, and
+// the build gate at the end).
+function isSpecFixPrompt(prompt) {
+  const text = normalizePrompt(prompt)
+  // A unit test is the developer's own file, not a case the platform runs.
+  if (/\bteste?s?\s+unitari|\bunit\s+tests?\b/.test(text)) return false
+  return /\b(?:corrig\w*|corrija|consert\w*|arrum\w*|ajust\w*|reescrev\w*|refaz\w*|refatora\w*|fix\w*|repair\w*)\b[\s\S]{0,70}(?:\b(?:specs?|testes?|test\s*cases?|casos?|cen[áa]rios?|seletor\w*|selector\w*|locator\w*|assert\w*)\b|\b[a-z]{3,}-\d{2,}\b)/.test(
+    text
+  )
+}
+
 // Copilot appends it to the transformed prompt Claude passes it as UserPromptSubmit context.
 export function voidrPromptGuidance(input) {
   const prompt = String(input?.prompt || '')
@@ -94,6 +108,21 @@ Never call executions_create_execution before the sync verification, and
 never create or re-create Test Plan modules, suites, or cases during a
 deploy — an "Only automated test cases can be executed" error means the
 cases need the deploy, not re-creation.`
+  }
+
+  // Checked before the failure route: after a diagnosis the user asks for the
+  // correction, and that is implementation work, not another diagnosis.
+  if (isSpecFixPrompt(prompt)) {
+    return `If this request is about correcting tests managed on the Voidr platform,
+use the /voidr-generate skill: correcting an implemented case follows the
+same contract as implementing it. Load the skill before editing any file.
+Base the correction on evidence — the execution's own timeline and the
+recorded sessions — and never weaken an assertion to make a case pass; when
+the evidence proves the approved AAA is wrong, take its update gate. Finish
+with voidr_build, and re-run through /voidr-execute only after that. When the
+failing evidence has not been read yet, diagnose with /voidr-failure-analysis
+first. If the request is clearly about product code unrelated to Voidr tests,
+ignore this note.`
   }
 
   // Checked before the pipeline intents so a failed execution named next to a

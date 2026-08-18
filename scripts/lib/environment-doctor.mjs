@@ -7,7 +7,7 @@ import {
   resolveNodeToolchainCommand,
   runCommand
 } from './command.mjs'
-import { applySystemCaTrust, describeNetworkFailure } from './network-trust.mjs'
+import { applySystemCaTrust } from './network-trust.mjs'
 import {
   declaredNodeVersion,
   describeNodeRuntime,
@@ -279,15 +279,17 @@ function checkTlsTrust() {
     }
   }
 
+  // Not a failure on its own: it only means this runtime predates
+  // tls.getCACertificates. It matters solely behind TLS interception, and the
+  // node-runtime check already reports an unsupported major — reporting both as
+  // failures turned one old Node into an invented corporate-proxy problem.
   if (trust.status === 'unsupported') {
     return {
       name,
-      status: 'fail',
-      owner: OWNER_USER,
-      detail: `This Node.js runtime cannot read the system certificate store. ${describeNetworkFailure(
-        { code: 'UNABLE_TO_GET_ISSUER_CERT_LOCALLY' },
-        'the Voidr API'
-      )}`,
+      status: 'skip',
+      owner: OWNER_PLUGIN,
+      detail:
+        'This Node.js runtime cannot read the system certificate store, so system CAs were not merged. Only matters behind a TLS-inspecting proxy; Node 22 supports it.',
       remediation: allowlist
     }
   }

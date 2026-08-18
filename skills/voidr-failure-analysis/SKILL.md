@@ -86,7 +86,10 @@ execution.
 - If exactly one failure exists, select it automatically.
 - If multiple failures exist, show slug, title, classification, error summary,
   and file/line; ask the user to select one.
-- Do not group or deduplicate rows by `failureSignature`.
+- Do not group or deduplicate rows by `failureSignature`: the selection is the
+  user's and every row stays visible. Do say, next to the rows that share one,
+  how many cases that signature covers — cases failing for the same reason are
+  one problem, and diagnosing the representative one answers for all of them.
 
 Treat `failureSignature` only as an identifier from the analytical store. Do
 not pass it to tools that require another signature format.

@@ -487,6 +487,18 @@ assert(
   'Execute skill must require the local build gate before a deploy.'
 )
 assert(
+  /Pilot execution/i.test(executeSkill) &&
+    /SINGLE representative target/.test(executeSkill) &&
+    /Never split a plan into one execution per case/i.test(executeSkill),
+  'Execute skill must pilot the shared preconditions before running the plan.'
+)
+assert(
+  /failureSignature/.test(executeSkill) &&
+    /ONE problem, not N/i.test(executeSkill) &&
+    /only the previously failing targets/i.test(executeSkill),
+  'Execute skill must group failures by signature and re-run only what failed.'
+)
+assert(
   /at least 30 seconds/i.test(executeSkill) &&
     /never a tight loop/i.test(executeSkill),
   'Execute skill must monitor executions with a bounded polling cadence.'

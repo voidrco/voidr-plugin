@@ -52,15 +52,40 @@ Ask (or infer from the request) which mode applies:
    content-addressed candidate WITHOUT promoting it (`latest` stays exactly
    as it was) and returns the immutable `codebaseVersion`. Behind its own
    confirmation gate.
-3. **Validation execution**: `voidr_create_validation_execution` with that
-   `codebaseVersion` — a SHADOW run pinned to the candidate, outside LIVE
-   governance and monitoring. Confirm scope with the user first. Share the
-   execution link the platform returns.
-4. **Follow to completion** (see "Monitoring").
-5. **Promotion is a separate decision**: when the validation passes and the
+3. **Pilot execution**: `voidr_create_validation_execution` with that
+   `codebaseVersion` and a SINGLE representative target — the shortest case
+   that still exercises the shared preconditions (login, environment, base
+   URL). Every case in a plan repeats those preconditions, so a broken one
+   fails all of them: the pilot buys that verdict for one case's runtime
+   instead of the whole plan's. Confirm the scope with the user first and
+   share the execution link.
+4. **Full run**: only after the pilot passes, execute the remaining targets in
+   ONE execution. Never split a plan into one execution per case: results are
+   already reported per case, and separate executions pay queue and pod
+   startup again for the same answer.
+5. **Follow to completion** (see "Monitoring") and read the outcome with
+   "Reading a failed run" below.
+6. **Promotion is a separate decision**: when the validation passes and the
    user wants the version in the main pipeline, that is the reviewed path —
    publish with `voidr_workspace_publish_tests`, merge by the user, then
    `voidr_release_inspect` + `voidr_release_deploy_merged_pr`.
+
+## Reading a failed run
+
+Group the failures by `failureSignature` (`playwright_list_execution_failures`)
+BEFORE reporting or proposing anything:
+
+- cases sharing one signature are ONE problem, not N. Diagnose the
+  representative case and say how many cases the signature covers; never open
+  one investigation — or one subagent — per case of the same signature;
+- a signature that covers every case is a shared precondition. Report it as
+  such: fixing it is what unblocks the plan;
+- distinct signatures are independent problems and may be worked in parallel.
+
+Corrections belong to `/voidr-generate`. When the user asks to re-run after a
+correction, execute ONLY the previously failing targets — a green case does
+not need to pay for another run, and a narrower scope returns its verdict
+sooner.
 
 ## Execution call contract
 
@@ -113,3 +138,5 @@ self-healing or any Hive process.
   a passing validation and an explicit user decision.
 - `executions_get_execution` / `playwright_get_execution_analytics` —
   monitoring and result reporting.
+- `playwright_list_execution_failures` — the per-case failures with their
+  `failureSignature`, which is what groups one problem from many cases.

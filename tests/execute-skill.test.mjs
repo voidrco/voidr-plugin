@@ -20,6 +20,7 @@ test('execute skill routes only its execution, release, and sync tools', () => {
     'executions_create_execution',
     'executions_get_execution',
     'playwright_get_execution_analytics',
+    'playwright_list_execution_failures',
     'test_plans_get_test_counts',
     'test_plans_get_test_plan',
     'voidr_build',
@@ -78,4 +79,25 @@ test('validation runs are SHADOW executions pinned to the candidate version', ()
   assert.match(skill, /Never deploy a\s+repository that did not build/i)
   assert.match(skill, /at least 30 seconds/i)
   assert.match(skill, /never a tight loop/i)
+})
+
+test('a validation run pilots the shared preconditions before the whole plan', () => {
+  // Every case repeats login/environment: a broken precondition fails all of
+  // them, so the plan's runtime buys no information the pilot did not.
+  assert.match(skill, /Pilot execution/)
+  assert.match(skill, /SINGLE representative target/)
+  assert.match(skill, /only after the pilot passes/i)
+  // One execution per case pays queue and pod startup again for results the
+  // platform already reports per case.
+  assert.match(skill, /Never split a plan into one execution per case/i)
+})
+
+test('failures are grouped by signature and re-runs are scoped', () => {
+  assert.match(skill, /failureSignature/)
+  assert.match(skill.replace(/\n/g, ' '), /ONE problem, not N/i)
+  assert.match(
+    skill.replace(/\n/g, ' '),
+    /never open\s*—?\s*one investigation — or one subagent — per case/i
+  )
+  assert.match(skill.replace(/\n/g, ' '), /only the previously failing targets/i)
 })

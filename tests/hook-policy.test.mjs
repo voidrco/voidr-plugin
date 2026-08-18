@@ -1392,7 +1392,7 @@ function transcriptEntry(type, data) {
   return JSON.stringify({ type, data })
 }
 
-test('blocks a manual clone or a fabricated checkout during a workflow', () => {
+test('allows cloning the test repository but blocks a fabricated checkout', () => {
   const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-materialize-'))
   const sessionId = 'materialization-gate'
   const now = Date.now()
@@ -1432,11 +1432,9 @@ test('blocks a manual clone or a fabricated checkout during a workflow', () => {
     dataRoot
   )
 
+  // Fabricating a checkout is still denied: a directory with the right origin
+  // but no history passes the origin lookup and then fails everywhere else.
   const denied = {
-    'git clone https://github.com/voidrco/voidr-tp-desk-web tests':
-      /never clone the Voidr test repository/i,
-    'git clone https://github.com/voidrco/voidr-tp-plano-e37c1b5b skeleton':
-      /never clone the Voidr test repository/i,
     'git init ; git remote add origin https://github.com/voidrco/voidr-tp-desk-web':
       /never create a Git repository or add a remote by hand/i,
     'cd tests && git remote add origin https://example.test/repo.git':
@@ -1451,9 +1449,11 @@ test('blocks a manual clone or a fabricated checkout during a workflow', () => {
     assert.match(output.permissionDecisionReason, reason, command)
   }
 
-  // Cloning something that is not the test repository stays the user's business,
-  // and reading Git state is never blocked.
+  // Cloning runs as the user, with the user's own credentials, so it grants no
+  // access they did not have — the test repository included.
   for (const command of [
+    'git clone https://github.com/voidrco/voidr-tp-desk-web tests',
+    'git clone https://github.com/voidrco/voidr-tp-plano-e37c1b5b skeleton',
     'git clone https://github.com/blip/desk-web product',
     'git status',
     'git remote -v'

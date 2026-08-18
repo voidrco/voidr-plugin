@@ -330,22 +330,10 @@ function enforceRepositoryMaterializationThroughTools(
 ) {
   const state = readSessionState(hookPayload)
   if (state.workflowActive !== true) return
-  const linkedUrl = String(state.linkedRepositoryUrl || '')
-    .trim()
-    .toLowerCase()
-  const clones = /(?:^|[\s;|&(])git\b[^;&|\n]*\bclone\b/.test(normalizedShell)
-  const clonesTestRepository =
-    clones &&
-    (/voidr-tp-/.test(normalizedShell) ||
-      (linkedUrl.length > 0 &&
-        normalizedShell.includes(
-          linkedUrl.replace(/^https?:\/\//, '').replace(/\.git$/, '')
-        )))
-  if (clonesTestRepository) {
-    deny(
-      'Blocked by Voidr policy: never clone the Voidr test repository — not from the terminal and not on the user\'s behalf. Every provisioned repository lives in Voidr\'s GitHub organization, so the clone is the user\'s, performed with their own credentials, and that is what proves their access. Show them the repository URL with the HTTPS and SSH commands, ask them to clone it inside the open workspace, and call voidr_workspace_prepare_test_repository again afterwards: it finds the checkout by its Git origin.'
-    )
-  }
+  // Cloning the test repository is allowed: git runs as the user, with the
+  // user's own credentials, so the agent doing it grants no access the user did
+  // not already have. `voidr_context_bootstrap` clones it as part of the
+  // atomic call; a terminal clone is the same act, just visible.
   const fabricatesCheckout =
     /(?:^|[\s;|&(])git\b[^;&|\n]*\binit\b/.test(normalizedShell) ||
     /(?:^|[\s;|&(])git\b[^;&|\n]*\bremote\s+add\b/.test(normalizedShell)

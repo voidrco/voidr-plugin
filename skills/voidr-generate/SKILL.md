@@ -95,10 +95,11 @@ different data source.
 
 ## 4. Exploration probes — inspect before asserting
 
-A probe is the LAST resort, never the first: read the action timeline AND the
-screen map first, and only probe what neither answered. State which question
-is still open before writing one — if the answer is already in the evidence,
-the probe costs a run and adds nothing. It is also the step most likely to
+A probe is the LAST resort, never the first — with the one exception named in
+4b: read the action timeline AND the screen map first, and only probe what
+neither answered. State which question is still open before writing one — if
+the answer is already in the evidence, the probe costs a run and adds
+nothing. It is also the step most likely to
 fail on its own: it runs on this machine, so an application behind SSO or a
 corporate network may never load. When it fails twice, stop probing and
 implement from the evidence you have, saying which assertion stayed weaker
@@ -111,6 +112,44 @@ structure, composed innerText) and run it with `voidr_explore` — it tolerates
 failures, returns per-test stdout and traces, never builds, and never counts
 as validation. Read the findings, refine, and DELETE the probe directory
 before the build. Probes must never be published or deployed.
+
+## 4b. The authentication action is probed before it is written
+
+Authentication is the one place where the rule above is inverted: probe it
+BEFORE implementing it, even when the recorded evidence looks conclusive.
+
+Three things make it the exception. Most cases in a plan only need to BE
+logged in, so a wrong login action fails every one of them and hides whatever
+they were meant to prove. The recorded evidence is least reliable exactly
+here: sign-in screens are frequently a third-party SSO where a design system
+renders its own control over the native form, and a recorded human click
+propagates to the underlying native element — so the timeline names a locator
+that exists in the DOM but that automation can never act on. And the login
+failure surfaces at the far end of the most expensive loop there is: it costs
+a build, a candidate deploy and a remote run to learn that a button was
+covered, then repeats.
+
+The sign-in screen is also the part of the product a probe can always reach:
+it is what an unauthenticated visitor sees, so the SSO caveat above does not
+apply to it.
+
+Before writing or changing the repository's authentication action:
+
+- probe the selected environment's login screen and report, for every field
+  and submit control the flow needs, its locator, whether it is VISIBLE, and
+  whether it is ENABLED — an element present in the DOM is not evidence that
+  it can be acted on;
+- when the screen is built from custom elements, report which layer each
+  control belongs to, and take the locator from the layer the probe proved
+  actionable — not from the recorded timeline. State the divergence when the
+  two disagree;
+- keep the probe's answers in the action factory, so every case that merely
+  needs a session inherits one validated login instead of one guess per case.
+
+If the login screen cannot be loaded twice, implement from the evidence and
+say plainly that the authentication action was never validated locally — so
+the first remote failure is read against that, instead of being diagnosed
+from scratch.
 
 ## 5. Implement
 
@@ -125,13 +164,16 @@ before the build. Probes must never be published or deployed.
 - Credentials and sensitive data only as `{{env.VARIABLE_NAME}}` /
   the repository's env fixture — never literals, never `process.env`
   fallbacks.
-- Prefer stable semantic locators and deterministic waits. Four rules that
-  real failures keep proving: assert the text the DOM carries, never the text
-  the screen shows (CSS `text-transform` makes them differ — match with a
-  tolerant regex); choose `select` options by value or visible label, never
-  by index; after an action that starts asynchronous work, anchor on a
-  positive web-first assertion before any negative one; waits belong to the
-  action layer, so every spec inherits them instead of scattering
+- Prefer stable semantic locators and deterministic waits — except when the
+  target is a custom element, where a semantic locator is a bet on an
+  accessible name the component may never expose. There, the locator proved
+  actionable by evidence wins over the one the convention ranks higher. Four
+  rules that real failures keep proving: assert the text the DOM carries,
+  never the text the screen shows (CSS `text-transform` makes them differ —
+  match with a tolerant regex); choose `select` options by value or visible
+  label, never by index; after an action that starts asynchronous work, anchor
+  on a positive web-first assertion before any negative one; waits belong to
+  the action layer, so every spec inherits them instead of scattering
   per-assertion timeouts.
 
 ## Deployed runtime configuration

@@ -240,6 +240,12 @@ test('exploration tolerates failing probes and never builds', async () => {
     result.validation.failures[0].category,
     'response-not-observed'
   )
+  // The category alone cannot be acted on: the message is what names the call
+  // that failed, so a probe that ran and failed stays diagnosable.
+  assert.equal(
+    result.validation.failures[0].message,
+    'page.waitForResponse: Timeout 30000ms exceeded'
+  )
   assert.equal(
     commands.some(command => command.includes('build')),
     false

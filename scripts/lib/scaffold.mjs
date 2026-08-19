@@ -347,6 +347,17 @@ function parsePlaywrightReport(stdout) {
   }
 }
 
+// A category names the KIND of failure; only Playwright's own message names the
+// failure. Its call log is what distinguishes a locator that is missing from
+// one that is present but never became actionable — the two share a category
+// and need opposite corrections. Without it a probe that ran and failed is
+// indistinguishable from one that never ran, and the next attempt is a guess.
+function failureMessageExcerpt(messages) {
+  const text = String(messages || '').trim()
+  if (!text) return ''
+  return text.length > 2000 ? `${text.slice(0, 2000)}…` : text
+}
+
 function collectPlaywrightFailures(report) {
   const failures = []
   const visitSuite = suite => {
@@ -365,7 +376,8 @@ function collectPlaywrightFailures(report) {
           failures.push({
             spec: String(spec.file || suite.file || ''),
             title: String(spec.title || test.title || ''),
-            category: classifyPlaywrightFailure(messages)
+            category: classifyPlaywrightFailure(messages),
+            message: failureMessageExcerpt(messages)
           })
         }
       }
@@ -377,7 +389,8 @@ function collectPlaywrightFailures(report) {
     failures.push({
       spec: '',
       title: 'Playwright infrastructure',
-      category: classifyPlaywrightFailure(error?.message)
+      category: classifyPlaywrightFailure(error?.message),
+      message: failureMessageExcerpt(error?.message)
     })
   }
   return failures

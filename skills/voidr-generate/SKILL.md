@@ -109,9 +109,11 @@ When AAA + sessions leave real questions open (is this text a DOM text or an
 attribute? does this click open a submenu?), write a THROWAWAY inspection
 spec under `modules/_probe/` that logs the answers (attributes, shadow-DOM
 structure, composed innerText) and run it with `voidr_explore` — it tolerates
-failures, returns per-test stdout and traces, never builds, and never counts
-as validation. Read the findings, refine, and DELETE the probe directory
-before the build. Probes must never be published or deployed.
+failures, returns per-test stdout and traces plus the Playwright message behind
+each failure, never builds, and never counts as validation. A probe that failed
+still reports why: read that message before editing the probe, or the next
+attempt repeats the same guess. Read the findings, refine, and DELETE the probe
+directory before the build. Probes must never be published or deployed.
 
 ## 4b. The authentication action is probed before it is written
 

@@ -151,6 +151,42 @@ say plainly that the authentication action was never validated locally — so
 the first remote failure is read against that, instead of being diagnosed
 from scratch.
 
+## 4c. One login per execution — the preflight artifact
+
+When the selected cases mostly need to BE logged in, the repository
+authenticates ONCE and the cases inherit that session. Writing the login into
+every spec pays the whole SSO handshake per case and turns the most fragile
+flow in the product into a dependency of every result.
+
+The framework already owns this. A `preflight/preflight.spec.js` at the
+repository root is detected and bundled by `voidr_build` with no extra
+configuration, and its artifacts are stored under the execution prefix — so
+every shard reads the same session instead of logging in again:
+
+```js
+// preflight/preflight.spec.js — runs once, before the plan
+import { savePreflightArtifact } from '@voidrco/playwright/shared/preflight.js'
+const storageState = await page.context().storageState()
+await savePreflightArtifact('auth.json', storageState)
+```
+
+```js
+// each spec that only needs to be authenticated
+import { getPreflightArtifactPath } from '@voidrco/playwright/shared/preflight.js'
+test.use({ storageState: getPreflightArtifactPath('auth.json') })
+```
+
+The preflight performs the login through the SAME action factory the cases
+would have called, so 4b validates one login and the whole plan inherits it.
+
+Two kinds of case must NOT inherit it: the one whose subject IS the login, and
+the one that requires the absence of a session. Those keep driving the UI and
+declare no inherited state — inheriting it would make them assert nothing.
+
+Skip the preflight entirely when no selected case needs a session. A plan that
+never logs in gains nothing from one, and an unnecessary preflight is one more
+thing that can fail before any test runs.
+
 ## 5. Implement
 
 - Shared page logic goes into action factories at the repository's `actions/`

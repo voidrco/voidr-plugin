@@ -73,6 +73,28 @@ Routing invariants:
 | `executions_get_execution` | `voidr-execute` | Lifecycle status of the execution just created. |
 | `executions_list_executions` | none | Reserved. No current skill routes to it; listing failed executions for analysis uses `playwright_list_executions`. |
 
+## Validation-run diagnosis (restructured flow)
+
+Owned by `voidr-execute`. A validation run that failed is diagnosed here before
+any correction is routed to `voidr-generate`; these tools read evidence and
+never change lifecycle state. They exist because an error message alone does
+not name a cause — "timeout" is the symptom of a locator that is present but
+hidden just as often as it is of slowness, and only the step-level evidence
+tells the two apart.
+
+| Tool | Purpose |
+| --- | --- |
+| `playwright_get_step_timeline` | Per-step outcome and duration with the DOM snapshot of the failing step — the first read after a failure, and what names the step that hung. |
+| `playwright_get_step_frames` | Screencast frames for one step, when the DOM snapshot leaves the visual state ambiguous. |
+| `assistant_context_get_step_detail` | Full detail of a single step, once the timeline identified which one to open. |
+| `failure_analysis_get_context` | The platform's own recorded analysis of the failure, when one exists. |
+
+Requires the run's trace to have been finalized. A repository whose test budget
+does not clear its action budget aborts the worker before the trace is written,
+and every tool in this table returns empty — `voidr_context_bootstrap` raises
+that budget while preparing the checkout, which is what keeps these reads
+answerable.
+
 ## Playwright analytics (ClickHouse evidence)
 
 Owned exclusively by `voidr-failure-analysis`. These tools read the analytical

@@ -495,7 +495,7 @@ assert(
 assert(
   /failureSignature/.test(executeSkill) &&
     /ONE problem, not N/i.test(executeSkill) &&
-    /only the previously failing targets/i.test(executeSkill),
+    /only the\s+previously failing targets/i.test(executeSkill),
   'Execute skill must group failures by signature and re-run only what failed.'
 )
 assert(

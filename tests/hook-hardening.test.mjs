@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -174,6 +174,59 @@ test('lists Test Plans normally in existing-plan mode', () => {
     dataRoot
   )
   assert.deepEqual(output, {})
+})
+
+test('denies edits to the plugin source checkout, not just the installed copy', () => {
+  // The installation boundary covers the copy the host installs. This repository
+  // is the source, an ordinary checkout in the workspace — and an agent asked to
+  // "fix the plugin" would rewrite the hooks, policy, and skills governing the
+  // very session it is running in.
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-real-workspace-'))
+
+  // A second plugin checkout, distinct from the installed one this guard runs
+  // from — which is the real case: the source repository open in the workspace.
+  const source = mkdtempSync(join(tmpdir(), 'voidr-plugin-source-'))
+  mkdirSync(join(source, 'scripts'), { recursive: true })
+  mkdirSync(join(source, 'skills', 'voidr-execute'), { recursive: true })
+  mkdirSync(join(source, 'policy'), { recursive: true })
+  writeFileSync(join(source, 'plugin.json'), '{"name":"copilot"}')
+  writeFileSync(join(source, 'scripts', 'voidr-mcp-bridge.mjs'), '')
+
+  for (const target of [
+    join(source, 'scripts', 'guard-hive-tools.mjs'),
+    join(source, 'skills', 'voidr-execute', 'SKILL.md'),
+    join(source, 'policy', 'tool-policy.json')
+  ]) {
+    const denied = runHook(
+      {
+        sessionId: 'plugin-source-boundary',
+        cwd: workspace,
+        toolName: 'Write',
+        toolArgs: { file_path: target, content: 'x' }
+      },
+      dataRoot
+    )
+    assert.equal(denied.permissionDecision, 'deny', target)
+    assert.match(denied.permissionDecisionReason, /belongs to the Voidr plugin itself/i)
+  }
+
+  // A test repository carries neither marker, so it stays writable.
+  const testRepo = mkdtempSync(join(tmpdir(), 'voidr-test-repo-'))
+  mkdirSync(join(testRepo, 'modules'), { recursive: true })
+  writeFileSync(join(testRepo, 'project.json'), '{}')
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId: 'plugin-source-boundary-allow',
+        cwd: testRepo,
+        toolName: 'Write',
+        toolArgs: { file_path: join(testRepo, 'modules', 'x.spec.js'), content: 'x' }
+      },
+      dataRoot
+    ),
+    {}
+  )
 })
 
 test('denies writes and repository selection inside the plugin installation (BUG-006)', () => {

@@ -17,8 +17,28 @@ enriquece foi tocado. Nenhum script foi apagado — só desligados do wiring.
 | --- | --- | --- | --- |
 | Rota de prompt | `userPromptTransformed` | `UserPromptSubmit` | ✅ mantido |
 | Policy gate | `preToolUse` | `PreToolUse` | ❌ **removido** |
-| Links de execução | `postToolUse` | `PostToolUse` | ✅ mantido |
+| Coleta de evidência | `postToolUse` | `PostToolUse` | ✅ mantido |
 | Gate de resposta | `stop` | `Stop` | ❌ **removido** |
+
+### Por que o `postToolUse` ficou
+
+Ele não nega nada — orienta e guarda estado. Faz quatro coisas:
+
+1. **Coleta IDs de execução** dos argumentos e do resultado de cada tool, e injeta no
+   contexto do modelo a instrução de terminar a resposta com
+   `Execution: [Open execution](<url>)`. Pede, não obriga.
+2. **Desarma o post-smoke stop quando o build passa.** Sem isso, um `voidr_build` **verde**
+   deixava o stop armado e travava o passo seguinte atrás de uma frase de remediação que
+   ninguém digitaria depois de um build sem erro.
+3. **Grava as seleções de `ask_user`**, que é como o plugin lembra as escolhas dos cards.
+4. Mantém `latestEvidenceExecutionIds` e `latestEvidenceTestCaseSlugs` (últimos 20).
+
+O `postToolUse` e o `stop` eram um par: o primeiro coletava em `requiredExecutionIds`, o
+segundo bloqueava a resposta até o link aparecer. **Com o `stop` fora, o link é pedido mas
+não é mais exigido.**
+
+Remover o `postToolUse` também quebraria a memória de `ask_user` e ressuscitaria o bug do
+build verde — atrapalharia o teste em vez de liberar.
 
 Arquivos alterados: 4 · 9 inserções · 75 remoções
 
@@ -104,7 +124,8 @@ Com o `preToolUse` fora, **nenhum** destes gates roda mais:
 | deploy mutável legado | `voidr deploy-latest` e `npm run voidr:deploy` |
 
 Com o `stop` fora, uma resposta que fala de execução **não é mais bloqueada** até incluir o
-link da execução.
+link. O `postToolUse` continua pedindo o link no contexto do modelo, mas nada verifica se
+ele apareceu — então respostas sobre execução podem sair sem rastro para a plataforma.
 
 ### Consequências práticas ao testar
 

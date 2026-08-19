@@ -177,6 +177,16 @@ test('bridge filters discovery, keeps secrets local, and blocks forbidden calls'
   assert.equal(statusText.includes(syntheticSecret), false)
   assert.equal(JSON.parse(statusText).canWrite, true)
 
+  // {} is what Copilot's first /voidr-setup call sends: the doctor must fall
+  // back to its own working directory instead of throwing on the absent path.
+  const doctorReport = await client.request('tools/call', {
+    name: 'voidr_environment_doctor',
+    arguments: {}
+  })
+  const doctorChecks = JSON.parse(doctorReport.content[0].text).checks
+  assert.equal(Array.isArray(doctorChecks), true)
+  assert.equal(doctorChecks.length > 0, true)
+
   const selectedPlanId = '0123456789abcdef01234567'
   const selectedPlan = await client.request('tools/call', {
     name: 'test_plans_get_test_plan',
@@ -1807,7 +1817,7 @@ test('a plan created without a repository continues in planning-only mode', asyn
 
   // Everything that needs a checkout is refused, naming the way out.
   for (const tool of [
-    'voidr_smoke_build',
+    'voidr_build',
     'voidr_workspace_publish_tests',
     'executions_create_execution'
   ]) {
@@ -1832,7 +1842,7 @@ test('a plan created without a repository continues in planning-only mode', asyn
     arguments: { planId: pendingId }
   })
   const afterProvision = await client.requestRaw('tools/call', {
-    name: 'voidr_smoke_build',
+    name: 'voidr_build',
     arguments: { testPlanId: pendingId, repositoryPath: temp }
   })
   assert.doesNotMatch(

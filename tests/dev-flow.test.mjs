@@ -67,27 +67,28 @@ test('the single dev approval must be the whole message', () => {
   assert.equal(isDevTestsApproval('sim'), false)
 })
 
-test('routes developer intent to /voidr-feature-test and keeps the classic route', () => {
+test('routes developer intent into the pipeline and keeps the classic route', () => {
   const dev = routeVoidrPrompt({
     prompt: 'cria os testes da minha feature de login'
   })
-  assert.match(dev.modifiedTransformedPrompt, /\/voidr-feature-test skill/)
-  assert.match(dev.modifiedTransformedPrompt, /Criar testes/)
+  assert.match(dev.modifiedTransformedPrompt, /\/voidr-context skill/)
+  assert.match(dev.modifiedTransformedPrompt, /\/voidr-generate/)
 
   const classic = routeVoidrPrompt({
     prompt: 'quero desenvolver testes na Voidr'
   })
-  assert.match(classic.modifiedTransformedPrompt, /\/voidr-develop-tests/)
+  assert.match(classic.modifiedTransformedPrompt, /\/voidr-context/)
 
   const deploy = routeVoidrPrompt({
     prompt: 'faca o deploy dos testes que desenvolvemos'
   })
-  assert.match(deploy.modifiedTransformedPrompt, /\/voidr-deploy-run/)
+  assert.match(deploy.modifiedTransformedPrompt, /\/voidr-execute/)
   assert.match(
     deploy.modifiedTransformedPrompt,
-    /Never call\s+executions_create_execution before the deploy/
+    /Never call executions_create_execution before the\s+sync verification/
   )
-  assert.match(deploy.modifiedTransformedPrompt, /voidr_release_inspect/)
+  assert.match(deploy.modifiedTransformedPrompt, /voidr_release_deploy_validation/)
+  assert.match(deploy.modifiedTransformedPrompt, /codebaseVersion/)
 
   assert.deepEqual(routeVoidrPrompt({ prompt: 'Criar testes' }), {})
 })
@@ -696,7 +697,7 @@ test('post-smoke remediation crosses hook session ids and ask_user answers', () 
       {
         sessionId: chatSession,
         cwd: process.cwd(),
-        toolName: 'voidr-voidr_smoke_build',
+        toolName: 'voidr-voidr_build',
         toolArgs: {
           repositoryPath: '/tmp/tests',
           repositoryUrl: 'https://github.com/voidrco/tests',
@@ -720,7 +721,7 @@ test('post-smoke remediation crosses hook session ids and ask_user answers', () 
     dataRoot
   )
   assert.equal(blocked.permissionDecision, 'deny')
-  assert.match(blocked.permissionDecisionReason, /after voidr_smoke_build/)
+  assert.match(blocked.permissionDecisionReason, /after voidr_build/)
 
   submitPrompt(
     {
@@ -756,7 +757,7 @@ test('an ask_user answer authorizing the fix clears the post-smoke stop', () => 
       {
         sessionId,
         cwd: process.cwd(),
-        toolName: 'voidr-voidr_smoke_build',
+        toolName: 'voidr-voidr_build',
         toolArgs: {
           repositoryPath: '/tmp/tests',
           repositoryUrl: 'https://github.com/voidrco/tests',
@@ -910,22 +911,6 @@ test('Criar testes never approves a write in the plan-first flow', () => {
   assert.match(blocked.permissionDecisionReason, /Aprovo este Test Plan/)
 })
 
-test('the dev flow verifies the linked repository before writing cases', () => {
-  const skill = readFileSync(
-    join(root, 'skills/voidr-feature-test/SKILL.md'),
-    'utf8'
-  )
-  const verification = skill.indexOf('gitProviderConfig.repositoryUrl')
-  const firstWrite = skill.indexOf('test_plans_create_module')
-  assert.ok(verification > 0, 'the repository check must exist')
-  assert.ok(
-    verification < firstWrite,
-    'the repository check must come before the first structure write'
-  )
-  assert.match(skill, /before writing anything/i)
-  assert.match(skill, /cases created in it are stranded/i)
-})
-
 test('the post-smoke stop never blocks the question that unlocks it', () => {
   const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-post-smoke-ask-'))
   const sessionId = 'post-smoke-ask'
@@ -933,7 +918,7 @@ test('the post-smoke stop never blocks the question that unlocks it', () => {
     {
       sessionId,
       cwd: process.cwd(),
-      toolName: 'voidr-voidr_smoke_build',
+      toolName: 'voidr-voidr_build',
       toolArgs: { repositoryPath: process.cwd() }
     },
     dataRoot
@@ -960,6 +945,80 @@ test('the post-smoke stop never blocks the question that unlocks it', () => {
       toolName
     )
   }
+})
+
+test('a completed build clears the stop, a failed one keeps it', () => {
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-post-build-'))
+  const postHook = join(root, 'scripts/post-tool-execution-links.mjs')
+  const buildCall = sessionId => ({
+    sessionId,
+    cwd: process.cwd(),
+    toolName: 'voidr-voidr_build',
+    toolArgs: { repositoryPath: process.cwd() }
+  })
+  const nextStep = sessionId => ({
+    sessionId,
+    cwd: process.cwd(),
+    toolName: 'skill',
+    toolArgs: { skill: 'voidr-execute' }
+  })
+  const reportResult = (sessionId, result) => {
+    const outcome = spawnSync(process.execPath, [postHook], {
+      input: JSON.stringify({
+        sessionId,
+        toolName: 'voidr-voidr_build',
+        toolResult: result
+      }),
+      encoding: 'utf8',
+      env: { ...process.env, COPILOT_PLUGIN_DATA: dataRoot }
+    })
+    assert.equal(outcome.status, 0, outcome.stderr)
+  }
+
+  // A green build has nothing to remediate: the validation run must follow
+  // without the user typing a remediation phrase. Copilot elides the report
+  // text in post-hook payloads, so resultType is the only surviving verdict.
+  const passed = 'build-passed'
+  runHook(buildCall(passed), dataRoot)
+  reportResult(passed, {
+    textResultForLlm: '[copilot:elided textResultForLlm (252 bytes)]',
+    resultType: 'success'
+  })
+  assert.deepEqual(runHook(nextStep(passed), dataRoot), {})
+  assert.deepEqual(
+    runHook(
+      {
+        sessionId: passed,
+        cwd: process.cwd(),
+        toolName: 'voidr-voidr_release_deploy_validation',
+        toolArgs: { repositoryPath: process.cwd() }
+      },
+      dataRoot
+    ),
+    {}
+  )
+
+  // A failed build still stops the turn: no silent diagnosis or retry.
+  const failed = 'build-failed'
+  runHook(buildCall(failed), dataRoot)
+  reportResult(failed, {
+    textResultForLlm: '[copilot:elided textResultForLlm (120 bytes)]',
+    resultType: 'error'
+  })
+  const blocked = runHook(
+    {
+      sessionId: failed,
+      cwd: process.cwd(),
+      toolName: 'read_file',
+      toolArgs: { filePath: join(process.cwd(), 'package.json') }
+    },
+    dataRoot
+  )
+  assert.equal(blocked.permissionDecision, 'deny')
+  assert.match(blocked.permissionDecisionReason, /after voidr_build/)
+  // Loading the skill that describes the authorized next step is never an
+  // investigation, so it stays allowed even while the stop is armed.
+  assert.deepEqual(runHook(nextStep(failed), dataRoot), {})
 })
 
 test('a bare remediation verb authorizes the post-smoke fix', async () => {
@@ -995,7 +1054,7 @@ test('the post-smoke denial teaches the fallback when the prompt hook is behind'
     {
       sessionId,
       cwd: process.cwd(),
-      toolName: 'voidr-voidr_smoke_build',
+      toolName: 'voidr-voidr_build',
       toolArgs: { repositoryPath: process.cwd() }
     },
     dataRoot
@@ -1025,7 +1084,7 @@ test('a fresh prompt hook keeps the post-smoke denial free of the fallback', () 
     {
       sessionId,
       cwd: process.cwd(),
-      toolName: 'voidr-voidr_smoke_build',
+      toolName: 'voidr-voidr_build',
       toolArgs: { repositoryPath: process.cwd() }
     },
     dataRoot

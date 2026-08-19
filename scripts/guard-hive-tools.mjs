@@ -6,6 +6,7 @@ import {
   realpathSync,
   statSync
 } from 'node:fs'
+import { homedir } from 'node:os'
 import { basename, dirname, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { CLAUDE, detectHost } from './lib/host.mjs'
@@ -58,9 +59,10 @@ enforceExplicitWorkspaceRoot(payload, toolName, toolArgs)
 enforceTestSpecContentPolicy(rawToolName, toolArgs)
 recordSmokeAttempt(payload, toolName)
 
-const protectedCredential = (policy.protectedCredentialFragments || []).find(
-  fragment => searchable.includes(fragment.toLowerCase())
-)
+const protectedCredential =
+  (policy.protectedCredentialFragments || []).find(fragment =>
+    searchable.includes(fragment.toLowerCase())
+  ) || (touchesCredentialDirectory(searchable) ? 'the credential store' : null)
 if (protectedCredential) {
   deny(
     'Blocked by Voidr policy: Service Account credential files can only be handled by the protected local authentication tools.'
@@ -242,7 +244,7 @@ function enforceVoidrCliShellUsage(normalizedShell) {
     /(?:^|[\s;|&(])npx\b[^;&|\n]*\bplaywright\s+test\b/.test(normalizedShell)
   if (!invokesVoidrCli && !invokesPlaywrightRun) return
   deny(
-    'Blocked by Voidr policy: never run the Voidr CLI or Playwright from the terminal — it has no Service Account credentials there, and interactive voidr login is forbidden. Use the bridge tools, which inject the credentials automatically: voidr_workspace_prepare_test_repository (setup/link/scaffold/env pull), voidr_smoke_build (run selected tests + build), voidr_workspace_publish_tests (commit/push/PR), and voidr_release_deploy_merged_pr (immutable deploy).'
+    'Blocked by Voidr policy: never run the Voidr CLI or Playwright from the terminal — it has no Service Account credentials there, and interactive voidr login is forbidden. Use the bridge tools, which inject the credentials automatically: voidr_workspace_prepare_test_repository (setup/link/scaffold/env pull), voidr_build (syntax/packaging gate), voidr_explore (inspection probes), voidr_workspace_publish_tests (commit/push/PR), voidr_release_deploy_validation (validation candidate, no promote), and voidr_release_deploy_merged_pr (immutable LIVE deploy).'
   )
 }
 
@@ -328,22 +330,10 @@ function enforceRepositoryMaterializationThroughTools(
 ) {
   const state = readSessionState(hookPayload)
   if (state.workflowActive !== true) return
-  const linkedUrl = String(state.linkedRepositoryUrl || '')
-    .trim()
-    .toLowerCase()
-  const clones = /(?:^|[\s;|&(])git\b[^;&|\n]*\bclone\b/.test(normalizedShell)
-  const clonesTestRepository =
-    clones &&
-    (/voidr-tp-/.test(normalizedShell) ||
-      (linkedUrl.length > 0 &&
-        normalizedShell.includes(
-          linkedUrl.replace(/^https?:\/\//, '').replace(/\.git$/, '')
-        )))
-  if (clonesTestRepository) {
-    deny(
-      'Blocked by Voidr policy: never clone the Voidr test repository — not from the terminal and not on the user\'s behalf. Every provisioned repository lives in Voidr\'s GitHub organization, so the clone is the user\'s, performed with their own credentials, and that is what proves their access. Show them the repository URL with the HTTPS and SSH commands, ask them to clone it inside the open workspace, and call voidr_workspace_prepare_test_repository again afterwards: it finds the checkout by its Git origin.'
-    )
-  }
+  // Cloning the test repository is allowed: git runs as the user, with the
+  // user's own credentials, so the agent doing it grants no access the user did
+  // not already have. `voidr_context_bootstrap` clones it as part of the
+  // atomic call; a terminal clone is the same act, just visible.
   const fabricatesCheckout =
     /(?:^|[\s;|&(])git\b[^;&|\n]*\binit\b/.test(normalizedShell) ||
     /(?:^|[\s;|&(])git\b[^;&|\n]*\bremote\s+add\b/.test(normalizedShell)
@@ -366,7 +356,7 @@ function enforceRuntimeInstallProtection(hookPayload, normalizedShell) {
     /nodesource|nodejs\.org\/dist/.test(normalizedShell)
   if (!installsRuntime) return
   deny(
-    'Blocked by Voidr policy: never install, switch, or pin a Node runtime from the agent terminal. The Voidr framework requires the pinned Node 22; ask the user to activate it in their own terminal (for example nvm use 22 or volta pin node@22) and then retry voidr_workspace_prepare_test_repository or voidr_smoke_build once. Do not keep retrying and do not attempt any other runtime workaround.'
+    'Blocked by Voidr policy: never install, switch, or pin a Node runtime from the agent terminal. The Voidr framework requires the pinned Node 22; ask the user to activate it in their own terminal (for example nvm use 22 or volta pin node@22) and then retry voidr_workspace_prepare_test_repository or voidr_build once. Do not keep retrying and do not attempt any other runtime workaround.'
   )
 }
 
@@ -482,9 +472,63 @@ function toolNameWords(name) {
   return String(name || '').replace(/([a-z0-9])([A-Z])/g, '$1-$2')
 }
 
+
+// The fragment list names specific files, so anything else under the credential
+// directory was readable — `cat ~/.voidr/auth.json` passed and only failed
+// because that file does not exist. Anchor on the directory instead, and only
+// the one in the user's home: test repositories keep their own `.voidr/` for
+// build output and test results, which must stay readable.
+function touchesCredentialDirectory(searchable) {
+  const home = homedir().toLowerCase()
+  return (
+    searchable.includes('~/.voidr/') ||
+    searchable.includes('$home/.voidr/') ||
+    searchable.includes(`${home}/.voidr/`)
+  )
+}
+
+function literalEmailAddresses(content) {
+  return [
+    ...String(content || '').matchAll(
+      /['"`]([^'"`\s@]+@[^'"`\s@]+\.[^'"`\s@]+)['"`]/gi
+    )
+  ].map(match => match[1])
+}
+
+// RFC 2606 / RFC 6761 reserve these for documentation and testing: they resolve
+// nowhere and can never reach a real mailbox.
+function hasReservedEmailDomain(address) {
+  const domain = String(address || '').split('@').pop() || ''
+  return /(?:^|\.)(?:example\.(?:com|net|org)|test|example|invalid|localhost)$/i.test(
+    domain
+  )
+}
+
+// Proving that a field ACCEPTS input means typing into it, and a probe that
+// cannot type cannot tell an actionable control from one that merely exists —
+// which is the single question probes are written to answer. The probe
+// directory is throwaway by contract: it is deleted before the build and may
+// never be published or deployed, so nothing typed here outlives the answer.
+// A real address is still refused: what is relaxed is the domain, not the rule
+// that production data stays out of specs.
+function isThrowawayProbeSpec(path) {
+  return /(?:^|[\\/])modules[\\/]_probe[\\/][^\\/]+\.spec\.[cm]?[jt]sx?$/i.test(
+    String(path || '')
+  )
+}
+
 function isGenericWriteTool(name) {
   return /(^|[-_/])(create|edit|write|delete|replace|replace_string_in_file|apply_patch|str_replace_editor)(?:$|[-_/])/i.test(
     toolNameWords(name)
+  )
+}
+
+// Copilot renders it as "Search tools", Claude as ToolSearch; both are
+// read-only schema lookups that call nothing.
+function isToolDiscovery(name) {
+  const words = toolNameWords(name)
+  return (
+    /(^|[-_/])(search|list|find)(?:$|[-_/])/i.test(words) && /tool/i.test(words)
   )
 }
 
@@ -512,7 +556,8 @@ function enforceExplicitEnvironmentSelection(hookPayload, name, args) {
       'voidr_workspace_select_test_repository',
       'voidr_workspace_prepare_test_repository',
       'voidr_workspace_scaffold_test_cases',
-      'voidr_smoke_build'
+      'voidr_build',
+      'voidr_explore'
     ].includes(name)
   ) {
     return
@@ -536,7 +581,7 @@ function enforceExplicitEnvironmentSelection(hookPayload, name, args) {
       return
     }
     deny(
-      'Blocked by Voidr workflow: list environments with applications_list_environments, show the selected environment on the confirmation card, and wait for the user to type “Criar testes” before repository setup, scaffold, or smoke/build.'
+      'Blocked by Voidr workflow: list environments with applications_list_environments, show the selected environment on the confirmation card, and wait for the user to type “Criar testes” before repository setup, scaffold, build, or exploration.'
     )
   }
 
@@ -550,7 +595,7 @@ function enforceExplicitEnvironmentSelection(hookPayload, name, args) {
     Date.now() - state.environmentSelectionRequestedAt <= 4 * 60 * 60 * 1000
   if (!selectionFresh && !environmentsListed) {
     deny(
-      'Blocked by Voidr workflow: list environments with applications_list_environments and confirm one with the user before repository setup, selection, scaffold, or smoke/build.'
+      'Blocked by Voidr workflow: list environments with applications_list_environments and confirm one with the user before repository setup, selection, scaffold, build, or exploration.'
     )
   }
 
@@ -588,6 +633,8 @@ function enforcePostSmokeStop(hookPayload, rawName, canonicalName) {
   if (
     [
       'voidr_release_deploy_merged_pr',
+      'voidr_release_deploy_validation',
+      'voidr_create_validation_execution',
       'voidr_workspace_publish_tests'
     ].includes(canonicalName)
   ) {
@@ -595,8 +642,13 @@ function enforcePostSmokeStop(hookPayload, rawName, canonicalName) {
   }
   // Asking the user is the documented way out of this stop, so the question
   // tool itself must never be blocked — the editor names it askQuestions, not
-  // ask_user, and matching only the latter deadlocked the flow.
+  // ask_user, and matching only the latter deadlocked the flow. Loading a
+  // skill is not an investigation either: blocking it stopped the agent from
+  // even reading the instructions that describe the authorized next step.
   if (/ask.*question|ask_user|todo/i.test(rawName)) return
+  if (/^(?:mcp__[a-z_]+__)?(?:load_)?skill$/i.test(String(rawName).trim())) {
+    return
+  }
   // A chat authorization only reaches this gate through the prompt hook. When
   // that hook is behind the smoke run it can never unlock the stop, so the
   // denial has to name the free-text fallback instead of telling the agent to
@@ -608,12 +660,12 @@ function enforcePostSmokeStop(hookPayload, rawName, canonicalName) {
     ? ' The prompt hook has not recorded a user message since this smoke run, so a typed chat authorization is not reaching the runtime: collect it with an ask_user question containing a single free-text field where the user types the authorization (for example “corrige e roda de novo”). A clicked option never counts. If the user already typed it in chat, say that the plugin needs a VS Code window reload to record typed messages again.'
     : ''
   deny(
-    `Blocked by Voidr workflow: after voidr_smoke_build, stop and report its exact result. Do not inspect files, edit specs, retry smoke, or diagnose by guessing in the same turn. Wait for the user to authorize the investigation or correction in a new chat message or an ask_user answer (for example “corrige e roda de novo”) before continuing.${fallback}`
+    `Blocked by Voidr workflow: after voidr_build, stop and report its exact result. Do not inspect files, edit specs, retry the build, or diagnose by guessing in the same turn. Wait for the user to authorize the investigation or correction in a new chat message or an ask_user answer (for example “corrige e roda de novo”) before continuing.${fallback}`
   )
 }
 
 function recordSmokeAttempt(hookPayload, name) {
-  if (name !== 'voidr_smoke_build') return
+  if (name !== 'voidr_build') return
   updateSessionState(hookPayload, {
     smokeAttemptedAt: Date.now()
   })
@@ -643,9 +695,15 @@ function enforceTestSpecContentPolicy(rawName, args) {
     )
   }
 
-  if (/['"`][^'"`\s@]+@[^'"`\s@]+\.[^'"`\s@]+['"`]/i.test(content)) {
+  const emails = literalEmailAddresses(content)
+  const forbiddenEmails = paths.every(isThrowawayProbeSpec)
+    ? emails.filter(address => !hasReservedEmailDomain(address))
+    : emails
+  if (forbiddenEmails.length > 0) {
     deny(
-      'Blocked by Voidr policy: do not persist email addresses in Playwright specs. Use a documented environment variable supplied by voidr env pull.'
+      paths.every(isThrowawayProbeSpec)
+        ? 'Blocked by Voidr policy: a throwaway probe may only type an address on a domain reserved for testing (example.com/.net/.org, or a .test/.example/.invalid/.localhost name). Never put a real address in a spec — read it from the environment supplied by voidr env pull.'
+        : 'Blocked by Voidr policy: do not persist email addresses in Playwright specs. Use a documented environment variable supplied by voidr env pull.'
     )
   }
 
@@ -795,8 +853,11 @@ function enforceSelectedTestPlanIdentity(hookPayload, canonicalName, args) {
       'test_plans_get_case',
       'voidr_workspace_prepare_test_repository',
       'voidr_workspace_scaffold_test_cases',
-      'voidr_smoke_build',
-      'voidr_release_deploy_merged_pr'
+      'voidr_build',
+      'voidr_explore',
+      'voidr_release_deploy_merged_pr',
+      'voidr_release_deploy_validation',
+      'voidr_create_validation_execution'
     ].includes(canonicalName)
   ) {
     return
@@ -839,12 +900,19 @@ function enforceConnectFirstTool(hookPayload, rawName, canonicalName, args) {
 
   const loadingConnectSkill =
     /skill/i.test(rawName) &&
-    /voidr-connect/i.test(`${rawName}\n${args}`)
+    /voidr-(?:connect|setup)/i.test(`${rawName}\n${args}`)
   if (loadingConnectSkill) return
+
+  // Discovery has to stay open or the gate is unsatisfiable: where the host
+  // defers or groups MCP tools, `voidr_auth_status` cannot be called until a
+  // tool search loads its schema — which is the very thing this gate used to
+  // deny. CONTRACTS.md requires that search, so denying it deadlocked the whole
+  // session, and the flag persists across prompts until auth status runs.
+  if (isToolDiscovery(rawName)) return
 
   if (canonicalName !== 'voidr_auth_status') {
     deny(
-      'Blocked by Voidr connect workflow: the first operational action must be the MCP tool voidr_auth_status. Do not inspect files, search for tools, or use the terminal.'
+      'Blocked by Voidr connect workflow: the first operational action must be the MCP tool voidr_auth_status. Search for it if the host defers tools, but do not inspect files or use the terminal before it.'
     )
   }
 

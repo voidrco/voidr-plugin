@@ -12,6 +12,13 @@ const SUPPORTED_NODE_MAJOR = 22
 // of telling the user to install what they already have.
 const ARCHITECTURE_SUBDIRECTORIES = ['x64', 'arm64', 'x86']
 
+// fnm keeps the runtime one level deeper than the other managers
+// (`<version>/installation/bin/node`), so probing only the version directory
+// found the install through detectNodeManagers and then failed to locate its
+// binary — the flow reported an unusable Node while a usable one sat right
+// there. Empty string first: every other manager puts it at the top.
+const NESTED_INSTALL_DIRECTORIES = ['', 'installation']
+
 const NODE_MANAGERS = [
   {
     name: 'nvs',
@@ -231,12 +238,13 @@ export function listCompatibleToolchains(major, options = {}) {
     )
     .sort((left, right) => compareVersions(right.version, left.version))
   for (const candidate of candidates) {
-    const roots = [
-      candidate.directory,
-      ...ARCHITECTURE_SUBDIRECTORIES.map(architecture =>
-        join(candidate.directory, architecture)
-      )
-    ]
+    const roots = NESTED_INSTALL_DIRECTORIES.flatMap(nested => {
+      const base = nested ? join(candidate.directory, nested) : candidate.directory
+      return [
+        base,
+        ...ARCHITECTURE_SUBDIRECTORIES.map(architecture => join(base, architecture))
+      ]
+    })
     for (const root of roots) {
       let located = null
       for (const directory of [root, join(root, 'bin')]) {

@@ -100,7 +100,7 @@ export function transition(workflow, event) {
       requireState(next, States.PLAN_MODE_SELECTED)
       next.state = States.AUTHENTICATION_REQUIRED
       next.prompt =
-        'A Voidr não está conectada. Execute `/copilot voidr-connect` para conectar uma Service Account. Depois volte e continue este fluxo.'
+        'A Voidr não está conectada. Execute `/copilot voidr-setup` para conectar uma Service Account. Depois volte e continue este fluxo.'
       return next
 
     case 'APPLICATION_SELECTED':
@@ -161,7 +161,7 @@ export function transition(workflow, event) {
       }
       next.context.feature = String(event.feature).trim()
       next.state = States.FEATURE_SELECTED
-      next.prompt = `A aplicação selecionada é ${next.context.applicationType}. Para o smoke local, deseja usar a URL do ambiente Voidr (${next.context.platformEnvironmentUrl}) ou localhost?`
+      next.prompt = `A aplicação selecionada é ${next.context.applicationType}. Para as sondas locais de inspeção (exploração), deseja usar a URL do ambiente Voidr (${next.context.platformEnvironmentUrl}) ou localhost?`
       return next
 
     case 'LOCAL_SMOKE_TARGET_SELECTED':

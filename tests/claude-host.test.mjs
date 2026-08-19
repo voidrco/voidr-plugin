@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, readFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -13,14 +13,15 @@ const promptHook = join(root, 'scripts/route-voidr-prompt.mjs')
 const postToolHook = join(root, 'scripts/post-tool-execution-links.mjs')
 const stopHook = join(root, 'scripts/require-execution-links.mjs')
 
-function runScript(script, payload, dataRoot) {
+function runScript(script, payload, dataRoot, extraEnv = {}) {
   const result = spawnSync(process.execPath, [script], {
     input: JSON.stringify(payload),
     encoding: 'utf8',
     env: {
       ...process.env,
       COPILOT_PLUGIN_DATA: dataRoot,
-      VOIDR_PLATFORM_URL: 'https://platform.voidr.co'
+      VOIDR_PLATFORM_URL: 'https://platform.voidr.co',
+      ...extraEnv
     }
   })
   assert.equal(result.status, 0, result.stderr)
@@ -51,7 +52,7 @@ test('the prompt hook answers each host in its own dialect', () => {
   )
   assert.match(
     claude.hookSpecificOutput.additionalContext,
-    /\/voidr-develop-tests/
+    /\/voidr-context/
   )
   assert.equal(claude.modifiedTransformedPrompt, undefined)
   // The note must stand on its own: Claude never sees it glued to the prompt.
@@ -70,9 +71,54 @@ test('the prompt hook answers each host in its own dialect', () => {
     },
     dataRoot()
   )
-  assert.match(copilot.modifiedTransformedPrompt, /\/voidr-develop-tests/)
+  assert.match(copilot.modifiedTransformedPrompt, /\/voidr-context/)
   assert.match(copilot.modifiedTransformedPrompt, /^Quero desenvolver testes/)
   assert.equal(copilot.hookSpecificOutput, undefined)
+
+  // Copilot CLI 1.0.80+ exports CLAUDE_PLUGIN_ROOT/CLAUDE_PLUGIN_DATA as
+  // compatibility aliases; the answer must still be the Copilot dialect or
+  // the CLI records the hook output as null and drops the routing note.
+  const copilotWithAliases = runScript(
+    promptHook,
+    {
+      sessionId: 'copilot-prompt-aliases',
+      cwd: root,
+      prompt,
+      transformedPrompt: prompt
+    },
+    dataRoot(),
+    {
+      COPILOT_CLI: '1',
+      COPILOT_PLUGIN_ROOT: root,
+      CLAUDE_PLUGIN_ROOT: root,
+      CLAUDE_PLUGIN_DATA: dataRoot()
+    }
+  )
+  assert.match(copilotWithAliases.modifiedTransformedPrompt, /\/voidr-context/)
+  assert.equal(copilotWithAliases.hookSpecificOutput, undefined)
+
+  // Claude's env fallback still wins when no Copilot marker is present, even
+  // without the payload stamp.
+  const claudeEnvOnly = runScript(
+    promptHook,
+    {
+      sessionId: 'claude-prompt-env',
+      cwd: root,
+      prompt,
+      transformedPrompt: prompt
+    },
+    dataRoot(),
+    {
+      COPILOT_CLI: '',
+      COPILOT_PLUGIN_ROOT: '',
+      CLAUDE_PLUGIN_ROOT: root
+    }
+  )
+  assert.match(
+    claudeEnvOnly.hookSpecificOutput.additionalContext,
+    /\/voidr-context/
+  )
+  assert.equal(claudeEnvOnly.modifiedTransformedPrompt, undefined)
 })
 
 test('both hosts route the same prompts and stay silent on the same ones', () => {
@@ -100,10 +146,10 @@ test('both hosts route the same prompts and stay silent on the same ones', () =>
 
 test('an explicit skill call is recognized in every host namespace', () => {
   for (const prompt of [
-    '/voidr-develop-tests',
-    '/copilot voidr-develop-tests',
-    '/copilot:voidr-develop-tests',
-    '/voidr:voidr-develop-tests'
+    '/voidr-context',
+    '/copilot voidr-context',
+    '/copilot:voidr-context',
+    '/voidr:voidr-context'
   ]) {
     assert.deepEqual(
       routeVoidrPrompt({ prompt, transformedPrompt: prompt }),
@@ -338,7 +384,7 @@ test('the Claude hook commands resolve and run the real scripts', () => {
   assert.equal(result.status, 0, result.stderr)
   assert.match(
     JSON.parse(result.stdout).hookSpecificOutput.additionalContext,
-    /\/voidr-develop-tests/
+    /\/voidr-context/
   )
 })
 
@@ -597,13 +643,51 @@ test('the connect flow arms its gate from a Claude-namespaced call', () => {
       cwd: root,
       prompt: '/voidr:voidr-connect'
     },
-    state
+    state,
+    // Pin an empty credential store: the gate only arms when there is something
+    // to connect, so without this the test passes or fails according to whether
+    // whoever runs it happens to be logged in.
+    { VOIDR_SERVICE_ACCOUNTS_PATH: join(state, 'service-accounts.json') }
   )
   const recorded = JSON.parse(
     readFileSync(join(state, 'sessions/latest-prompt-state.json'), 'utf8')
   )
   assert.equal(recorded.connectWorkflowActive, true)
   assert.equal(recorded.connectFirstToolRequired, true)
+})
+
+test('an authenticated machine has nothing to connect, so the gate stays open', () => {
+  const state = mkdtempSync(join(tmpdir(), 'voidr-claude-connected-'))
+  const store = join(state, 'service-accounts.json')
+  writeFileSync(
+    store,
+    JSON.stringify({
+      activeOrgId: 'org_abc',
+      accounts: {
+        org_abc: {
+          clientId: 'sa_test',
+          clientSecret: 'sk_test',
+          orgName: 'Test',
+          scopes: ['read', 'write']
+        }
+      }
+    })
+  )
+  runScript(
+    promptHook,
+    {
+      hook_event_name: 'UserPromptSubmit',
+      session_id: 'claude-connected',
+      cwd: root,
+      prompt: '/voidr:voidr-connect'
+    },
+    state,
+    { VOIDR_SERVICE_ACCOUNTS_PATH: store }
+  )
+  const recorded = JSON.parse(
+    readFileSync(join(state, 'sessions/latest-prompt-state.json'), 'utf8')
+  )
+  assert.equal(recorded.connectFirstToolRequired, false)
 })
 
 test('an empty transformed prompt keeps the user message', () => {
@@ -621,7 +705,7 @@ test('an empty transformed prompt keeps the user message', () => {
   )
   assert.match(
     output.modifiedTransformedPrompt,
-    /^Quero desenvolver testes na voidr\n\nUse the \/voidr-develop-tests/
+    /^Quero desenvolver testes na voidr\n\nThis is a Voidr platform testing request/
   )
 })
 

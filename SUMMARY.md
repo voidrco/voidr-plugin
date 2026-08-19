@@ -39,7 +39,7 @@ Copilot não — então os dois CLIs convivem na mesma máquina.
 | Hooks | `hooks.json` | `hooks/hooks.json` |
 | MCP | `.mcp.json` | `mcp/claude.json` |
 | Plugin root | `${PLUGIN_ROOT}` | `${CLAUDE_PLUGIN_ROOT}` |
-| Invocação | `/copilot:voidr-connect` | `/voidr:voidr-connect` |
+| Invocação | `/copilot:voidr-setup` | `/voidr:voidr-setup` |
 
 O único conflito de arquivo era o `.mcp.json`, por causa da variável de root; o
 manifesto do Claude aponta para um arquivo próprio, e o validador assere
@@ -70,7 +70,7 @@ primeira leva de testes cobria formato de wire e não fluxo.
 | 4 | Timeout de 5s num gate de segurança | Um `PreToolUse` cancelado por timeout no Claude **falha aberto**. O guard roda em ~80ms; subido para 15s e asserido no validador. |
 | 5 | `??` no lugar de `\|\|` | Regressão do Copilot: com `transformedPrompt` vazio, a mensagem do usuário era substituída pela nota de roteamento. |
 | 6 | Gate de `Stop` sem saída | O Claude não tem `stop_hook_active`. Um modelo que não produzisse os links travava a conversa para sempre. |
-| 7 | Nota de roteamento com nome errado de skill | `/voidr-develop-tests` não existe no Claude. |
+| 7 | Nota de roteamento com nome errado de skill | `/voidr-context` não existe no Claude. |
 | 8 | Parágrafo de recuperação de tool só descrevia o Copilot | As 7 skills que o têm fechavam com `If no activation entry lists it … stop.` No Claude nunca existe activation entry, então lido literalmente isso instruía o modelo a **desistir** de um tool que estava a um `ToolSearch` de distância. Agora nomeia os dois mecanismos. |
 
 ### Duas decisões que valem revisão explícita
@@ -159,5 +159,5 @@ npm run check
 
 # Sem instalar nada: carrega o plugin só nessa sessão.
 cd /algum/projeto/descartável
-claude --plugin-dir /caminho/para/voidr-copilot-plugin
+claude --plugin-dir /caminho/para/voidr-plugin
 ```

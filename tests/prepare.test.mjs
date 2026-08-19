@@ -4,6 +4,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   realpathSync,
   writeFileSync
 } from 'node:fs'
@@ -259,15 +260,18 @@ test('rejects a stale destination that is not a checkout of the linked repositor
         VOIDR_CLIENT_SECRET: 'synthetic-wrong-origin-secret',
         VOIDR_ORG_ID: context.organizationId
       },
-      run: async () => {
-        throw new Error('setup must not run for a stale destination')
+      // The clone is attempted and fails, which is the access check: the
+      // handover then carries the commands and the authorization instructions.
+      run: async file => {
+        if (file === 'git') throw new Error('fatal: repository not found')
+        return { stdout: '' }
       }
     }),
-    /never clones it[\s\S]*git clone/
+    /could not be cloned[\s\S]*git clone/
   )
 })
 
-test('asks the user to clone the linked repository instead of cloning it', async () => {
+test('hands the clone commands over when git cannot clone it', async () => {
   const workspace = mkdtempSync(join(tmpdir(), 'voidr-clone-'))
   const destination = join(workspace, 'tests')
   const repositoryUrl =
@@ -287,8 +291,10 @@ test('asks the user to clone the linked repository instead of cloning it', async
       },
       run: async (file, args) => {
         calls.push([file, ...args])
-        // The only command a missing checkout may run is the read-only lookup of
-        // the GitHub account the administrator has to authorize.
+        // The clone is attempted first; this machine cannot read the repository,
+        // so the handover takes over with the commands and the authorization
+        // instructions.
+        if (file === 'git') throw new Error('fatal: repository not found')
         return file === 'gh' ? { stdout: 'synthetic-dev\n' } : { stdout: '' }
       }
     }),
@@ -320,15 +326,99 @@ test('asks the user to clone the linked repository instead of cloning it', async
         /granted by an administrator of the user's own organization in the Voidr platform/
       )
       assert.match(error.message, /GitHub account synthetic-dev/)
-      assert.match(error.message, /Never clone it from the agent terminal/)
       return true
     }
   )
 
-  // Nothing else ran: no clone, and no setup on a repository that is not there.
-  assert.deepEqual(calls, [['gh', 'api', 'user', '--jq', '.login']])
+  // The clone was attempted, and no setup ran on a repository that is not there.
+  // The destination is compared by suffix: macOS resolves the temp workspace
+  // through /private, so an equality check would assert the platform.
+  assert.equal(calls.length, 2)
+  const [gitCall, ghCall] = calls
+  assert.deepEqual(gitCall.slice(0, 3), [
+    'git',
+    'clone',
+    'https://github.com/voidrco/voidr-tp-synthetic-01234567.git'
+  ])
+  assert.ok(gitCall[3].endsWith('voidr-tp-synthetic-01234567'), gitCall[3])
+  assert.deepEqual(ghCall, ['gh', 'api', 'user', '--jq', '.login'])
   assert.equal(existsSync(destination), false)
 })
+
+test('raises a test budget that is tied to the action budget, so a failed run keeps its trace', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-prepare-'))
+  const repositoryPath = createRepository(workspace)
+  writeRunnerConfig(repositoryPath, { timeout: 40000, actionTimeout: 40000, navigationTimeout: 40000 })
+
+  const result = await prepareTestRepository({
+    repositoryPath,
+    ...context,
+    workspaceRoot: workspace,
+    cliEnvironment: syntheticCliEnvironment(),
+    run: fakeVoidrRun({ repositoryPath, calls: [], context })
+  })
+
+  assert.equal(result.steps.runnerTimeouts.adjusted, true)
+  assert.equal(result.steps.runnerTimeouts.previousTestTimeout, 40000)
+  assert.equal(result.steps.runnerTimeouts.testTimeout, 80000)
+
+  const written = readFileSync(join(repositoryPath, 'voidr.runner.config.mjs'), 'utf8')
+  assert.match(written, /^ {2}timeout: 80000,$/m)
+  assert.match(written, /actionTimeout: 40000/)
+  assert.match(written, /navigationTimeout: 40000/)
+})
+
+test('leaves a repository alone when its test budget already clears the step budgets', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-prepare-'))
+  const repositoryPath = createRepository(workspace)
+  writeRunnerConfig(repositoryPath, { timeout: 90000, actionTimeout: 30000, navigationTimeout: 45000 })
+  const before = readFileSync(join(repositoryPath, 'voidr.runner.config.mjs'), 'utf8')
+
+  const result = await prepareTestRepository({
+    repositoryPath,
+    ...context,
+    workspaceRoot: workspace,
+    cliEnvironment: syntheticCliEnvironment(),
+    run: fakeVoidrRun({ repositoryPath, calls: [], context })
+  })
+
+  assert.equal(result.steps.runnerTimeouts.adjusted, false)
+  assert.equal(result.steps.runnerTimeouts.reason, 'already-diagnosable')
+  assert.equal(readFileSync(join(repositoryPath, 'voidr.runner.config.mjs'), 'utf8'), before)
+})
+
+function syntheticCliEnvironment() {
+  return {
+    VOIDR_CLIENT_ID: 'sa_synthetic_prepare',
+    VOIDR_CLIENT_SECRET: 'synthetic-prepare-secret',
+    VOIDR_ORG_ID: context.organizationId,
+    VOIDR_API_URL: 'https://preview.example.test/v1'
+  }
+}
+
+function writeRunnerConfig(repositoryPath, { timeout, actionTimeout, navigationTimeout }) {
+  writeFileSync(
+    join(repositoryPath, 'voidr.runner.config.mjs'),
+    [
+      "import { defineConfig } from '@playwright/test'",
+      '',
+      'export default defineConfig({',
+      "  testMatch: ['**/*.spec.js'],",
+      '  retries: 0,',
+      `  timeout: ${timeout},`,
+      '  expect: { timeout: 15000 },',
+      '  workers: 1,',
+      '  use: {',
+      "    trace: 'on',",
+      `    actionTimeout: ${actionTimeout},`,
+      `    navigationTimeout: ${navigationTimeout},`,
+      '  }',
+      '})',
+      ''
+    ].join('\n'),
+    'utf8'
+  )
+}
 
 function createRepository(workspace) {
   const repositoryPath = join(workspace, 'tests')

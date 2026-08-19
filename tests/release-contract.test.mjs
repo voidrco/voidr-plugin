@@ -99,6 +99,7 @@ test('release tool binds build, immutable candidate, promotion, and latest to me
   )
 
   const calls = []
+  const posted = []
   const result = await deployMergedPullRequest({
     repositoryPath,
     repositoryUrl,
@@ -147,7 +148,10 @@ test('release tool binds build, immutable candidate, promotion, and latest to me
       return { stdout: '' }
     },
     restClient: {
-      post: async () => ({ data: { codebaseVersion } }),
+      post: async (path, body) => {
+        posted.push({ path, body })
+        return { data: { codebaseVersion } }
+      },
       get: async () => ({
         data: { manifestData: { codebaseVersion } }
       })
@@ -171,6 +175,100 @@ test('release tool binds build, immutable candidate, promotion, and latest to me
       call.join(' ').includes('voidr deploy-candidate --json')
     ),
     true
+  )
+  // The release is published by the CLI, from the same build the candidate was
+  // cut from — and it is what syncs the automation manifest, so a plan whose
+  // first preflight ships with this release learns about it here.
+  assert.equal(
+    calls.some(call => call.join(' ') === 'npx --no-install voidr deploy-latest'),
+    true,
+    'the merged release must be published with voidr deploy-latest'
+  )
+  assert.equal(
+    posted.length,
+    0,
+    'promotion must not depend on a REST endpoint the platform does not expose'
+  )
+})
+
+test('reports what the CLI said when the release never left the machine', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-release-fail-'))
+  const repositoryPath = join(workspace, 'tests')
+  mkdirSync(join(repositoryPath, '.voidr', '.output'), { recursive: true })
+  writeFileSync(join(repositoryPath, 'package.json'), '{}')
+  writeFileSync(
+    join(repositoryPath, 'project.json'),
+    JSON.stringify({ testPlanId })
+  )
+  writeFileSync(
+    join(repositoryPath, '.voidr', '.output', 'manifest.json'),
+    JSON.stringify({ testPlanId, codebaseVersion })
+  )
+  const repositoryUrl = 'https://github.com/acme/tests.git'
+  execFileSync('git', ['init', repositoryPath], { stdio: 'ignore' })
+  execFileSync(
+    'git',
+    ['-C', repositoryPath, 'remote', 'add', 'origin', repositoryUrl],
+    { stdio: 'ignore' }
+  )
+
+  await assert.rejects(
+    deployMergedPullRequest({
+      repositoryPath,
+      repositoryUrl,
+      pullRequestNumber: 42,
+      testPlanId,
+      workspaceRoot: workspace,
+      cliEnvironment: { VOIDR_API_URL: 'https://preview.example.test/v1' },
+      run: async (file, args) => {
+        if (file === 'gh' && args[0] === 'repo') {
+          return {
+            stdout: JSON.stringify({
+              nameWithOwner: 'acme/tests',
+              defaultBranchRef: { name: 'main' }
+            })
+          }
+        }
+        if (file === 'gh' && args[0] === 'pr') {
+          return {
+            stdout: JSON.stringify({
+              number: 42,
+              url: 'https://github.com/acme/tests/pull/42',
+              state: 'MERGED',
+              mergedAt: '2026-07-28T12:00:00Z',
+              mergeCommit: { oid: mergeCommitSha },
+              baseRefName: 'main'
+            })
+          }
+        }
+        if (file === 'git' && args[0] === 'rev-parse') {
+          return { stdout: `${mergeCommitSha}\n` }
+        }
+        if (file === 'git' && args[0] === 'status') return { stdout: '' }
+        if (file === 'npx' && args.includes('deploy-latest')) {
+          return { stdout: '', stderr: 'Upload failed: 403 Forbidden', exitCode: 1 }
+        }
+        if (file === 'npx') {
+          return {
+            stdout: `${JSON.stringify({
+              codebaseVersion,
+              prefix: `versions/${codebaseVersion}`
+            })}\n`
+          }
+        }
+        return { stdout: '' }
+      },
+      restClient: {
+        post: async () => ({ data: { codebaseVersion } }),
+        get: async () => ({ data: { manifestData: { codebaseVersion } } })
+      }
+    }),
+    error => {
+      // The CLI's words, not "the pointer was not verified".
+      assert.match(error.message, /deploy-latest failed/)
+      assert.match(error.message, /403 Forbidden/)
+      return true
+    }
   )
 })
 

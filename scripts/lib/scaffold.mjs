@@ -96,16 +96,16 @@ export async function scaffoldTestCases({
   }
 }
 
-export async function buildTestRepository({
+// The local gate is the build alone: `voidr build` bundles every spec with
+// esbuild, so a syntax error fails here with the file and line. Functional
+// validation happens on the platform, as a SHADOW execution pinned to the
+// deployed codebaseVersion — never as a local Playwright run.
+export async function buildRepository({
   repositoryPath,
   repositoryUrl,
   testPlanId,
-  specs,
-  baseUrl,
-  workspaceRoot = process.cwd(),
   cliEnvironment = voidrCliEnvironment(),
-  run = runCommand,
-  testRun = runPlaywrightCommand
+  run = runCommand
 }) {
   if (!/^[a-f0-9]{24}$/i.test(String(testPlanId || ''))) {
     throw new Error('A valid Test Plan ID is required.')
@@ -124,36 +124,44 @@ export async function buildTestRepository({
     )
   }
 
-  const validation = await validateSelectedPlaywrightTests({
+  const runtime = await assertSupportedNodeRuntime({
     repositoryPath: selected.path,
-    repositoryUrl,
-    testPlanId,
-    specs,
-    baseUrl,
-    workspaceRoot,
-    run: testRun
+    run
   })
-  if (!validation.completed) {
-    return {
-      completed: false,
-      buildCompleted: false,
-      repositoryPath: selected.path,
-      testPlanId: String(testPlanId),
-      validation
-    }
-  }
 
-  await run('npx', ['--no-install', 'voidr', 'build'], {
+  const buildResult = await run('npx', ['--no-install', 'voidr', 'build'], {
     cwd: selected.path,
     timeout: 180_000,
-    env: withToolchainPath(cliEnvironment, validation.nodeRuntime?.toolchain)
+    env: withToolchainPath(cliEnvironment, runtime.toolchain)
   })
+  if (buildResult?.exitCode !== undefined && buildResult.exitCode !== 0) {
+    throw new Error(
+      'voidr build failed. The build reported:\n' +
+        commandOutputExcerpt(buildResult)
+    )
+  }
 
   return {
     completed: true,
     buildCompleted: true,
     repositoryPath: selected.path,
     testPlanId: String(testPlanId),
+    nodeRuntime: describeNodeRuntime(runtime)
+  }
+}
+
+// Exploration probes: run throwaway inspection specs against the deployed
+// application to answer DOM questions the recorded sessions left open.
+// Failures are expected and informative; nothing is gated, nothing is built,
+// and an exploration never counts as validation.
+export async function exploreSelectedPlaywrightTests(options) {
+  const validation = await validateSelectedPlaywrightTests(options)
+  return {
+    completed: true,
+    exploration: true,
+    buildCompleted: false,
+    repositoryPath: validation.repositoryPath,
+    testPlanId: validation.testPlanId,
     validation
   }
 }
@@ -229,7 +237,13 @@ export async function validateSelectedPlaywrightTests({
     }
   )
   if (listResult.exitCode !== 0) {
-    throw new Error('Playwright could not list the selected specs.')
+    // Playwright already names the broken file and line (a syntax error in a
+    // spec is the common cause); without its words the failure reads as an
+    // infrastructure problem nobody can act on.
+    throw new Error(
+      'Playwright could not list the selected specs. Playwright reported:\n' +
+        commandOutputExcerpt(listResult)
+    )
   }
 
   const testResult = await run(
@@ -275,9 +289,17 @@ export async function validateSelectedPlaywrightTests({
     flaky: Number(stats.flaky || 0),
     failures,
     traces,
+    output: collectPlaywrightStdout(report),
     traceHint:
       'Analyze each run in the Playwright trace viewer: npx playwright show-trace <trace path>, executed from the test repository. Always share these commands with the user, failures first.'
   }
+}
+
+function commandOutputExcerpt({ stderr, stdout } = {}) {
+  const text = `${stderr || ''}\n${stdout || ''}`.trim()
+  if (!text) return 'Playwright produced no output.'
+  const excerpt = text.split('\n').slice(0, 20).join('\n')
+  return excerpt.length > 2000 ? `${excerpt.slice(0, 2000)}…` : excerpt
 }
 
 async function runPlaywrightCommand(file, args, options = {}) {
@@ -325,6 +347,17 @@ function parsePlaywrightReport(stdout) {
   }
 }
 
+// A category names the KIND of failure; only Playwright's own message names the
+// failure. Its call log is what distinguishes a locator that is missing from
+// one that is present but never became actionable — the two share a category
+// and need opposite corrections. Without it a probe that ran and failed is
+// indistinguishable from one that never ran, and the next attempt is a guess.
+function failureMessageExcerpt(messages) {
+  const text = String(messages || '').trim()
+  if (!text) return ''
+  return text.length > 2000 ? `${text.slice(0, 2000)}…` : text
+}
+
 function collectPlaywrightFailures(report) {
   const failures = []
   const visitSuite = suite => {
@@ -343,7 +376,8 @@ function collectPlaywrightFailures(report) {
           failures.push({
             spec: String(spec.file || suite.file || ''),
             title: String(spec.title || test.title || ''),
-            category: classifyPlaywrightFailure(messages)
+            category: classifyPlaywrightFailure(messages),
+            message: failureMessageExcerpt(messages)
           })
         }
       }
@@ -355,10 +389,44 @@ function collectPlaywrightFailures(report) {
     failures.push({
       spec: '',
       title: 'Playwright infrastructure',
-      category: classifyPlaywrightFailure(error?.message)
+      category: classifyPlaywrightFailure(error?.message),
+      message: failureMessageExcerpt(error?.message)
     })
   }
   return failures
+}
+
+// Per-test stdout, bounded: this is how exploration probes report their DOM
+// and console findings back to the agent without any artifact round trip.
+const STDOUT_LIMIT_PER_TEST = 6000
+
+function collectPlaywrightStdout(report) {
+  const outputs = []
+  const visitSuite = suite => {
+    for (const spec of suite?.specs || []) {
+      for (const test of spec?.tests || []) {
+        for (const result of test?.results || []) {
+          const text = (result?.stdout || [])
+            .map(chunk => String(chunk?.text || ''))
+            .join('')
+            .trim()
+          if (!text) continue
+          outputs.push({
+            spec: String(spec.file || suite.file || ''),
+            title: String(spec.title || test.title || ''),
+            status: String(result.status || ''),
+            stdout:
+              text.length > STDOUT_LIMIT_PER_TEST
+                ? `${text.slice(0, STDOUT_LIMIT_PER_TEST)}\n[stdout truncated]`
+                : text
+          })
+        }
+      }
+    }
+    for (const child of suite?.suites || []) visitSuite(child)
+  }
+  for (const suite of report?.suites || []) visitSuite(suite)
+  return outputs
 }
 
 function collectPlaywrightTraces(report) {

@@ -6,7 +6,7 @@ import {
   readFileSync,
   writeFileSync
 } from 'node:fs'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 
@@ -29,13 +29,14 @@ function runHook(payload, dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-')))
   return JSON.parse(result.stdout || '{}')
 }
 
-function submitPrompt(payload, dataRoot) {
+function submitPrompt(payload, dataRoot, extraEnv = {}) {
   const result = spawnSync(process.execPath, [promptHook], {
     input: JSON.stringify(payload),
     encoding: 'utf8',
     env: {
       ...process.env,
-      COPILOT_PLUGIN_DATA: dataRoot
+      COPILOT_PLUGIN_DATA: dataRoot,
+      ...extraEnv
     }
   })
   assert.equal(result.status, 0, result.stderr)
@@ -324,6 +325,34 @@ test('blocks platform and codebase tools until plan mode is selected', () => {
   )
 })
 
+test('the credential directory is protected beyond the named files', () => {
+  // Observed: an agent ran `cat ~/.voidr/auth.json`. It was allowed, because the
+  // policy lists file names and that one is not among them; it failed only
+  // because the file does not exist. A test repository's own `.voidr/` holds
+  // build output and must stay readable, so the guard anchors on the home one.
+  for (const command of [
+    'cat ~/.voidr/auth.json | jq .',
+    `cat ${homedir()}/.voidr/auth.json`,
+    'ls -la ~/.voidr/'
+  ]) {
+    assert.equal(
+      runHook({ toolName: 'bash', toolArgs: { command } }).permissionDecision,
+      'deny',
+      command
+    )
+  }
+  for (const command of [
+    'cat .voidr/.output/manifest.json',
+    'ls .voidr/test-results'
+  ]) {
+    assert.deepEqual(
+      runHook({ toolName: 'bash', toolArgs: { command } }),
+      {},
+      command
+    )
+  }
+})
+
 test('forces voidr_auth_status as the first operational connect action', () => {
   const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
   const sessionId = 'connect-first-tool'
@@ -343,7 +372,10 @@ test('forces voidr_auth_status as the first operational connect action', () => {
       prompt: '/copilot voidr-connect',
       transformedPrompt: '/copilot voidr-connect'
     },
-    dataRoot
+    dataRoot,
+    // Empty credential store: the gate only arms when there is an account to
+    // create, so otherwise this asserts the machine, not the hook.
+    { VOIDR_SERVICE_ACCOUNTS_PATH: join(dataRoot, 'service-accounts.json') }
   )
 
   assert.deepEqual(
@@ -1268,7 +1300,7 @@ test('stops automatic diagnosis, edits, and retries after the first smoke call',
       {
         sessionId,
         cwd: workspace,
-        toolName: 'voidr-voidr_smoke_build',
+        toolName: 'voidr-voidr_build',
         toolArgs: { repositoryPath: workspace }
       },
       dataRoot
@@ -1289,7 +1321,7 @@ test('stops automatic diagnosis, edits, and retries after the first smoke call',
       }
     },
     {
-      toolName: 'voidr-voidr_smoke_build',
+      toolName: 'voidr-voidr_build',
       toolArgs: { repositoryPath: workspace }
     }
   ]) {
@@ -1298,7 +1330,7 @@ test('stops automatic diagnosis, edits, and retries after the first smoke call',
       dataRoot
     )
     assert.equal(output.permissionDecision, 'deny')
-    assert.match(output.permissionDecisionReason, /after voidr_smoke_build/i)
+    assert.match(output.permissionDecisionReason, /after voidr_build/i)
   }
 
   submitPrompt(
@@ -1356,11 +1388,43 @@ test('blocks unsafe literals and frontend-derived API origins in spec edits', ()
     assert.equal(output.permissionDecision, 'deny')
   }
 })
+test('lets a throwaway probe type a reserved-domain address, and nothing else', () => {
+  // A path under the plugin installation is refused by an earlier rule, so the
+  // email policy is only reachable from a real workspace.
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-probe-email-'))
+  mkdirSync(join(workspace, 'modules', '_probe'), { recursive: true })
+  mkdirSync(join(workspace, 'modules', 'login'), { recursive: true })
+  const probeSpec = join(workspace, 'modules/_probe/login-probe.spec.js')
+  const regularSpec = join(workspace, 'modules/login/login.spec.js')
+
+  const fillWith = address =>
+    `await page.locator('#email-input').fill('${address}');`
+
+  const editSpec = (path, address) =>
+    runHook({
+      sessionId: 'probe-email-policy',
+      cwd: workspace,
+      toolName: 'edit',
+      toolArgs: { path, new_str: fillWith(address) }
+    }).permissionDecision
+
+  // A probe answers "can this field be typed into?", which requires typing.
+  assert.notEqual(editSpec(probeSpec, 'probe@example.test'), 'deny')
+
+  // What is relaxed is the domain, not the rule: a real address stays refused,
+  // and so does a registrable one that merely looks like a test domain.
+  assert.equal(editSpec(probeSpec, 'agent@voidr.co'), 'deny')
+  assert.equal(editSpec(probeSpec, 'probe@test.com'), 'deny')
+
+  // And the exception does not leak outside the throwaway directory.
+  assert.equal(editSpec(regularSpec, 'probe@example.test'), 'deny')
+})
+
 function transcriptEntry(type, data) {
   return JSON.stringify({ type, data })
 }
 
-test('blocks a manual clone or a fabricated checkout during a workflow', () => {
+test('allows cloning the test repository but blocks a fabricated checkout', () => {
   const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-materialize-'))
   const sessionId = 'materialization-gate'
   const now = Date.now()
@@ -1400,11 +1464,9 @@ test('blocks a manual clone or a fabricated checkout during a workflow', () => {
     dataRoot
   )
 
+  // Fabricating a checkout is still denied: a directory with the right origin
+  // but no history passes the origin lookup and then fails everywhere else.
   const denied = {
-    'git clone https://github.com/voidrco/voidr-tp-desk-web tests':
-      /never clone the Voidr test repository/i,
-    'git clone https://github.com/voidrco/voidr-tp-plano-e37c1b5b skeleton':
-      /never clone the Voidr test repository/i,
     'git init ; git remote add origin https://github.com/voidrco/voidr-tp-desk-web':
       /never create a Git repository or add a remote by hand/i,
     'cd tests && git remote add origin https://example.test/repo.git':
@@ -1419,9 +1481,11 @@ test('blocks a manual clone or a fabricated checkout during a workflow', () => {
     assert.match(output.permissionDecisionReason, reason, command)
   }
 
-  // Cloning something that is not the test repository stays the user's business,
-  // and reading Git state is never blocked.
+  // Cloning runs as the user, with the user's own credentials, so it grants no
+  // access they did not have — the test repository included.
   for (const command of [
+    'git clone https://github.com/voidrco/voidr-tp-desk-web tests',
+    'git clone https://github.com/voidrco/voidr-tp-plano-e37c1b5b skeleton',
     'git clone https://github.com/blip/desk-web product',
     'git status',
     'git remote -v'

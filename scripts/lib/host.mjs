@@ -9,6 +9,12 @@ export function detectHost(payload) {
   if (override === CLAUDE || override === COPILOT) return override
   if (payload?.hook_event_name) return CLAUDE
   if (payload?.hookEventName) return CLAUDE
+  // Copilot CLI 1.0.80+ exports CLAUDE_PLUGIN_ROOT/CLAUDE_PLUGIN_DATA as
+  // compatibility aliases alongside its own variables, so the Claude env
+  // fallback only counts when no Copilot marker is present.
+  if (process.env.COPILOT_CLI || process.env.COPILOT_PLUGIN_ROOT) {
+    return COPILOT
+  }
   if (process.env.CLAUDE_PLUGIN_ROOT || process.env.CLAUDE_PLUGIN_DATA) {
     return CLAUDE
   }

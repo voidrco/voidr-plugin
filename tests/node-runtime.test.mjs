@@ -8,6 +8,7 @@ import {
   declaredNodeVersion,
   describeNodeRuntime,
   detectNodeManagers,
+  listCompatibleToolchains,
   nodeVersionGuidance,
   resolveCompatibleToolchain,
   withToolchainPath
@@ -430,4 +431,34 @@ test('reads only a valid volta pin from package.json', () => {
   assert.deepEqual(declaredNodeVersion(repositoryWith(undefined)), {
     major: null
   })
+})
+
+
+test('locates the runtime in every manager layout, fnm nesting included', () => {
+  // fnm keeps it one level deeper than the others
+  // (`<version>/installation/bin/node`), on every platform — not just macOS.
+  // Probing only the version directory found the install and then failed to
+  // locate its binary, so a machine with Node 22 installed was reported as
+  // unusable and the whole flow stopped on it.
+  const layouts = {
+    'fnm unix': '/fake/v22.22.3/installation/bin/node',
+    'fnm windows': '/fake/v22.22.3/installation/node.exe',
+    'nvm unix': '/fake/v22.22.3/bin/node',
+    'volta': '/fake/v22.22.3/node',
+    'nvs windows': '/fake/v22.22.3/x64/node.exe'
+  }
+  for (const [layout, nodePath] of Object.entries(layouts)) {
+    const found = listCompatibleToolchains(22, {
+      managers: [
+        {
+          name: 'test',
+          majors: [22],
+          versions: [{ version: '22.22.3', directory: '/fake/v22.22.3' }]
+        }
+      ],
+      exists: candidate => candidate === nodePath
+    })
+    assert.equal(found.length, 1, layout)
+    assert.equal(found[0].node, nodePath, layout)
+  }
 })

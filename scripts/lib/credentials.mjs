@@ -307,6 +307,70 @@ export async function validatedAuthStatus({
   }
 }
 
+// The platform authenticates Service Accounts by exchanging the credential
+// pair for a short-lived token; Basic auth is not accepted on its REST API.
+// Cached per credential so one workflow does not re-exchange on every call.
+const accessTokenCache = new Map()
+
+export async function serviceAccountAccessToken({
+  fetchImpl = globalThis.fetch,
+  tokenUrl = process.env.VOIDR_TOKEN_URL ||
+    'https://api.voidr.co/v1/service-accounts/token',
+  now = () => Date.now()
+} = {}) {
+  const resolved = resolveCredential()
+  const { clientId, clientSecret } = resolved.account || {}
+  if (!clientId || !clientSecret) {
+    throw new Error(
+      'Voidr authentication is not configured. Provision a Service Account; do not paste its secret into chat.'
+    )
+  }
+
+  const cached = accessTokenCache.get(clientId)
+  if (cached && cached.expiresAt > now()) return cached.token
+
+  let response
+  try {
+    response = await fetchImpl(tokenUrl, {
+      method: 'POST',
+      headers: {
+        accept: 'application/json',
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        grantType: 'client_credentials',
+        clientId,
+        clientSecret
+      })
+    })
+  } catch (error) {
+    throw new Error(
+      `Voidr could not be reached to authenticate the Service Account: ${error?.message || error}`
+    )
+  }
+  if (!response.ok) {
+    throw new Error(
+      'Voidr Service Account was rejected while requesting an access token.'
+    )
+  }
+  const token = await response.json().catch(() => null)
+  if (!token?.access_token) {
+    throw new Error('Voidr returned no access token for the Service Account.')
+  }
+
+  // A minute of slack keeps a token from expiring mid-request.
+  const claims = decodeJwtPayload(token.access_token)
+  const expiresAt = Number.isFinite(claims?.exp)
+    ? claims.exp * 1000 - 60_000
+    : now() + 60_000
+  accessTokenCache.set(clientId, { token: token.access_token, expiresAt })
+  return token.access_token
+}
+
+export function forgetServiceAccountAccessToken() {
+  accessTokenCache.clear()
+}
+
 export function basicAuthorizationHeader() {
   const resolved = resolveCredential()
   const { clientId, clientSecret } = resolved.account || {}

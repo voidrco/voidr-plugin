@@ -119,20 +119,45 @@ export async function deployMergedPullRequest({
     })
   )
 
-  const promotion = await restClient.post(
-    `/test-plans/${testPlanId}/automation/versions/${candidate.codebaseVersion}/promote`,
-    {}
-  )
-  const promotedVersion =
-    promotion?.data?.codebaseVersion ?? promotion?.codebaseVersion
-  if (promotedVersion !== candidate.codebaseVersion) {
-    throw new Error('Voidr did not confirm promotion of the expected immutable release.')
+  // `deploy-latest` publishes the SAME build the candidate was cut from: it
+  // reads the manifest already on disk, whose codebaseVersion `deploy-candidate`
+  // computed and wrote, so the released version stays verifiable against the one
+  // that was validated. It also syncs the automation manifest with the platform,
+  // which is what carries `preflight.enabled` onto the Test Plan — a candidate
+  // deploy never does that, so a plan whose first preflight arrives with this
+  // release only learns about it here.
+  const published = await run('npx', ['--no-install', 'voidr', 'deploy-latest'], {
+    cwd: selected.path,
+    timeout: 300_000,
+    env: effectiveCliEnvironment
+  })
+  // Without this the CLI's own words are lost, and a release that never left
+  // the machine reports itself as an unverified pointer — a verdict that names
+  // the check instead of the cause, and sends the next attempt guessing.
+  if (published?.exitCode !== undefined && published.exitCode !== 0) {
+    throw new Error(
+      'voidr deploy-latest failed, so nothing was published. It reported:\n' +
+        releaseCommandExcerpt(published)
+    )
   }
 
   const latest = await restClient.get(
     `/test-plans/${testPlanId}/automation/deploys/latest`
   )
   const currentVersion = latestCodebaseVersion(latest)
+  // `deploy-latest` treats the manifest sync as optional: it prints the failure
+  // and still exits zero. When that happens the files are uploaded but no deploy
+  // record is written, so the pointer cannot verify and the plan keeps reporting
+  // nothing automated. The CLI already said why — this is where it gets read.
+  if (currentVersion !== candidate.codebaseVersion) {
+    throw new Error(
+      'The published release was not registered on the platform: ' +
+        `deploys/latest reports ${currentVersion || 'no codebaseVersion'}, ` +
+        `the build published was ${candidate.codebaseVersion}. ` +
+        'voidr deploy-latest reported:\n' +
+        releaseCommandExcerpt(published)
+    )
+  }
   const completed = assertCompletedImmutableDeployment({
     prMerged: true,
     mergeCommitSha: merged.mergeCommitSha,
@@ -272,4 +297,23 @@ function assertSameMergedSource(expected, evidence) {
   ) {
     throw new Error('Merged PR evidence changed while preparing the release.')
   }
+}
+
+// The CLI dumps the whole failing request before printing its own summary, so
+// the server's explanation sits in the MIDDLE of the output: a plain tail loses
+// it, which is how a 400 from the platform reached the user as "no
+// codebaseVersion" three times in a row. Lines that carry a reason are kept
+// first, and the tail is appended for context.
+function releaseCommandExcerpt({ stderr, stdout } = {}) {
+  const text = `${stderr || ''}\n${stdout || ''}`.trim()
+  if (!text) return 'The command produced no output.'
+  const lines = text.split('\n')
+  const reasons = lines.filter(line =>
+    /"?(message|error|errors|detail|details)"?\s*[:=]|Validation failed|status code \d{3}/i.test(
+      line
+    )
+  )
+  const selected = [...new Set([...reasons.slice(0, 12), ...lines.slice(-12)])]
+  const excerpt = selected.join('\n')
+  return excerpt.length > 2500 ? `${excerpt.slice(0, 2500)}…` : excerpt
 }

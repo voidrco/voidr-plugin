@@ -51,7 +51,7 @@ test('asks new versus existing before any tool action', () => {
   )
 })
 
-test('missing authentication stops and redirects to voidr-connect', () => {
+test('missing authentication stops and redirects to voidr-setup', () => {
   let workflow = createWorkflow()
   workflow = transition(workflow, {
     type: 'PLAN_MODE_CHOSEN',
@@ -63,7 +63,7 @@ test('missing authentication stops and redirects to voidr-connect', () => {
 
   assert.equal(workflow.state, States.AUTHENTICATION_REQUIRED)
   assert.deepEqual(workflow.actions, [])
-  assert.match(workflow.prompt, /\/copilot voidr-connect/)
+  assert.match(workflow.prompt, /\/copilot voidr-setup/)
   assert.throws(
     () =>
       transition(workflow, {
@@ -463,7 +463,7 @@ function collectNewPlanScope(workflow, feature) {
   assert.equal(workflow.state, States.FEATURE_SELECTED)
   assert.deepEqual(workflow.actions, [])
   assert.equal(workflow.context.applicationType, 'WEB')
-  assert.match(workflow.prompt, /smoke local/i)
+  assert.match(workflow.prompt, /sondas locais de inspe/i)
   workflow = transition(workflow, {
     type: 'LOCAL_SMOKE_TARGET_SELECTED',
     mode: 'localhost',

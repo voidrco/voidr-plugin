@@ -144,12 +144,57 @@ Before writing or changing the repository's authentication action:
   actionable — not from the recorded timeline. State the divergence when the
   two disagree;
 - keep the probe's answers in the action factory, so every case that merely
-  needs a session inherits one validated login instead of one guess per case.
+  needs a session inherits one validated login instead of one guess per case,
+  and record them as described in 4d so the next plan does not rediscover
+  them.
 
 If the login screen cannot be loaded twice, implement from the evidence and
 say plainly that the authentication action was never validated locally — so
 the first remote failure is read against that, instead of being diagnosed
 from scratch.
+
+## 4d. What a probe proves becomes `.selectors.json`
+
+A probe answers a question by spending a run against the deployed product.
+That answer is worth keeping: the repository's convention file already treats
+`.selectors.json` as the authoritative selector source and forbids inventing
+selectors — it is the file the conventions point at, so it is the file the
+probes must fill.
+
+After a probe confirms a selector, write it there before implementing. One
+file per screen, named for the screen, holding what the probe actually
+established:
+
+```json
+{
+  "screen": "login",
+  "url": "https://<selected environment>/...",
+  "verifiedAt": "<ISO date of the probe run>",
+  "elements": {
+    "username": { "selector": "#email-input >> input", "label": "Email*", "actionable": true },
+    "submit": { "selector": "<the control the probe could click>", "label": "Entrar", "actionable": true,
+                "note": "the native submit is present but not visible under this layer" }
+  }
+}
+```
+
+`actionable` is the field that matters and the one a recording cannot supply:
+it records that the probe found the element visible AND enabled, not merely
+present. When a screen carries two controls for the same purpose — a native
+one and the one a design system paints over it — keep both facts: the selector
+that works, and a note naming the one that does not. That note is what stops
+the next agent from "fixing" a working selector into the broken one the
+recording suggests.
+
+Read the existing files BEFORE probing. An entry whose `verifiedAt` is recent
+and whose screen is the one under test already answers the question, and a
+probe that repeats it spends a run to learn what the repository knows. Treat a
+stale entry as a lead to confirm, never as truth: the product changes, and the
+file records what was true when it was written.
+
+Never record a credential, a token, or any recorded input VALUE in these
+files. They hold structure — selectors, labels, actionability — and nothing a
+user typed.
 
 ## 4c. One login per execution — the preflight artifact
 

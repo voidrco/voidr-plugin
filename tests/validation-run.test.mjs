@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -51,6 +51,63 @@ test('an old CLI without deploy-candidate is explained, not dumped raw', async (
       return true
     }
   )
+})
+
+test('a validation execution declares the preflight its candidate ships', async () => {
+  // The Test Plan describes the promoted release; the manifest describes the
+  // build actually being run. A candidate that introduces a preflight can only
+  // be validated if the run is told about it.
+  const repositoryPath = mkdtempSync(join(tmpdir(), 'voidr-candidate-'))
+  mkdirSync(join(repositoryPath, '.voidr', '.output'), { recursive: true })
+  writeFileSync(
+    join(repositoryPath, '.voidr', '.output', 'manifest.json'),
+    JSON.stringify({ preflight: { enabled: true } })
+  )
+  const posted = []
+
+  await createValidationExecution({
+    applicationId: '0123456789abcdef01234567',
+    testPlanId,
+    environment: 'principal',
+    codebaseVersion: 'b'.repeat(64),
+    targets: [
+      { testCaseSlug: 'TROCA-02', suiteSlug: 'FLUXO', moduleSlug: 'troca' }
+    ],
+    repositoryPath,
+    restClient: {
+      post: async (path, body) => {
+        posted.push({ path, body })
+        return { data: { _id: 'exec-preflight' } }
+      }
+    }
+  })
+
+  assert.equal(posted[0].body.candidatePreflightEnabled, true)
+})
+
+test('a candidate without a readable manifest leaves the decision to the platform', async () => {
+  const posted = []
+
+  await createValidationExecution({
+    applicationId: '0123456789abcdef01234567',
+    testPlanId,
+    environment: 'principal',
+    codebaseVersion: 'c'.repeat(64),
+    targets: [
+      { testCaseSlug: 'TROCA-02', suiteSlug: 'FLUXO', moduleSlug: 'troca' }
+    ],
+    repositoryPath: join(tmpdir(), 'voidr-absent-candidate'),
+    restClient: {
+      post: async (path, body) => {
+        posted.push({ path, body })
+        return { data: { _id: 'exec-no-manifest' } }
+      }
+    }
+  })
+
+  // Absent rather than false: the platform keeps falling back to the plan,
+  // which is the behaviour every existing caller relies on.
+  assert.equal('candidatePreflightEnabled' in posted[0].body, false)
 })
 
 test('a validation execution is SHADOW and pinned to the candidate version', async () => {

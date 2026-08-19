@@ -426,7 +426,7 @@ const localTools = [
   {
     name: 'voidr_create_validation_execution',
     description:
-      'Create a SHADOW execution pinned to the codebaseVersion returned by voidr_release_deploy_validation. It validates the candidate on the platform without entering LIVE governance or monitoring and never runs the promoted latest release. Requires the environment slug, the codebaseVersion, and the targets — pass the ones voidr_release_deploy_validation returned, since an execution without targets covers only cases the platform already lists as automated.',
+      'Create a SHADOW execution pinned to the codebaseVersion returned by voidr_release_deploy_validation. It validates the candidate on the platform without entering LIVE governance or monitoring and never runs the promoted latest release. Requires the environment slug, the codebaseVersion, and the targets — pass the ones voidr_release_deploy_validation returned, since an execution without targets covers only cases the platform already lists as automated. Pass repositoryPath too: the candidate manifest states whether this build ships a preflight, and the platform otherwise asks the Test Plan, which describes the promoted release — a candidate introducing a preflight would run without it and every case inheriting its session would fail.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -434,6 +434,7 @@ const localTools = [
         testPlanId: { type: 'string', pattern: '^[a-fA-F0-9]{24}$' },
         environment: { type: 'string', minLength: 1 },
         codebaseVersion: { type: 'string', pattern: '^[a-f0-9]{64}$' },
+        repositoryPath: { type: 'string' },
         targets: {
           type: 'array',
           minItems: 1,
@@ -1785,7 +1786,10 @@ async function callLocal(name, args) {
           testPlanId: String(args.testPlanId || ''),
           environment: String(args.environment || ''),
           codebaseVersion: String(args.codebaseVersion || ''),
-          targets: Array.isArray(args.targets) ? args.targets : undefined
+          targets: Array.isArray(args.targets) ? args.targets : undefined,
+          repositoryPath: args.repositoryPath
+            ? String(args.repositoryPath)
+            : undefined
         })
       )
     default:

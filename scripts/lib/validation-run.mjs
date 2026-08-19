@@ -93,11 +93,34 @@ export async function deployValidationCandidate({
     repositoryPath: selected.path,
     codebaseVersion: candidate.codebaseVersion,
     storagePrefix: candidate.prefix || null,
+    preflightEnabled: (await candidateDeclaresPreflight(selected.path)) === true,
     // The candidate's own manifest is the only honest scope for a validation
     // run: the platform resolves an execution without targets as "the whole
     // plan", which means only the cases already automated — none of them, for
     // a plan being automated for the first time.
     targets: normalizeTargets(candidate.targets) || []
+  }
+}
+
+// The build manifest is the candidate's own account of what it ships. The Test
+// Plan's preflight flag describes the PROMOTED release instead, so a candidate
+// that INTRODUCES a preflight cannot be validated through it: the platform
+// would start the run without one, and every case inheriting the session would
+// fail reading a storage state nobody wrote.
+async function candidateDeclaresPreflight(repositoryPath) {
+  if (!repositoryPath) return undefined
+  try {
+    const manifest = JSON.parse(
+      await readFile(
+        join(String(repositoryPath), '.voidr', '.output', 'manifest.json'),
+        'utf8'
+      )
+    )
+    return manifest?.preflight?.enabled === true
+  } catch {
+    // A missing or unreadable manifest is not a reason to refuse the run: the
+    // platform still falls back to the plan, which is today's behaviour.
+    return undefined
   }
 }
 
@@ -111,6 +134,7 @@ export async function createValidationExecution({
   environment,
   codebaseVersion,
   targets,
+  repositoryPath,
   restClient = new VoidrRestClient()
 }) {
   if (!/^[a-f0-9]{24}$/i.test(String(applicationId || ''))) {
@@ -149,6 +173,8 @@ export async function createValidationExecution({
     .digest('hex')
     .slice(0, 32)
 
+  const candidatePreflightEnabled = await candidateDeclaresPreflight(repositoryPath)
+
   const execution = await restClient.post('/executions', {
     applicationId: String(applicationId),
     planId: String(testPlanId),
@@ -164,6 +190,9 @@ export async function createValidationExecution({
     // is rejected with "Only automated test cases can be executed".
     tags: ['test-generation', 'validation-run'],
     ...(selectedTargets ? { targets: selectedTargets } : {}),
+    ...(candidatePreflightEnabled === undefined
+      ? {}
+      : { candidatePreflightEnabled }),
     idempotencyKey: `validation-${idempotencyKey}`
   })
 

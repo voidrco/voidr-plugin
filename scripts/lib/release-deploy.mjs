@@ -119,15 +119,18 @@ export async function deployMergedPullRequest({
     })
   )
 
-  const promotion = await restClient.post(
-    `/test-plans/${testPlanId}/automation/versions/${candidate.codebaseVersion}/promote`,
-    {}
-  )
-  const promotedVersion =
-    promotion?.data?.codebaseVersion ?? promotion?.codebaseVersion
-  if (promotedVersion !== candidate.codebaseVersion) {
-    throw new Error('Voidr did not confirm promotion of the expected immutable release.')
-  }
+  // `deploy-latest` publishes the SAME build the candidate was cut from: it
+  // reads the manifest already on disk, whose codebaseVersion `deploy-candidate`
+  // computed and wrote, so the released version stays verifiable against the one
+  // that was validated. It also syncs the automation manifest with the platform,
+  // which is what carries `preflight.enabled` onto the Test Plan — a candidate
+  // deploy never does that, so a plan whose first preflight arrives with this
+  // release only learns about it here.
+  await run('npx', ['--no-install', 'voidr', 'deploy-latest'], {
+    cwd: selected.path,
+    timeout: 300_000,
+    env: effectiveCliEnvironment
+  })
 
   const latest = await restClient.get(
     `/test-plans/${testPlanId}/automation/deploys/latest`

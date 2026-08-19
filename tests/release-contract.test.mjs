@@ -99,6 +99,7 @@ test('release tool binds build, immutable candidate, promotion, and latest to me
   )
 
   const calls = []
+  const posted = []
   const result = await deployMergedPullRequest({
     repositoryPath,
     repositoryUrl,
@@ -147,7 +148,10 @@ test('release tool binds build, immutable candidate, promotion, and latest to me
       return { stdout: '' }
     },
     restClient: {
-      post: async () => ({ data: { codebaseVersion } }),
+      post: async (path, body) => {
+        posted.push({ path, body })
+        return { data: { codebaseVersion } }
+      },
       get: async () => ({
         data: { manifestData: { codebaseVersion } }
       })
@@ -171,6 +175,19 @@ test('release tool binds build, immutable candidate, promotion, and latest to me
       call.join(' ').includes('voidr deploy-candidate --json')
     ),
     true
+  )
+  // The release is published by the CLI, from the same build the candidate was
+  // cut from — and it is what syncs the automation manifest, so a plan whose
+  // first preflight ships with this release learns about it here.
+  assert.equal(
+    calls.some(call => call.join(' ') === 'npx --no-install voidr deploy-latest'),
+    true,
+    'the merged release must be published with voidr deploy-latest'
+  )
+  assert.equal(
+    posted.length,
+    0,
+    'promotion must not depend on a REST endpoint the platform does not expose'
   )
 })
 

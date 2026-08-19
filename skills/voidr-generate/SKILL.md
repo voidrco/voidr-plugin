@@ -166,6 +166,20 @@ returned `codebaseVersion`). On a build failure, report the exact error and
 wait for the user's authorization before touching the specs. Never weaken an
 assertion just to make the validation pass.
 
+## 6b. Correcting a case the validation run failed
+
+A failed run arrives here already diagnosed — `/voidr-execute` names the cause
+from the step timeline and the DOM before handing it over. Correct THAT cause.
+
+Never edit a spec against the error message alone. "Timeout" is the symptom of
+at least three different defects, and the one that looks most like slowness is
+usually a locator the test can never act on: present in the DOM but hidden,
+disabled, or covered. Raising a timeout there buys the same failure later.
+
+When the diagnosis points at a selector, take the replacement from the recorded
+evidence (step 3), not from a guess about the markup. A selector the recording
+never proves is a second guess stacked on the first.
+
 ## 7. AAA × product divergence — the update gate
 
 When evidence from steps 3–6 PROVES the approved AAA describes behavior the

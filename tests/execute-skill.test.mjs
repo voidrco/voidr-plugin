@@ -16,10 +16,18 @@ test('execute skill routes only its execution, release, and sync tools', () => {
   ]
   const referencedTools = allTools.filter(tool => skill.includes(tool))
 
+  // The diagnosis reads are part of the contract: a failed run has to be
+  // explained from the timeline and the DOM before anything is corrected.
   assert.deepEqual(referencedTools.sort(), [
+    'assistant_context_get_step_detail',
     'executions_create_execution',
     'executions_get_execution',
+    'failure_analysis_get_context',
     'playwright_get_execution_analytics',
+    'playwright_get_step_frames',
+    'playwright_get_step_timeline',
+    'playwright_get_test_dom',
+    'playwright_get_trace_events',
     'playwright_list_execution_failures',
     'test_plans_get_test_counts',
     'test_plans_get_test_plan',

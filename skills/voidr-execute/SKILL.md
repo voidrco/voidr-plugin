@@ -72,8 +72,10 @@ Ask (or infer from the request) which mode applies:
 
 ## Reading a failed run
 
-Group the failures by `failureSignature` (`playwright_list_execution_failures`)
-BEFORE reporting or proposing anything:
+### First group, then diagnose, then edit
+
+Group by `failureSignature` (`playwright_list_execution_failures`) BEFORE
+reporting or proposing anything:
 
 - cases sharing one signature are ONE problem, not N. Diagnose the
   representative case and say how many cases the signature covers; never open
@@ -82,10 +84,52 @@ BEFORE reporting or proposing anything:
   such: fixing it is what unblocks the plan;
 - distinct signatures are independent problems and may be worked in parallel.
 
-Corrections belong to `/voidr-generate`. When the user asks to re-run after a
-correction, execute ONLY the previously failing targets — a green case does
-not need to pay for another run, and a narrower scope returns its verdict
-sooner.
+### The error message is the symptom, never the cause
+
+`errorMessage` says what the runner observed, not why. "Test timeout of 40000ms
+exceeded" is compatible with a slow page, a selector that matches nothing, and a
+selector that matches something the test can never act on — three different
+fixes. Reporting the message back as the diagnosis is not a diagnosis.
+
+Before naming a cause, read the representative case's runtime evidence:
+
+- `playwright_get_step_timeline` — the step sequence with durations. Read it
+  first and read it whole. Where the time actually went is the strongest signal
+  available: a step that consumed the remaining budget was waiting on something,
+  and the steps that passed before it tell you how far the flow really got.
+- `playwright_get_test_dom` / `playwright_get_step_frames` — what the page held
+  at the failing step. This is how a locator is confirmed to be absent, or
+  present but not actionable.
+- `playwright_get_trace_events` / `assistant_context_get_step_detail` — the
+  detail behind one step when the timeline leaves the question open.
+- `failure_analysis_get_context` — the platform's own prior analysis, when it
+  has one.
+
+A green step is not proof that its effect happened: `fill` reports success for
+writing into an element the application never read. Trust the timeline and the
+DOM over the step's own verdict.
+
+### Waiting longer is not a fix
+
+Never raise a timeout to make a failure go away. A timeout is only ever the
+correction when the timeline PROVES the operation was progressing and simply
+needed more room — and then say which step, and how long it actually took.
+
+When a step consumed its budget without progressing, the target was wrong or
+unreachable; a larger timeout buys the same red result later. An element that is
+present but hidden, disabled, or covered is the common case, and no amount of
+waiting changes it.
+
+### Then correct
+
+Corrections belong to `/voidr-generate`, and only after the evidence above named
+a cause. When the user asks to re-run after a correction, execute ONLY the
+previously failing targets — a green case does not need to pay for another run,
+and a narrower scope returns its verdict sooner.
+
+If two attempts at the same signature fail, stop and report what the evidence
+shows instead of trying a third edit. Repeated blind edits bury the original
+failure under new ones.
 
 ## Execution call contract
 
@@ -140,3 +184,10 @@ self-healing or any Hive process.
   monitoring and result reporting.
 - `playwright_list_execution_failures` — the per-case failures with their
   `failureSignature`, which is what groups one problem from many cases.
+- `playwright_get_step_timeline` — the failing case's steps and durations; the
+  first read of any diagnosis, never skipped.
+- `playwright_get_test_dom` / `playwright_get_step_frames` — the page at the
+  failing step, to tell an absent locator from an unactionable one.
+- `playwright_get_trace_events` / `assistant_context_get_step_detail` — one
+  step in detail, when the timeline leaves the question open.
+- `failure_analysis_get_context` — the platform's prior analysis of the run.

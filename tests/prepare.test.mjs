@@ -420,6 +420,112 @@ function writeRunnerConfig(repositoryPath, { timeout, actionTimeout, navigationT
   )
 }
 
+test('installs dependencies when the tree does not match the lockfile', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-prepare-'))
+  const repositoryPath = createRepository(workspace)
+  writeFileSync(join(repositoryPath, 'package-lock.json'), '{}')
+  const calls = []
+
+  const result = await prepareTestRepository({
+    repositoryPath,
+    ...context,
+    workspaceRoot: workspace,
+    cliEnvironment: syntheticCliEnvironment(),
+    run: fakeVoidrRun({ repositoryPath, calls, context })
+  })
+
+  assert.equal(
+    calls.some(call => call.file === 'npm' && call.args?.includes('install')),
+    true
+  )
+  assert.equal(result.steps.dependenciesInstalled, true)
+  assert.equal(result.steps.dependenciesAlreadyCurrent, false)
+})
+
+test('skips the install when npm already recorded this lockfile', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-prepare-'))
+  const repositoryPath = createRepository(workspace)
+  writeFileSync(join(repositoryPath, 'package-lock.json'), '{}')
+  // npm writes this record after installing; newer than the lockfile means the
+  // tree already matches it.
+  mkdirSync(join(repositoryPath, 'node_modules'), { recursive: true })
+  writeFileSync(join(repositoryPath, 'node_modules', '.package-lock.json'), '{}')
+  const calls = []
+
+  const result = await prepareTestRepository({
+    repositoryPath,
+    ...context,
+    workspaceRoot: workspace,
+    cliEnvironment: syntheticCliEnvironment(),
+    run: fakeVoidrRun({ repositoryPath, calls, context })
+  })
+
+  assert.equal(
+    calls.some(call => call.file === 'npm' && call.args?.includes('install')),
+    false,
+    'the slowest step must not run when nothing changed'
+  )
+  assert.equal(result.steps.dependenciesInstalled, false)
+  assert.equal(result.steps.dependenciesAlreadyCurrent, true)
+})
+
+test('scaffolds only the selected cases that have no spec yet', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-prepare-'))
+  const repositoryPath = createRepository(workspace)
+  // LOGIN-001 is already implemented; LOGIN-002 is not there at all.
+  const suite = join(repositoryPath, 'modules', 'login', 'login')
+  mkdirSync(suite, { recursive: true })
+  writeFileSync(
+    join(suite, 'login-001.spec.js'),
+    "test('[LOGIN-001] signs in', async () => {})"
+  )
+  const calls = []
+
+  const result = await prepareTestRepository({
+    repositoryPath,
+    ...context,
+    workspaceRoot: workspace,
+    cliEnvironment: syntheticCliEnvironment(),
+    run: fakeVoidrRun({ repositoryPath, calls, context })
+  })
+
+  const scaffold = calls.find(call => call.args?.includes('scaffold'))
+  assert.ok(scaffold, 'the missing case still has to be scaffolded')
+  assert.equal(scaffold.args[scaffold.args.indexOf('--cases') + 1], 'LOGIN-002')
+  assert.deepEqual(result.steps.scaffoldedCases, ['LOGIN-002'])
+  assert.deepEqual(result.steps.alreadyScaffolded, ['LOGIN-001'])
+})
+
+test('does not scaffold at all when every selected case already has a spec', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-prepare-'))
+  const repositoryPath = createRepository(workspace)
+  const suite = join(repositoryPath, 'modules', 'login', 'login')
+  mkdirSync(suite, { recursive: true })
+  // The slug in the title is what identifies the case — the file name and the
+  // suite it sits in are free to change.
+  writeFileSync(
+    join(suite, 'anything.spec.js'),
+    "test('[LOGIN-001] signs in', async () => {})\ntest('[LOGIN-002] fails', async () => {})"
+  )
+  const calls = []
+
+  const result = await prepareTestRepository({
+    repositoryPath,
+    ...context,
+    workspaceRoot: workspace,
+    cliEnvironment: syntheticCliEnvironment(),
+    run: fakeVoidrRun({ repositoryPath, calls, context })
+  })
+
+  assert.equal(
+    calls.some(call => call.args?.includes('scaffold')),
+    false,
+    'the CLI must not be spawned when there is nothing to create'
+  )
+  assert.equal(result.steps.scaffolded, false)
+  assert.deepEqual(result.steps.scaffoldedCases, [])
+})
+
 function createRepository(workspace) {
   const repositoryPath = join(workspace, 'tests')
   mkdirSync(repositoryPath)

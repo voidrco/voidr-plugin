@@ -191,6 +191,87 @@ test('release tool binds build, immutable candidate, promotion, and latest to me
   )
 })
 
+test('reports what the CLI said when the release never left the machine', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-release-fail-'))
+  const repositoryPath = join(workspace, 'tests')
+  mkdirSync(join(repositoryPath, '.voidr', '.output'), { recursive: true })
+  writeFileSync(join(repositoryPath, 'package.json'), '{}')
+  writeFileSync(
+    join(repositoryPath, 'project.json'),
+    JSON.stringify({ testPlanId })
+  )
+  writeFileSync(
+    join(repositoryPath, '.voidr', '.output', 'manifest.json'),
+    JSON.stringify({ testPlanId, codebaseVersion })
+  )
+  const repositoryUrl = 'https://github.com/acme/tests.git'
+  execFileSync('git', ['init', repositoryPath], { stdio: 'ignore' })
+  execFileSync(
+    'git',
+    ['-C', repositoryPath, 'remote', 'add', 'origin', repositoryUrl],
+    { stdio: 'ignore' }
+  )
+
+  await assert.rejects(
+    deployMergedPullRequest({
+      repositoryPath,
+      repositoryUrl,
+      pullRequestNumber: 42,
+      testPlanId,
+      workspaceRoot: workspace,
+      cliEnvironment: { VOIDR_API_URL: 'https://preview.example.test/v1' },
+      run: async (file, args) => {
+        if (file === 'gh' && args[0] === 'repo') {
+          return {
+            stdout: JSON.stringify({
+              nameWithOwner: 'acme/tests',
+              defaultBranchRef: { name: 'main' }
+            })
+          }
+        }
+        if (file === 'gh' && args[0] === 'pr') {
+          return {
+            stdout: JSON.stringify({
+              number: 42,
+              url: 'https://github.com/acme/tests/pull/42',
+              state: 'MERGED',
+              mergedAt: '2026-07-28T12:00:00Z',
+              mergeCommit: { oid: mergeCommitSha },
+              baseRefName: 'main'
+            })
+          }
+        }
+        if (file === 'git' && args[0] === 'rev-parse') {
+          return { stdout: `${mergeCommitSha}\n` }
+        }
+        if (file === 'git' && args[0] === 'status') return { stdout: '' }
+        if (file === 'npx' && args.includes('deploy-latest')) {
+          return { stdout: '', stderr: 'Upload failed: 403 Forbidden', exitCode: 1 }
+        }
+        if (file === 'npx') {
+          return {
+            stdout: `${JSON.stringify({
+              codebaseVersion,
+              prefix: `versions/${codebaseVersion}`
+            })}\n`
+          }
+        }
+        return { stdout: '' }
+      },
+      restClient: {
+        post: async () => ({ data: { codebaseVersion } }),
+        get: async () => ({ data: { manifestData: { codebaseVersion } } })
+      }
+    }),
+    error => {
+      // The CLI's words, not "the pointer was not verified".
+      assert.match(error.message, /deploy-latest failed/)
+      assert.match(error.message, /403 Forbidden/)
+      return true
+    }
+  )
+})
+
 test('fast-forwards a clean checkout that is behind the merged PR commit', async () => {
   const workspace = mkdtempSync(join(tmpdir(), 'voidr-release-ff-'))
   const repositoryPath = join(workspace, 'tests')

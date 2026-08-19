@@ -126,11 +126,20 @@ export async function deployMergedPullRequest({
   // which is what carries `preflight.enabled` onto the Test Plan — a candidate
   // deploy never does that, so a plan whose first preflight arrives with this
   // release only learns about it here.
-  await run('npx', ['--no-install', 'voidr', 'deploy-latest'], {
+  const published = await run('npx', ['--no-install', 'voidr', 'deploy-latest'], {
     cwd: selected.path,
     timeout: 300_000,
     env: effectiveCliEnvironment
   })
+  // Without this the CLI's own words are lost, and a release that never left
+  // the machine reports itself as an unverified pointer — a verdict that names
+  // the check instead of the cause, and sends the next attempt guessing.
+  if (published?.exitCode !== undefined && published.exitCode !== 0) {
+    throw new Error(
+      'voidr deploy-latest failed, so nothing was published. It reported:\n' +
+        releaseCommandExcerpt(published)
+    )
+  }
 
   const latest = await restClient.get(
     `/test-plans/${testPlanId}/automation/deploys/latest`
@@ -275,4 +284,11 @@ function assertSameMergedSource(expected, evidence) {
   ) {
     throw new Error('Merged PR evidence changed while preparing the release.')
   }
+}
+
+function releaseCommandExcerpt({ stderr, stdout } = {}) {
+  const text = `${stderr || ''}\n${stdout || ''}`.trim()
+  if (!text) return 'The command produced no output.'
+  const excerpt = text.split('\n').slice(-25).join('\n')
+  return excerpt.length > 2000 ? `…${excerpt.slice(-2000)}` : excerpt
 }

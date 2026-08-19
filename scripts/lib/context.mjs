@@ -1,8 +1,8 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { runCommand } from './command.mjs'
-import { prepareTestRepository, locateLinkedCheckout } from './prepare.mjs'
-import { resolveWorkspaceRoot } from './workspace.mjs'
+import { prepareTestRepository, cloneRequestMessage } from './prepare.mjs'
+import { findCheckoutByOrigin, resolveWorkspaceRoot } from './workspace.mjs'
 
 export const CONTEXT_MANIFEST_FILENAME = 'manifest-context.json'
 export const CONTEXT_MANIFEST_VERSION = 1
@@ -251,23 +251,17 @@ export async function contextBootstrap({
     sessionIds = []
   }
 
-  // 4. Checkout by Git origin, cloning it when absent.
-  //
-  // This used to only look, and hand the clone command to the user — which put
-  // a manual `git clone` in the middle of an automation, in the one place a
-  // person who does not know the product is most likely to stop. The clone runs
-  // as the user, with the user's own credentials, so doing it for them grants
-  // nothing they did not already have; a repository their credentials cannot
-  // read still fails, and the handover message takes over from there.
-  //
-  // Shared with voidr_workspace_prepare_test_repository on purpose: the same
-  // fix was once applied to that path alone, and this one kept asking.
-  const located = await locateLinkedCheckout({
-    workspaceRoot: resolvedRoot,
-    repositoryUrl: planContext.repository.url,
-    run
-  })
-  const checkout = located.path
+  // 4. Checkout by Git origin — never clone on the user's behalf.
+  const checkout = findCheckoutByOrigin(resolvedRoot, planContext.repository.url)
+  if (!checkout) {
+    throw new Error(
+      cloneRequestMessage({
+        workspaceRoot: resolvedRoot,
+        repositoryUrl: planContext.repository.url,
+        githubAccount: ''
+      })
+    )
+  }
 
   // 5. Manifest first: the anchor exists even if preparation fails midway,
   // and the retry updates it in place.

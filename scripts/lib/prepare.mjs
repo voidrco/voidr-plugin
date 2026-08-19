@@ -226,7 +226,7 @@ export async function prepareTestRepository({
 // fails, and the handover message takes over with the authorization
 // instructions. That failure is the access check, and it is the user's own
 // credentials failing it.
-export async function locateLinkedCheckout({ workspaceRoot, repositoryUrl, run }) {
+async function locateLinkedCheckout({ workspaceRoot, repositoryUrl, run }) {
   const existing = findCheckoutByOrigin(workspaceRoot, repositoryUrl)
   if (existing) return { path: existing, how: 'existing-checkout' }
 

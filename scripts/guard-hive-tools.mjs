@@ -7,7 +7,7 @@ import {
   statSync
 } from 'node:fs'
 import { homedir } from 'node:os'
-import { basename, dirname, join, relative, resolve, sep } from 'node:path'
+import { basename, dirname, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { CLAUDE, detectHost } from './lib/host.mjs'
 import { canonicalToolName, loadPolicy } from './lib/policy.mjs'
@@ -140,7 +140,6 @@ if (
 }
 
 enforcePluginInstallationBoundary(payload, rawToolName, toolArgs)
-enforcePluginSourceBoundary(payload, rawToolName, toolArgs)
 enforceSelectedRepositoryBoundary(payload, rawToolName, toolArgs)
 const updatedToolArgs = addDefectExecutionEvidence(payload, toolName, toolArgs)
 if (updatedToolArgs) allowUpdatedInput(updatedToolArgs)
@@ -193,46 +192,6 @@ function enforcePluginInstallationBoundary(hookPayload, name, args) {
     if (isInside(candidate, pluginInstallationRoot)) {
       deny(
         'Blocked by Voidr policy: never create, edit, or delete files inside the plugin installation directory. Test repositories and generated files live in the real VS Code workspace.'
-      )
-    }
-  }
-}
-
-// The installation boundary above covers the copy Copilot and Claude install.
-// It does not cover the plugin's own SOURCE checkout, which is an ordinary
-// repository in the workspace — so an agent asked to "fix the plugin" edits the
-// very hooks, policy, and skills that govern it, from inside a session those
-// files are governing. The checkout is recognised by two markers that only a
-// plugin repository carries together; a test repository has neither.
-function pluginSourceRootFor(path) {
-  let current = path
-  for (let depth = 0; depth < 40; depth += 1) {
-    if (
-      existsSync(join(current, 'plugin.json')) &&
-      existsSync(join(current, 'scripts', 'voidr-mcp-bridge.mjs'))
-    ) {
-      return current
-    }
-    const parent = dirname(current)
-    if (parent === current) return null
-    current = parent
-  }
-  return null
-}
-
-function enforcePluginSourceBoundary(hookPayload, name, args) {
-  if (!isGenericWriteTool(name)) return
-  const cwd = hookPayload.cwd || process.cwd()
-  const paths = [
-    ...collectPathArguments(args),
-    ...collectPatchPathsFromValue(args)
-  ]
-  for (const value of paths) {
-    const candidate = realpathOrResolve(resolve(cwd, value))
-    const root = pluginSourceRootFor(candidate)
-    if (root) {
-      deny(
-        `Blocked by Voidr policy: this file belongs to the Voidr plugin itself (${root}). The plugin governs the session it is running in, so changing its hooks, policy, skills, or bridge from inside that session is never part of a testing workflow. Work on test repositories only. To develop the plugin, open a session with the plugin disabled.`
       )
     }
   }

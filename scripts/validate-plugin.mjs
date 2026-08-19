@@ -194,9 +194,20 @@ assert(
 )
 assert(
   claudeManifest.skills === './skills/' &&
-    claudeManifest.hooks === './hooks/hooks.json' &&
     claudeManifest.mcpServers === './mcp/claude.json',
-  '.claude-plugin/plugin.json must point at the shared skills and the Claude hook and MCP configs.'
+  '.claude-plugin/plugin.json must point at the shared skills and the Claude MCP config.'
+)
+// Claude loads hooks/hooks.json by convention, so declaring it again makes the
+// plugin fail to load: "Duplicate hooks file detected". The manifest may only
+// name ADDITIONAL hook files. Manifest validation passes either way — this only
+// surfaces when the plugin is actually enabled, which is how it shipped broken.
+assert(
+  claudeManifest.hooks === undefined,
+  '.claude-plugin/plugin.json must not declare hooks/hooks.json: Claude loads it automatically.'
+)
+assert(
+  existsSync(join(root, 'hooks/hooks.json')),
+  'hooks/hooks.json must exist for Claude to load it by convention.'
 )
 const claudeMarketplaceEntry = claudeMarketplace.plugins?.find(
   entry => entry.name === claudeManifest.name

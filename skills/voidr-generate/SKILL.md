@@ -105,6 +105,13 @@ corporate network may never load. When it fails twice, stop probing and
 implement from the evidence you have, saying which assertion stayed weaker
 for it.
 
+A probe does NOT inherit the specs' boilerplate. Copying `useStealth` /
+`withStealth` into one costs a run to rediscover that the stealth browser
+rejects the runner's viewport (`Browser.setDefaultViewport … isMobile`) — it
+has happened on every first probe. Write it against the plain `{ page }`
+fixture; stealth belongs to the specs that run on the platform, not to a local
+inspection.
+
 When AAA + sessions leave real questions open (is this text a DOM text or an
 attribute? does this click open a submenu?), write a THROWAWAY inspection
 spec under `modules/_probe/` that logs the answers (attributes, shadow-DOM
@@ -214,6 +221,16 @@ file records what was true when it was written.
 Never record a credential, a token, or any recorded input VALUE in these
 files. They hold structure — selectors, labels, actionability — and nothing a
 user typed.
+
+A probe also teaches things that belong to no single element: that a wait
+never settles in this product, that a panel stays open after a selection, that
+an assertion has to read the container instead of the node. Keep those next to
+the code they explain — the action factory, the spec, or a note in the screen's
+`.selectors.json` — inside the repository. A file the checkout does not carry
+is lost the next time the repository is recreated, and this knowledge is worth
+exactly as much as the run that bought it. Never write into files above the
+checkout, even when the conventions mention them: those belong to whoever put
+them there.
 
 ## 4c. One login per execution — the preflight artifact
 

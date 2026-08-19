@@ -420,6 +420,63 @@ function writeRunnerConfig(repositoryPath, { timeout, actionTimeout, navigationT
   )
 }
 
+test('scaffolds only the selected cases that have no spec yet', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-prepare-'))
+  const repositoryPath = createRepository(workspace)
+  // LOGIN-001 is already implemented; LOGIN-002 is not there at all.
+  const suite = join(repositoryPath, 'modules', 'login', 'login')
+  mkdirSync(suite, { recursive: true })
+  writeFileSync(
+    join(suite, 'login-001.spec.js'),
+    "test('[LOGIN-001] signs in', async () => {})"
+  )
+  const calls = []
+
+  const result = await prepareTestRepository({
+    repositoryPath,
+    ...context,
+    workspaceRoot: workspace,
+    cliEnvironment: syntheticCliEnvironment(),
+    run: fakeVoidrRun({ repositoryPath, calls, context })
+  })
+
+  const scaffold = calls.find(call => call.args?.includes('scaffold'))
+  assert.ok(scaffold, 'the missing case still has to be scaffolded')
+  assert.equal(scaffold.args[scaffold.args.indexOf('--cases') + 1], 'LOGIN-002')
+  assert.deepEqual(result.steps.scaffoldedCases, ['LOGIN-002'])
+  assert.deepEqual(result.steps.alreadyScaffolded, ['LOGIN-001'])
+})
+
+test('does not scaffold at all when every selected case already has a spec', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-prepare-'))
+  const repositoryPath = createRepository(workspace)
+  const suite = join(repositoryPath, 'modules', 'login', 'login')
+  mkdirSync(suite, { recursive: true })
+  // The slug in the title is what identifies the case — the file name and the
+  // suite it sits in are free to change.
+  writeFileSync(
+    join(suite, 'anything.spec.js'),
+    "test('[LOGIN-001] signs in', async () => {})\ntest('[LOGIN-002] fails', async () => {})"
+  )
+  const calls = []
+
+  const result = await prepareTestRepository({
+    repositoryPath,
+    ...context,
+    workspaceRoot: workspace,
+    cliEnvironment: syntheticCliEnvironment(),
+    run: fakeVoidrRun({ repositoryPath, calls, context })
+  })
+
+  assert.equal(
+    calls.some(call => call.args?.includes('scaffold')),
+    false,
+    'the CLI must not be spawned when there is nothing to create'
+  )
+  assert.equal(result.steps.scaffolded, false)
+  assert.deepEqual(result.steps.scaffoldedCases, [])
+})
+
 function createRepository(workspace) {
   const repositoryPath = join(workspace, 'tests')
   mkdirSync(repositoryPath)

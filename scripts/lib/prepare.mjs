@@ -121,22 +121,29 @@ export async function prepareTestRepository({
 
   validateProject(projectPath, identifiers)
 
-  await run(
-    'npx',
-    [
-      '--no-install',
-      'voidr',
-      'scaffold',
-      '--split-per-case',
-      '--cases',
-      selectedCases.join(',')
-    ],
-    {
-      cwd: selected.path,
-      timeout: 180_000,
-      env: childEnvironment
-    }
-  )
+  // Scaffolding is idempotent — the CLI skips a spec that exists — but calling
+  // it when every selected case already has one spends a process to learn that,
+  // and reports `scaffolded: true` for work nobody did. Asking first is cheap
+  // and lets the answer say which cases were actually missing.
+  const missingSpecs = casesWithoutSpec(join(selected.path, 'modules'), selectedCases)
+  if (missingSpecs.length > 0) {
+    await run(
+      'npx',
+      [
+        '--no-install',
+        'voidr',
+        'scaffold',
+        '--split-per-case',
+        '--cases',
+        missingSpecs.join(',')
+      ],
+      {
+        cwd: selected.path,
+        timeout: 180_000,
+        env: childEnvironment
+      }
+    )
+  }
 
   await run(
     'npx',
@@ -186,7 +193,9 @@ export async function prepareTestRepository({
       interactiveLoginExecuted: false,
       linked: !hadProject,
       existingProjectValidated: hadProject,
-      scaffolded: true,
+      scaffolded: missingSpecs.length > 0,
+      scaffoldedCases: missingSpecs,
+      alreadyScaffolded: selectedCases.filter((slug) => !missingSpecs.includes(slug)),
       secretsPulled: true,
       runnerTimeouts,
       nodeRuntime: describeNodeRuntime(runtime)
@@ -406,4 +415,45 @@ function ensureDiagnosableTimeouts(repositoryPath) {
     testTimeout: raised,
     longestStepTimeout: longestStep
   }
+}
+
+/**
+ * Which of the selected cases have no spec yet.
+ *
+ * A generated spec carries its case slug in the test title (`[TROCA-02] ...`),
+ * which survives the file being implemented, renamed or moved between suites —
+ * unlike a path convention, which only holds until someone reorganises the
+ * tree. Anything unreadable counts as missing: scaffolding again is harmless
+ * (the CLI skips what exists), while wrongly declaring a case scaffolded would
+ * leave it without a spec.
+ */
+function casesWithoutSpec(modulesDirectory, caseSlugs) {
+  if (!existsSync(modulesDirectory)) return [...caseSlugs]
+  const specs = []
+  const collect = directory => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const path = join(directory, entry.name)
+      if (entry.isDirectory()) collect(path)
+      else if (/\.spec\.[cm]?[jt]s$/i.test(entry.name)) specs.push(path)
+    }
+  }
+  try {
+    collect(modulesDirectory)
+  } catch {
+    return [...caseSlugs]
+  }
+
+  const covered = new Set()
+  for (const spec of specs) {
+    let content = ''
+    try {
+      content = readFileSync(spec, 'utf8')
+    } catch {
+      continue
+    }
+    for (const slug of caseSlugs) {
+      if (content.includes(`[${slug}]`)) covered.add(slug)
+    }
+  }
+  return caseSlugs.filter(slug => !covered.has(slug))
 }

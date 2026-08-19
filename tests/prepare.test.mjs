@@ -4,6 +4,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   realpathSync,
   writeFileSync
 } from 'node:fs'
@@ -343,6 +344,81 @@ test('hands the clone commands over when git cannot clone it', async () => {
   assert.deepEqual(ghCall, ['gh', 'api', 'user', '--jq', '.login'])
   assert.equal(existsSync(destination), false)
 })
+
+test('raises a test budget that is tied to the action budget, so a failed run keeps its trace', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-prepare-'))
+  const repositoryPath = createRepository(workspace)
+  writeRunnerConfig(repositoryPath, { timeout: 40000, actionTimeout: 40000, navigationTimeout: 40000 })
+
+  const result = await prepareTestRepository({
+    repositoryPath,
+    ...context,
+    workspaceRoot: workspace,
+    cliEnvironment: syntheticCliEnvironment(),
+    run: fakeVoidrRun({ repositoryPath, calls: [], context })
+  })
+
+  assert.equal(result.steps.runnerTimeouts.adjusted, true)
+  assert.equal(result.steps.runnerTimeouts.previousTestTimeout, 40000)
+  assert.equal(result.steps.runnerTimeouts.testTimeout, 80000)
+
+  const written = readFileSync(join(repositoryPath, 'voidr.runner.config.mjs'), 'utf8')
+  assert.match(written, /^ {2}timeout: 80000,$/m)
+  assert.match(written, /actionTimeout: 40000/)
+  assert.match(written, /navigationTimeout: 40000/)
+})
+
+test('leaves a repository alone when its test budget already clears the step budgets', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-prepare-'))
+  const repositoryPath = createRepository(workspace)
+  writeRunnerConfig(repositoryPath, { timeout: 90000, actionTimeout: 30000, navigationTimeout: 45000 })
+  const before = readFileSync(join(repositoryPath, 'voidr.runner.config.mjs'), 'utf8')
+
+  const result = await prepareTestRepository({
+    repositoryPath,
+    ...context,
+    workspaceRoot: workspace,
+    cliEnvironment: syntheticCliEnvironment(),
+    run: fakeVoidrRun({ repositoryPath, calls: [], context })
+  })
+
+  assert.equal(result.steps.runnerTimeouts.adjusted, false)
+  assert.equal(result.steps.runnerTimeouts.reason, 'already-diagnosable')
+  assert.equal(readFileSync(join(repositoryPath, 'voidr.runner.config.mjs'), 'utf8'), before)
+})
+
+function syntheticCliEnvironment() {
+  return {
+    VOIDR_CLIENT_ID: 'sa_synthetic_prepare',
+    VOIDR_CLIENT_SECRET: 'synthetic-prepare-secret',
+    VOIDR_ORG_ID: context.organizationId,
+    VOIDR_API_URL: 'https://preview.example.test/v1'
+  }
+}
+
+function writeRunnerConfig(repositoryPath, { timeout, actionTimeout, navigationTimeout }) {
+  writeFileSync(
+    join(repositoryPath, 'voidr.runner.config.mjs'),
+    [
+      "import { defineConfig } from '@playwright/test'",
+      '',
+      'export default defineConfig({',
+      "  testMatch: ['**/*.spec.js'],",
+      '  retries: 0,',
+      `  timeout: ${timeout},`,
+      '  expect: { timeout: 15000 },',
+      '  workers: 1,',
+      '  use: {',
+      "    trace: 'on',",
+      `    actionTimeout: ${actionTimeout},`,
+      `    navigationTimeout: ${navigationTimeout},`,
+      '  }',
+      '})',
+      ''
+    ].join('\n'),
+    'utf8'
+  )
+}
 
 function createRepository(workspace) {
   const repositoryPath = join(workspace, 'tests')

@@ -157,6 +157,8 @@ export async function prepareTestRepository({
     }
   )
 
+  const runnerTimeouts = ensureDiagnosableTimeouts(selected.path)
+
   const specCount = countSpecs(join(selected.path, 'modules'))
   if (specCount === 0) {
     throw new Error(
@@ -186,6 +188,7 @@ export async function prepareTestRepository({
       existingProjectValidated: hadProject,
       scaffolded: true,
       secretsPulled: true,
+      runnerTimeouts,
       nodeRuntime: describeNodeRuntime(runtime)
     }
   }
@@ -358,4 +361,49 @@ function countSpecs(directory) {
     else if (/\.spec\.[cm]?[jt]s$/i.test(entry.name)) count += 1
   }
   return count
+}
+
+const RUNNER_CONFIG_FILENAME = 'voidr.runner.config.mjs'
+const TEST_TIMEOUT_PATTERN = /^([ \t]*timeout:[ \t]*)(\d+)/m
+const ACTION_TIMEOUT_PATTERN = /actionTimeout:[ \t]*(\d+)/
+const NAVIGATION_TIMEOUT_PATTERN = /navigationTimeout:[ \t]*(\d+)/
+
+// Playwright aborts the worker the instant the test budget expires, and an
+// aborted worker never finalizes trace.zip. When the action budget equals the
+// test budget the two expire together: the trace is lost, the step timeline and
+// the DOM snapshots come back empty, and the failure degrades to the generic
+// "Test timeout exceeded" instead of the call log naming the locator that never
+// became actionable. Raising the test budget above the longest step budget is
+// what makes a failed run diagnosable — it is never the action budgets that
+// give way, so no step is left with less room than the repository asked for.
+function ensureDiagnosableTimeouts(repositoryPath) {
+  const configPath = join(repositoryPath, RUNNER_CONFIG_FILENAME)
+  if (!existsSync(configPath)) return { adjusted: false, reason: 'runner-config-absent' }
+
+  const source = readFileSync(configPath, 'utf8')
+  const testTimeoutMatch = source.match(TEST_TIMEOUT_PATTERN)
+  if (!testTimeoutMatch) return { adjusted: false, reason: 'test-timeout-not-a-literal' }
+
+  const longestStep = Math.max(
+    Number(source.match(ACTION_TIMEOUT_PATTERN)?.[1] || 0),
+    Number(source.match(NAVIGATION_TIMEOUT_PATTERN)?.[1] || 0)
+  )
+  if (longestStep === 0) return { adjusted: false, reason: 'step-timeouts-absent' }
+
+  const testTimeout = Number(testTimeoutMatch[2])
+  if (testTimeout > longestStep) return { adjusted: false, reason: 'already-diagnosable' }
+
+  const raised = longestStep * 2
+  writeFileSync(
+    configPath,
+    source.replace(TEST_TIMEOUT_PATTERN, `$1${raised}`),
+    'utf8'
+  )
+  return {
+    adjusted: true,
+    reason: 'test-budget-tied-to-step-budget',
+    previousTestTimeout: testTimeout,
+    testTimeout: raised,
+    longestStepTimeout: longestStep
+  }
 }

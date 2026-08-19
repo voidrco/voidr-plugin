@@ -299,9 +299,21 @@ function assertSameMergedSource(expected, evidence) {
   }
 }
 
+// The CLI dumps the whole failing request before printing its own summary, so
+// the server's explanation sits in the MIDDLE of the output: a plain tail loses
+// it, which is how a 400 from the platform reached the user as "no
+// codebaseVersion" three times in a row. Lines that carry a reason are kept
+// first, and the tail is appended for context.
 function releaseCommandExcerpt({ stderr, stdout } = {}) {
   const text = `${stderr || ''}\n${stdout || ''}`.trim()
   if (!text) return 'The command produced no output.'
-  const excerpt = text.split('\n').slice(-25).join('\n')
-  return excerpt.length > 2000 ? `…${excerpt.slice(-2000)}` : excerpt
+  const lines = text.split('\n')
+  const reasons = lines.filter(line =>
+    /"?(message|error|errors|detail|details)"?\s*[:=]|Validation failed|status code \d{3}/i.test(
+      line
+    )
+  )
+  const selected = [...new Set([...reasons.slice(0, 12), ...lines.slice(-12)])]
+  const excerpt = selected.join('\n')
+  return excerpt.length > 2500 ? `${excerpt.slice(0, 2500)}…` : excerpt
 }

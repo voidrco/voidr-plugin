@@ -79,11 +79,31 @@ function isSpecFixPrompt(prompt) {
 }
 
 // Copilot appends it to the transformed prompt Claude passes it as UserPromptSubmit context.
+// The router matches keywords in whatever text arrives, and not every text is a
+// request. Observed injecting a full deploy briefing into a message that merely
+// DESCRIBED a persona ("quero subir testes na plataforma pela ide, pq meu
+// techlead pediu"), and into an automated background notification that no human
+// wrote. Guidance on a turn that asked for nothing spends the model's attention
+// on a workflow nobody started.
+function isNotARequest(prompt) {
+  const text = String(prompt || '')
+  // Hosts wrap machine-generated turns in these; a human never types them.
+  if (/<(?:system-reminder|task-notification|function_results)\b/i.test(text)) {
+    return true
+  }
+  // Talking about the flow rather than asking for it: reported speech, or a
+  // sentence whose subject is the tool instead of the work.
+  return /\b(?:imagine|suponha|considere|pense que|digamos que|por exemplo|hipoteticamente|pretend|suppose|for example)\b/i.test(
+    text
+  )
+}
+
 export function voidrPromptGuidance(input) {
   const prompt = String(input?.prompt || '')
 
   if (!prompt || explicitVoidrSkill.test(prompt)) return null
   if (isDevTestsApproval(prompt)) return null
+  if (isNotARequest(prompt)) return null
 
   if (isDevTestFlowPrompt(prompt)) {
     return `Use the /voidr-context skill for this request, then /voidr-generate. Load the

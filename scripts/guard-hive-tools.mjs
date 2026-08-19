@@ -59,10 +59,26 @@ enforceExplicitWorkspaceRoot(payload, toolName, toolArgs)
 enforceTestSpecContentPolicy(rawToolName, toolArgs)
 recordSmokeAttempt(payload, toolName)
 
+// Matched against the paths and the command, never the file CONTENT: a write
+// carries the whole body in its arguments, so scanning everything refused a
+// document that merely mentioned the credential path — and the .env rule
+// refused an `ls` checking existence, which its own message calls allowed.
+const credentialSurface = [
+  rawToolName,
+  toolName,
+  ...collectPathArguments(toolArgs),
+  ...collectPatchPathsFromValue(toolArgs),
+  ...(/(^|[-_/])(bash|shell|powershell)$/i.test(rawToolName)
+    ? collectStringValues(toolArgs)
+    : [])
+]
+  .join('\n')
+  .toLowerCase()
 const protectedCredential =
   (policy.protectedCredentialFragments || []).find(fragment =>
-    searchable.includes(fragment.toLowerCase())
-  ) || (touchesCredentialDirectory(searchable) ? 'the credential store' : null)
+    credentialSurface.includes(fragment.toLowerCase())
+  ) ||
+  (touchesCredentialDirectory(credentialSurface) ? 'the credential store' : null)
 if (protectedCredential) {
   deny(
     'Blocked by Voidr policy: Service Account credential files can only be handled by the protected local authentication tools.'

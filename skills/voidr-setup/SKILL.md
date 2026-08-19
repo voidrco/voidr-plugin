@@ -59,9 +59,29 @@ organization name and scopes that the platform returned.
 
 ## Reporting
 
-Answer with a short APT/NOT-APT verdict, the failed checks (if any) each with
-its remediation and owner (user vs. plugin), and the authenticated
-organization. Never print tokens, secrets, or credential file contents.
+The reader wants to know whether they can proceed, not how the machine was
+inspected. Report the checks that FAILED, never the ones that passed.
+
+**Everything passed** — one line naming the organization, and go straight on to
+what they asked for. Do not print the check table: a five-row report of things
+that are fine is noise in front of the actual task.
+
+**Something failed** — name what is broken in one sentence, then the single
+next action, in the imperative, addressed to the reader. Nothing else. If more
+than one check failed, lead with the one that blocks everything else.
+
+Write for the person, not for yourself: no tool names, no "call this again", no
+describing the user in the third person. Compare
+
+> ❌ NOT APT — node-runtime (owner: user): This shell resolves Node v25.9.0 but
+> the framework requires Node 22. Ask the user to run `fnm use 22`…
+
+with
+
+> Ative o Node 22 antes de seguir: `fnm use 22`, e reabra o editor por esse
+> terminal. O resto do ambiente está pronto.
+
+Never print tokens, secrets, or credential file contents.
 
 ## Tool routing
 

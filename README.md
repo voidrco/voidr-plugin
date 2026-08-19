@@ -73,7 +73,7 @@ npm run check
 On GitHub Copilot CLI:
 
 ```sh
-copilot plugin marketplace add .
+copilot plugin marketplace add "$PWD"    # a bare "." is rejected: pass a path
 copilot plugin install copilot@voidrco
 copilot plugin list
 copilot mcp get voidr --json
@@ -95,9 +95,15 @@ Skills appear as `/voidr:voidr-<name>` and MCP tools as
 To install it for real:
 
 ```sh
-claude plugin marketplace add .
-claude plugin install voidr@voidrco     # --scope project to limit it to one repo
+claude plugin marketplace add "$PWD"     # a bare "." is rejected: pass a path
+claude plugin install voidr@voidrco      # --scope project limits it to one repo
+claude plugin enable voidr@voidrco       # it installs disabled
+claude plugin list                       # must read: enabled
 ```
+
+The plugin is named **`voidr`** here and **`copilot`** on Copilot CLI, so
+`voidr@voidrco` is the Claude form and `copilot@voidrco` the Copilot one —
+using the other host's name fails with "not found in marketplace".
 
 Prefer `--scope project`, or `--plugin-dir`, over a user-scoped install while
 developing. A clean session is untouched — every workflow gate checks

@@ -16,9 +16,25 @@ Plan content.
 
 ## 1. Resolve the Test Plan
 
-- If the user already named a plan or pasted its 24-hex ID, use it.
-- Otherwise list with `test_plans_list_test_plans` and render the choice with
-  `ask_user` (name + status + case count). Never ask the user to type an ID.
+- If the user pasted a 24-hex ID, use it VERBATIM: copy it character by
+  character from their message. Never retype it from memory — dropping one
+  character produces an id that is rejected, and the mistake looks like theirs.
+- Otherwise, resolve it in two steps, because listing plans requires an
+  application: call `applications_list_applications`, render the choice with
+  `ask_user`, then call `test_plans_list_test_plans` with the selected
+  `applicationId` and render the plan choice with `ask_user` (name + status +
+  case count). Listing plans without an `applicationId` is refused.
+- Never ask the user to type an ID.
+
+### When the bootstrap rejects the id
+
+Re-read the user's original message and resend the value verbatim — the error
+reports what it received, so compare it against what they wrote before
+concluding anything. A rejected id is a copy error until proven otherwise.
+
+Only when the plan is genuinely unknown, fall back to the two-step listing
+above and present the result as `ask_user` OPTIONS. Never resolve a tool
+failure by asking the user to retype an id, and never ask it as free text.
 
 ## 2. One atomic bootstrap
 
@@ -60,7 +76,10 @@ automated).
 
 ## Tool routing
 
-- `test_plans_list_test_plans` — plan selection listing (read-only).
+- `applications_list_applications` — application selection; required before
+  listing plans, since the bridge refuses a listing without an `applicationId`.
+- `test_plans_list_test_plans` — plan selection listing for the selected
+  application (read-only).
 - `voidr_context_bootstrap` — the atomic context + preparation gate. It is
   the ONLY setup path: never call prepare/scaffold tools separately from this
   skill, and never run npm, git, or the Voidr CLI in the terminal.

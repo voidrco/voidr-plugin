@@ -177,7 +177,17 @@ export async function contextBootstrap({
 }) {
   const normalizedPlanId = String(planId || '').trim()
   if (!/^[a-fA-F0-9]{24}$/.test(normalizedPlanId)) {
-    throw new Error('contextBootstrap requires a 24-hex Test Plan id.')
+    // Saying only that the id is invalid leaves the caller to guess whose
+    // mistake it was — and a model that dropped a character while copying the
+    // id concludes the user typed it wrong, then asks them to retype something
+    // they got right. Showing the value and its length makes the truncation
+    // visible to whoever can still fix it in the same turn.
+    throw new Error(
+      'contextBootstrap requires a 24-hex Test Plan id. Received ' +
+        `${normalizedPlanId.length} characters: "${normalizedPlanId}". ` +
+        "If this looks like a truncated copy of an id the user gave you, re-read " +
+        'their message and resend the value verbatim — never ask them to retype it.'
+    )
   }
   const resolvedRoot = resolveWorkspaceRoot({ explicit: workspaceRoot })
 

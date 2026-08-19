@@ -174,8 +174,15 @@ selectors — it is the file the conventions point at, so it is the file the
 probes must fill.
 
 After a probe confirms a selector, write it there before implementing. One
-file per screen, named for the screen, holding what the probe actually
-established:
+file per screen, named for the screen, INSIDE the test repository, so it is
+committed with the tests it explains. A path outside the checkout — a sibling
+directory, anywhere above the repository root — is not durable: it never
+reaches the pull request, and it is gone the next time the workspace is
+cleaned, which is exactly when the next agent would have needed it. If the
+repository conventions point somewhere outside the checkout, they describe a
+pipeline that no longer runs; keep the file in the repository and say so.
+
+Each file holds what the probe actually established:
 
 ```json
 {

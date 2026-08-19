@@ -27,6 +27,7 @@
     "test_plans_update_test_case_tag",
     "sessions_list_sessions",
     "sessions_get_session_actions",
+    "sessions_get_session_action_effects",
     "sessions_get_session_digest",
     "sessions_get_session_summary",
     "sessions_get_session_screenmap",

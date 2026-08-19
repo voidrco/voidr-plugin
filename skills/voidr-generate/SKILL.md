@@ -57,6 +57,14 @@ flow under test):
 
 - `sessions_get_session_actions` — the recorded human action timeline; this
   is the primary source of REAL selectors (ids, roles, click targets).
+- `sessions_get_session_action_effects` — what the page ANSWERED after each
+  action: the text rewritten, the attributes flipped, the elements that
+  appeared or disappeared, each named by the locator a test would use. This is
+  the source for the assertion: without it a case named "switch the status to
+  Em pausa" ends up asserting that the menu closed, which passes with the
+  status untouched. An action listed with no effect means the recording
+  observed none — say so and take the assertion from the AAA instead of
+  inventing a proxy.
 - `sessions_get_session_digest` — errors/friction/health, to judge whether
   the session is a trustworthy reference.
 - `sessions_get_session_screenmap` / `sessions_get_session_selectors` —
@@ -109,7 +117,11 @@ before the build. Probes must never be published or deployed.
 - Shared page logic goes into action factories at the repository's `actions/`
   tree; one spec per case in the platform-derived module/suite directory.
 - Map the AAA into named test steps; keep asserts on what the runtime
-  actually renders (evidence from steps 3–4).
+  actually renders (evidence from steps 3–4). Assert the EFFECT the case
+  promises, taken from the recorded action effects — never a proxy for it. A
+  menu closing, a spinner leaving, or a click being accepted are not the
+  outcome; when the effect cannot be established from evidence, say which
+  assertion stayed weaker and why.
 - Credentials and sensitive data only as `{{env.VARIABLE_NAME}}` /
   the repository's env fixture — never literals, never `process.env`
   fallbacks.

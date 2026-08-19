@@ -153,6 +153,7 @@ own confirmation and is verified with a `defects_get_defect` read-back.
 | `sessions_get_session_actions` | `voidr-generate` | Recorded human action timeline — the primary source of real selectors. |
 | `sessions_get_session_digest` | `voidr-generate` | Session health (errors, friction) to judge evidence quality. |
 | `sessions_get_session_summary` | `voidr-generate` | Compact "what happened" overview of one session. |
+| `sessions_get_session_action_effects` | `voidr-generate` | What the page answered after each action (text/attribute/appearance changes), named by locator — the source for the assertion, not a proxy for it. |
 | `sessions_get_session_screenmap` | `voidr-generate` | Processed semantic selectors per screen; empty means "no evidence". |
 | `sessions_get_session_selectors` | `voidr-generate` | Selector extraction grouped by page; empty means "no evidence". |
 

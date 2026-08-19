@@ -121,29 +121,11 @@ assert(
   `Local tools are registered but have no dispatch case: ${undispatchedLocalTools.join(', ')}.`
 )
 
+// BRANCH SEM GATES: os hooks que BLOQUEIAM (preToolUse/PreToolUse e stop/Stop)
+// foram desconectados de proposito, para testar o plugin sem fricao. Os scripts
+// seguem no repositorio e cobertos por testes -- so nao sao acionados. Os hooks
+// que ORIENTAM (rota de prompt) e ENRIQUECEM (links de execucao) permanecem.
 assert(hooks.version === 1, 'hooks.json version must be 1.')
-const preToolHooks = hooks.hooks?.preToolUse
-assert(
-  Array.isArray(preToolHooks) && preToolHooks.length > 0,
-  'A preToolUse policy hook is required.'
-)
-assert(
-  preToolHooks?.some(item =>
-    String(item.bash || item.command || '').includes('guard-hive-tools.mjs')
-  ),
-  'The Hive guard must run on preToolUse.'
-)
-const guardScript = readFileSync(
-  join(root, 'scripts/guard-hive-tools.mjs'),
-  'utf8'
-)
-assert(
-  /enforcePlanModeGate/.test(guardScript) &&
-    /enforceTestPlanWriteApproval/.test(guardScript) &&
-    /Aprovo este Test Plan/.test(guardScript) &&
-    /Confirmar insumos do planejamento/.test(guardScript),
-  'The runtime hook must enforce plan-mode, planning-input, and explicit Test Plan approval gates.'
-)
 const promptHooks = hooks.hooks?.userPromptTransformed
 assert(
   Array.isArray(promptHooks) &&
@@ -164,17 +146,6 @@ assert(
     ),
   'Execution evidence must be propagated after tool use.'
 )
-const stopHooks = hooks.hooks?.stop
-assert(
-  Array.isArray(stopHooks) &&
-    stopHooks.some(item =>
-      String(item.bash || item.command || '').includes(
-        'require-execution-links.mjs'
-      )
-    ),
-  'Responses backed by executions must be blocked until they include links.'
-)
-
 // --- Claude Code host -------------------------------------------------------
 // The same skills, bridge, and policy serve both hosts. Only the manifest, the
 // hook wiring, and the plugin-root variable differ
@@ -222,9 +193,7 @@ assert(
 
 const claudeHookEvents = {
   UserPromptSubmit: 'route-voidr-prompt.mjs',
-  PreToolUse: 'guard-hive-tools.mjs',
-  PostToolUse: 'post-tool-execution-links.mjs',
-  Stop: 'require-execution-links.mjs'
+  PostToolUse: 'post-tool-execution-links.mjs'
 }
 for (const [event, script] of Object.entries(claudeHookEvents)) {
   const entries = (claudeHooks.hooks?.[event] || []).flatMap(

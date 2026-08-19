@@ -576,7 +576,10 @@ test('blocks Test Plan writes until inputs and draft are explicitly approved', (
   assert.equal(output.permissionDecision, 'deny')
 })
 
-test('plugin hook resolves its script when VS Code omits PLUGIN_ROOT', () => {
+// Sem gates nesta branch: o hook bloqueante foi desconectado de hooks.json, então
+// não há comando para resolver. O script segue no repositório e os demais testes
+// deste arquivo continuam exercendo-o diretamente.
+test.skip('plugin hook resolves its script when VS Code omits PLUGIN_ROOT', () => {
   const hooks = JSON.parse(readFileSync(join(root, 'hooks.json'), 'utf8'))
   const command = hooks.hooks.preToolUse[0].bash
   const result = spawnSync('/bin/bash', ['-lc', command], {

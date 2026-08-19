@@ -2,6 +2,7 @@ import {
   existsSync,
   readdirSync,
   readFileSync,
+  statSync,
   writeFileSync
 } from 'node:fs'
 import { basename, join } from 'node:path'
@@ -68,11 +69,19 @@ export async function prepareTestRepository({
     run
   })
 
-  await run('npm', ['install'], {
-    cwd: selected.path,
-    timeout: 300_000,
-    env: withToolchainPath(process.env, runtime.toolchain)
-  })
+  // npm writes `node_modules/.package-lock.json` as the record of what it
+  // actually installed. When it is at least as new as the lockfile, the tree
+  // already matches — and this is the slowest step of the whole preparation,
+  // so re-running it to be told nothing changed is what makes reopening a plan
+  // feel stuck.
+  const dependenciesInstalled = dependenciesAreCurrent(selected.path)
+  if (!dependenciesInstalled) {
+    await run('npm', ['install'], {
+      cwd: selected.path,
+      timeout: 300_000,
+      env: withToolchainPath(process.env, runtime.toolchain)
+    })
+  }
 
   // The selected plugin Service Account is injected only into Voidr CLI child
   // processes. This deliberately replaces the interactive `voidr login` step.
@@ -188,7 +197,8 @@ export async function prepareTestRepository({
     specCount,
     steps: {
       checkoutMaterialized: materialized?.how || 'given-path',
-      dependenciesInstalled: true,
+      dependenciesInstalled: !dependenciesInstalled,
+      dependenciesAlreadyCurrent: dependenciesInstalled,
       authenticationResolvedFromPluginServiceAccount: true,
       interactiveLoginExecuted: false,
       linked: !hadProject,
@@ -456,4 +466,25 @@ function casesWithoutSpec(modulesDirectory, caseSlugs) {
     }
   }
   return caseSlugs.filter(slug => !covered.has(slug))
+}
+/**
+ * Is the installed tree already the one the lockfile describes?
+ *
+ * npm records what it installed in `node_modules/.package-lock.json`; when that
+ * record is no older than the lockfile, nothing has changed since. Both files
+ * missing means nothing was ever installed.
+ *
+ * Unreadable state counts as NOT current: installing again costs time, while
+ * skipping a needed install leaves the repository unable to build.
+ */
+function dependenciesAreCurrent(repositoryPath) {
+  const lockfile = join(repositoryPath, 'package-lock.json')
+  const installed = join(repositoryPath, 'node_modules', '.package-lock.json')
+  if (!existsSync(installed)) return false
+  if (!existsSync(lockfile)) return true
+  try {
+    return statSync(installed).mtimeMs >= statSync(lockfile).mtimeMs
+  } catch {
+    return false
+  }
 }

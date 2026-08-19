@@ -420,6 +420,55 @@ function writeRunnerConfig(repositoryPath, { timeout, actionTimeout, navigationT
   )
 }
 
+test('installs dependencies when the tree does not match the lockfile', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-prepare-'))
+  const repositoryPath = createRepository(workspace)
+  writeFileSync(join(repositoryPath, 'package-lock.json'), '{}')
+  const calls = []
+
+  const result = await prepareTestRepository({
+    repositoryPath,
+    ...context,
+    workspaceRoot: workspace,
+    cliEnvironment: syntheticCliEnvironment(),
+    run: fakeVoidrRun({ repositoryPath, calls, context })
+  })
+
+  assert.equal(
+    calls.some(call => call.file === 'npm' && call.args?.includes('install')),
+    true
+  )
+  assert.equal(result.steps.dependenciesInstalled, true)
+  assert.equal(result.steps.dependenciesAlreadyCurrent, false)
+})
+
+test('skips the install when npm already recorded this lockfile', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-prepare-'))
+  const repositoryPath = createRepository(workspace)
+  writeFileSync(join(repositoryPath, 'package-lock.json'), '{}')
+  // npm writes this record after installing; newer than the lockfile means the
+  // tree already matches it.
+  mkdirSync(join(repositoryPath, 'node_modules'), { recursive: true })
+  writeFileSync(join(repositoryPath, 'node_modules', '.package-lock.json'), '{}')
+  const calls = []
+
+  const result = await prepareTestRepository({
+    repositoryPath,
+    ...context,
+    workspaceRoot: workspace,
+    cliEnvironment: syntheticCliEnvironment(),
+    run: fakeVoidrRun({ repositoryPath, calls, context })
+  })
+
+  assert.equal(
+    calls.some(call => call.file === 'npm' && call.args?.includes('install')),
+    false,
+    'the slowest step must not run when nothing changed'
+  )
+  assert.equal(result.steps.dependenciesInstalled, false)
+  assert.equal(result.steps.dependenciesAlreadyCurrent, true)
+})
+
 test('scaffolds only the selected cases that have no spec yet', async () => {
   const workspace = mkdtempSync(join(tmpdir(), 'voidr-prepare-'))
   const repositoryPath = createRepository(workspace)

@@ -1388,6 +1388,38 @@ test('blocks unsafe literals and frontend-derived API origins in spec edits', ()
     assert.equal(output.permissionDecision, 'deny')
   }
 })
+test('lets a throwaway probe type a reserved-domain address, and nothing else', () => {
+  // A path under the plugin installation is refused by an earlier rule, so the
+  // email policy is only reachable from a real workspace.
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-probe-email-'))
+  mkdirSync(join(workspace, 'modules', '_probe'), { recursive: true })
+  mkdirSync(join(workspace, 'modules', 'login'), { recursive: true })
+  const probeSpec = join(workspace, 'modules/_probe/login-probe.spec.js')
+  const regularSpec = join(workspace, 'modules/login/login.spec.js')
+
+  const fillWith = address =>
+    `await page.locator('#email-input').fill('${address}');`
+
+  const editSpec = (path, address) =>
+    runHook({
+      sessionId: 'probe-email-policy',
+      cwd: workspace,
+      toolName: 'edit',
+      toolArgs: { path, new_str: fillWith(address) }
+    }).permissionDecision
+
+  // A probe answers "can this field be typed into?", which requires typing.
+  assert.notEqual(editSpec(probeSpec, 'probe@example.test'), 'deny')
+
+  // What is relaxed is the domain, not the rule: a real address stays refused,
+  // and so does a registrable one that merely looks like a test domain.
+  assert.equal(editSpec(probeSpec, 'agent@voidr.co'), 'deny')
+  assert.equal(editSpec(probeSpec, 'probe@test.com'), 'deny')
+
+  // And the exception does not leak outside the throwaway directory.
+  assert.equal(editSpec(regularSpec, 'probe@example.test'), 'deny')
+})
+
 function transcriptEntry(type, data) {
   return JSON.stringify({ type, data })
 }

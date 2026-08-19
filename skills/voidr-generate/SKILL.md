@@ -145,6 +145,16 @@ Before writing or changing the repository's authentication action:
   control belongs to, and take the locator from the layer the probe proved
   actionable — not from the recorded timeline. State the divergence when the
   two disagree;
+- to prove a field ACCEPTS input, type into it — and type the real credential
+  through the environment fixture (`data.USER_EMAIL`, `data.USER_PASSWORD`),
+  never a literal. That way the probe does not stop at "the field is
+  typable": it completes the sign-in and can report what the next screen
+  exposes, which is where the cases actually run. Only when authenticating
+  would be wrong for the question at hand, a literal on a domain reserved by
+  the RFCs is permitted inside `modules/_probe/` — `probe@example.test`, or
+  any `example.com`/`.test`/`.invalid`/`.localhost` name. A registrable domain
+  is refused even when it looks synthetic (`test.com` belongs to someone), and
+  a real address as a literal is refused everywhere;
 - keep the probe's answers in the action factory, so every case that merely
   needs a session inherits one validated login instead of one guess per case,
   and record them as described in 4d so the next plan does not rediscover

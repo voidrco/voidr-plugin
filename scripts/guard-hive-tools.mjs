@@ -487,6 +487,36 @@ function touchesCredentialDirectory(searchable) {
   )
 }
 
+function literalEmailAddresses(content) {
+  return [
+    ...String(content || '').matchAll(
+      /['"`]([^'"`\s@]+@[^'"`\s@]+\.[^'"`\s@]+)['"`]/gi
+    )
+  ].map(match => match[1])
+}
+
+// RFC 2606 / RFC 6761 reserve these for documentation and testing: they resolve
+// nowhere and can never reach a real mailbox.
+function hasReservedEmailDomain(address) {
+  const domain = String(address || '').split('@').pop() || ''
+  return /(?:^|\.)(?:example\.(?:com|net|org)|test|example|invalid|localhost)$/i.test(
+    domain
+  )
+}
+
+// Proving that a field ACCEPTS input means typing into it, and a probe that
+// cannot type cannot tell an actionable control from one that merely exists —
+// which is the single question probes are written to answer. The probe
+// directory is throwaway by contract: it is deleted before the build and may
+// never be published or deployed, so nothing typed here outlives the answer.
+// A real address is still refused: what is relaxed is the domain, not the rule
+// that production data stays out of specs.
+function isThrowawayProbeSpec(path) {
+  return /(?:^|[\\/])modules[\\/]_probe[\\/][^\\/]+\.spec\.[cm]?[jt]sx?$/i.test(
+    String(path || '')
+  )
+}
+
 function isGenericWriteTool(name) {
   return /(^|[-_/])(create|edit|write|delete|replace|replace_string_in_file|apply_patch|str_replace_editor)(?:$|[-_/])/i.test(
     toolNameWords(name)
@@ -665,9 +695,15 @@ function enforceTestSpecContentPolicy(rawName, args) {
     )
   }
 
-  if (/['"`][^'"`\s@]+@[^'"`\s@]+\.[^'"`\s@]+['"`]/i.test(content)) {
+  const emails = literalEmailAddresses(content)
+  const forbiddenEmails = paths.every(isThrowawayProbeSpec)
+    ? emails.filter(address => !hasReservedEmailDomain(address))
+    : emails
+  if (forbiddenEmails.length > 0) {
     deny(
-      'Blocked by Voidr policy: do not persist email addresses in Playwright specs. Use a documented environment variable supplied by voidr env pull.'
+      paths.every(isThrowawayProbeSpec)
+        ? 'Blocked by Voidr policy: a throwaway probe may only type an address on a domain reserved for testing (example.com/.net/.org, or a .test/.example/.invalid/.localhost name). Never put a real address in a spec — read it from the environment supplied by voidr env pull.'
+        : 'Blocked by Voidr policy: do not persist email addresses in Playwright specs. Use a documented environment variable supplied by voidr env pull.'
     )
   }
 

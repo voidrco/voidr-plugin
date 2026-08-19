@@ -145,6 +145,19 @@ export async function deployMergedPullRequest({
     `/test-plans/${testPlanId}/automation/deploys/latest`
   )
   const currentVersion = latestCodebaseVersion(latest)
+  // `deploy-latest` treats the manifest sync as optional: it prints the failure
+  // and still exits zero. When that happens the files are uploaded but no deploy
+  // record is written, so the pointer cannot verify and the plan keeps reporting
+  // nothing automated. The CLI already said why — this is where it gets read.
+  if (currentVersion !== candidate.codebaseVersion) {
+    throw new Error(
+      'The published release was not registered on the platform: ' +
+        `deploys/latest reports ${currentVersion || 'no codebaseVersion'}, ` +
+        `the build published was ${candidate.codebaseVersion}. ` +
+        'voidr deploy-latest reported:\n' +
+        releaseCommandExcerpt(published)
+    )
+  }
   const completed = assertCompletedImmutableDeployment({
     prMerged: true,
     mergeCommitSha: merged.mergeCommitSha,

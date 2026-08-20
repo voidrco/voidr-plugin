@@ -162,11 +162,37 @@ export function isNetworkFailure(error) {
   return NETWORK_ERROR_MARKERS.some(marker => text.includes(marker))
 }
 
-function sanitizedOutputTail(error) {
+// A CLI that prints its progress to stdout ends with whatever it managed to do
+// before failing, so the last three lines are the tail of the SUCCESSFUL
+// preamble and the reason — usually on stderr, and therefore at the front of
+// the concatenation — is dropped. Observed on a real deploy: the failure read
+// `npx --no-install failed (exit 1): Preflight detected | Preflight built |
+// Authenticated via environment client credentials`, three lines of success
+// standing in for a cause that never appeared, and the model went to the
+// terminal to run the command by hand to find out what happened.
+//
+// Lines that carry a reason are selected first, then the tail is appended for
+// context. release-deploy.mjs solved this once for one call site; keeping a
+// second, worse implementation here is why the fix never reached this path.
+const REASON_LINE =
+  /(?:"?(?:message|error|errors|detail|details|reason)"?\s*[:=])|\b(?:err(?:or)?|failed|failure|cannot|unable|denied|invalid|missing|not found|refused|timed? ?out|exception|traceback)\b|\bstatus (?:code )?[45]\d{2}\b|^\s*(?:✖|✗|×|❌)/i
+
+export function selectFailureLines(error, { limit = 6 } = {}) {
   const lines = `${error?.stderr || ''}\n${error?.stdout || ''}`
     .split(/\r?\n/)
     .map(line => line.trim())
     .filter(Boolean)
     .filter(line => !SENSITIVE_OUTPUT_LINE.test(line))
-  return lines.slice(-3).join(' | ').slice(0, 400)
+  if (!lines.length) return []
+  const reasons = lines.filter(line => REASON_LINE.test(line))
+  // Deduplicated so a reason repeated in both streams is not shown twice, and
+  // the tail still travels along when nothing looks like a reason.
+  return [...new Set([...reasons.slice(0, limit), ...lines.slice(-3)])].slice(
+    0,
+    limit + 3
+  )
+}
+
+function sanitizedOutputTail(error) {
+  return selectFailureLines(error).join(' | ').slice(0, 900)
 }

@@ -16,6 +16,13 @@
         "powershell": "$voidrHookRoot = if ($env:PLUGIN_ROOT) { $env:PLUGIN_ROOT } elseif ($env:COPILOT_PLUGIN_ROOT) { $env:COPILOT_PLUGIN_ROOT } elseif ($env:CLAUDE_PLUGIN_ROOT) { $env:CLAUDE_PLUGIN_ROOT } elseif ($env:VOIDR_PLUGIN_ROOT) { $env:VOIDR_PLUGIN_ROOT } else { Join-Path $HOME '.copilot/installed-plugins/voidrco/copilot' }; node (Join-Path $voidrHookRoot 'scripts/post-tool-execution-links.mjs')",
         "timeoutSec": 5
       }
+    ],
+    "preToolUse": [
+      {
+        "type": "command",
+        "command": "node \"${PLUGIN_ROOT}/scripts/guard-protections.mjs\"",
+        "timeout": 15
+      }
     ]
   }
 }

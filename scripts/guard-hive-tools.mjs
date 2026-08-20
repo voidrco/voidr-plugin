@@ -87,7 +87,12 @@ if (forbiddenRequest) {
   )
 }
 
-const isShell = /(^|[-_/])(bash|shell|powershell)$/i.test(rawToolName)
+// VS Code's terminal tool is named run_in_terminal — a shell-name-only match
+// left every shell policy dormant on that host (the agent could run npx
+// voidr, git push, or write specs through the terminal unchecked).
+const isShell = /(^|[-_/])(bash|shell|powershell|terminal|cmd)$/i.test(
+  rawToolName
+)
 if (isShell) {
   const shellText = collectStringValues(toolArgs).join('\n').toLowerCase()
   const normalizedShell = shellText.replace(/\s+/g, ' ')
@@ -115,6 +120,7 @@ if (isShell) {
     )
   }
   enforceVoidrCliShellUsage(normalizedShell)
+  enforceShellSpecWrite(normalizedShell)
   const fragment = policy.forbiddenShellFragments.find(value =>
     searchable.includes(value.toLowerCase())
   )
@@ -247,6 +253,31 @@ function enforceVoidrCliShellUsage(normalizedShell) {
   if (!invokesVoidrCli && !invokesPlaywrightRun) return
   deny(
     'Blocked by Voidr policy: never run the Voidr CLI or Playwright from the terminal — it has no Service Account credentials there, and interactive voidr login is forbidden. Use the bridge tools, which inject the credentials automatically: voidr_workspace_prepare_test_repository (setup/link/scaffold/env pull), voidr_build (syntax/packaging gate), voidr_explore (inspection probes), voidr_workspace_publish_tests (commit/push/PR), voidr_release_deploy_validation (validation candidate, no promote), and voidr_release_deploy_merged_pr (immutable LIVE deploy).'
+  )
+}
+
+// Spec files written through the shell bypass enforceTestSpecContentPolicy —
+// the content policy only inspects the editor write tools, so a Set-Content
+// heredoc can smuggle literal credentials, e-mails, or env fallbacks into a
+// spec uninspected. Writing specs is not a terminal job: reads stay allowed,
+// writes are pushed back to the inspected editor tools. Hard gate (content
+// hygiene) — never degrades.
+function enforceShellSpecWrite(normalizedShell) {
+  if (!/\.spec\.[cm]?[jt]sx?\b/.test(normalizedShell)) return
+  const writesViaCommand =
+    /\b(?:set-content|add-content|out-file|new-item)\b/.test(
+      normalizedShell
+    ) ||
+    /\[(?:system\.)?io\.file\]::(?:write|append)/.test(normalizedShell) ||
+    /\bfs\.(?:write|append)filesync?\b/.test(normalizedShell) ||
+    /\btee\b[^;|&\n]*\.spec\.[cm]?[jt]sx?\b/.test(normalizedShell)
+  const redirectsIntoSpec =
+    /[^<>-]>{1,2}\s*["']?[^"'\s;|&]*\.spec\.[cm]?[jt]sx?\b/.test(
+      normalizedShell
+    )
+  if (!writesViaCommand && !redirectsIntoSpec) return
+  deny(
+    'Blocked by Voidr policy: never create or edit Playwright specs through the terminal — shell writes bypass the spec content inspection (credentials, e-mail addresses, env fallbacks). Use the editor file tools to write specs; reading specs in the terminal remains allowed.'
   )
 }
 

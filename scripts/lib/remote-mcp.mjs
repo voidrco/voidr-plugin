@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { basicAuthorizationHeader } from './credentials.mjs'
 import { describeNetworkFailure } from './network-trust.mjs'
 
@@ -5,22 +6,27 @@ export class RemoteMcpClient {
   constructor({
     url = process.env.VOIDR_MCP_URL || 'https://api.voidr.co/v1/mcp',
     origin = process.env.VOIDR_MCP_ORIGIN || 'https://app.voidr.co',
-    fetchImpl = globalThis.fetch
+    fetchImpl = globalThis.fetch,
+    authorizationHeader = basicAuthorizationHeader
   } = {}) {
     this.url = url
     this.origin = origin
     this.fetch = fetchImpl
+    this.authorizationHeader = authorizationHeader
     this.sessionId = null
     this.initialized = false
+    this.authorizationFingerprint = null
     this.nextId = 1
   }
 
   reset() {
     this.sessionId = null
     this.initialized = false
+    this.authorizationFingerprint = null
   }
 
   async initialize(protocolVersion = '2024-11-05') {
+    this.synchronizeAuthorization()
     if (this.initialized) return
 
     await this.request('initialize', {
@@ -68,9 +74,10 @@ export class RemoteMcpClient {
   }
 
   async post(payload) {
+    const authorization = this.synchronizeAuthorization()
     const headers = {
       accept: 'application/json, text/event-stream',
-      authorization: basicAuthorizationHeader(),
+      authorization,
       'content-type': 'application/json',
       origin: this.origin
     }
@@ -107,6 +114,23 @@ export class RemoteMcpClient {
       return parseEventStream(text)
     }
     return JSON.parse(text)
+  }
+
+  synchronizeAuthorization() {
+    const authorization = this.authorizationHeader()
+    const fingerprint = createHash('sha256')
+      .update(authorization)
+      .digest('hex')
+
+    if (
+      this.authorizationFingerprint !== null &&
+      this.authorizationFingerprint !== fingerprint
+    ) {
+      this.sessionId = null
+      this.initialized = false
+    }
+    this.authorizationFingerprint = fingerprint
+    return authorization
   }
 }
 

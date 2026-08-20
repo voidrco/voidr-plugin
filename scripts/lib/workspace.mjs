@@ -1,4 +1,4 @@
-import {
+﻿import {
   existsSync,
   lstatSync,
   readdirSync,
@@ -6,10 +6,29 @@ import {
   realpathSync
 } from 'node:fs'
 import { spawnSync } from 'node:child_process'
-import { basename, dirname, join, relative, resolve, sep } from 'node:path'
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { latestPromptStatePath } from './session-state.mjs'
 
 const moduleDir = dirname(fileURLToPath(import.meta.url))
+
+// The MCP bridge cannot see the open workspace by itself (its cwd is the
+// plugin installation), but the prompt hook runs with the real workspace as
+// cwd and records it in the shared prompt state. Reading that record lets
+// the bridge adapt to the user's workspace without the deny/retry roundtrip
+// that used to teach the model the workspaceRoot value. When several
+// workspaces are open the most recent prompt wins — which is why this is the
+// LAST candidate, after the explicit argument, the environment variable, and
+// the process cwd, and why every candidate is still validated the same way.
+function lastPromptWorkspaceRoot() {
+  try {
+    const state = JSON.parse(readFileSync(latestPromptStatePath(), 'utf8'))
+    const root = state?.lastWorkspaceRoot
+    return typeof root === 'string' && root.trim() ? root.trim() : null
+  } catch {
+    return null
+  }
+}
 
 export function pluginInstallationRoot() {
   return canonicalizePotentialPath(resolve(moduleDir, '..', '..'))
@@ -34,7 +53,12 @@ export function resolveWorkspaceRoot({
   cwd = process.cwd()
 } = {}) {
   const installationRoot = pluginInstallationRoot()
-  for (const candidate of [explicit, env.VOIDR_WORKSPACE_ROOT, cwd]) {
+  for (const candidate of [
+    explicit,
+    env.VOIDR_WORKSPACE_ROOT,
+    cwd,
+    lastPromptWorkspaceRoot()
+  ]) {
     if (!candidate || typeof candidate !== 'string') continue
     let resolved
     try {
@@ -281,7 +305,15 @@ export function normalizeGitHubRepositoryUrl(value) {
 
 export function isInside(candidate, root) {
   const rel = relative(root, candidate)
-  return rel === '' || (!rel.startsWith(`..${sep}`) && rel !== '..')
+  // On Windows, relative() across drives (C: vs D:) returns the candidate's
+  // absolute path, which does not start with '..' — without the isAbsolute
+  // guard every path on another drive counts as inside every root, and the
+  // bridge rejects a legitimate checkout as living inside the plugin
+  // installation. isAbsolute also covers UNC paths.
+  return (
+    rel === '' ||
+    (!isAbsolute(rel) && !rel.startsWith(`..${sep}`) && rel !== '..')
+  )
 }
 
 export function canonicalizePotentialPath(path) {

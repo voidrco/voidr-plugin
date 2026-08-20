@@ -92,6 +92,14 @@ export function updateSessionState(payload, update) {
 export function recordUserPromptState(payload) {
   const prompt = extractUserAuthoredPrompt(payload?.prompt)
   const timestamp = normalizeTimestamp(payload?.timestamp)
+  // The hook runs with the real workspace folder as cwd — the one thing the
+  // MCP bridge (whose cwd is the plugin installation) cannot discover by
+  // itself. Persisting it lets resolveWorkspaceRoot adapt to the user's
+  // workspace without a deny/retry roundtrip.
+  const workspaceCwd =
+    typeof payload?.cwd === 'string' && payload.cwd.trim()
+      ? payload.cwd.trim()
+      : null
   const next = updateSessionState(payload, current => {
     if (
       current.lastPromptAt &&
@@ -212,7 +220,8 @@ export function recordUserPromptState(payload) {
         isExplicitTestPlanApproval(prompt) || devApprovalArmed
           ? timestamp || Date.now()
           : null,
-      lastPromptAt: timestamp || Date.now()
+      lastPromptAt: timestamp || Date.now(),
+      lastWorkspaceRoot: workspaceCwd || current.lastWorkspaceRoot || null
     }
   })
   try {
@@ -584,6 +593,18 @@ export function isSmokeRemediationPrompt(prompt) {
       text
     )
   if (remediationVerb) return true
+  // Asking to run the build/smoke again IS the authorization, even without an
+  // explicit "de novo": right after a smoke run there is nothing else "rodar
+  // build" could mean. Without this, the phrase an agent most naturally
+  // relays ("rodar build") silently fails to unlock the stop and the user
+  // keeps obeying instructions that never work.
+  if (
+    /\b(?:rod\w*|execut\w*|run|rerun)\b[^.!?\n]{0,30}\b(?:build|smoke)\b/.test(
+      text
+    )
+  ) {
+    return true
+  }
   // Generic change verbs stay ambiguous, so they still need the subject.
   return (
     /\b(?:ajust\w*|mud\w*|alter\w*|troc\w*|melhor\w*|refator\w*)\b/.test(

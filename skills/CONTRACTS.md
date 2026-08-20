@@ -25,6 +25,19 @@ unavailable before the host's own mechanism has been tried, and never fall
 back to a terminal command or a manual step. Only when that mechanism still
 does not surface it, say exactly which tool is unreachable and stop.
 
+## Guard denials
+
+A tool call denied with a `Blocked by Voidr workflow` or `Blocked by Voidr
+policy` message is the plugin steering the flow, not a defect. When the
+denial embeds its own remedy — an exact parameter to add (for example
+`workspaceRoot: "<path>"`), a tool to call first, or a phrase to collect from
+the user — follow it literally: repeat the same call with the indicated
+change in the same turn. Never route around a denial through the terminal,
+never delegate it to a subagent, and never report it to the user as a plugin
+or MCP bug. When the denial names a user authorization phrase, relay that
+phrase to the user exactly as written — a paraphrase may not be recognized by
+the gate and leaves the user typing authorizations that never work.
+
 ## Terminal
 
 Never run Git, npm, npx, Playwright, or the Voidr CLI in the terminal.

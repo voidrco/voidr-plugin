@@ -365,7 +365,7 @@ const localTools = [
   {
     name: 'voidr_workspace_publish_tests',
     description:
-      'Publish the implemented tests from the linked checkout after the user explicitly authorized it in chat: create or reuse a feature branch, commit, push with an explicit refspec, and open (or reuse) a pull request to the default branch. Runs outside the Copilot shell sandbox with the user Git credentials. Pushing to the default branch is refused.',
+      'Publish the implemented tests from the linked checkout after the user explicitly authorized it in chat: create or reuse a feature branch, commit, and push with an explicit refspec. With createPullRequest, it also opens (or reuses) a pull request to the default branch — review only, since the release deploys the pushed commit and never waits for a merge. Runs outside the Copilot shell sandbox with the user Git credentials. Pushing to the default branch is refused.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -378,7 +378,7 @@ const localTools = [
         commitMessage: { type: 'string' },
         pullRequestTitle: { type: 'string' },
         pullRequestBody: { type: 'string' },
-        createPullRequest: { type: 'boolean', default: true }
+        createPullRequest: { type: 'boolean', default: false }
       },
       required: ['repositoryPath', 'repositoryUrl', 'branch', 'commitMessage']
     }

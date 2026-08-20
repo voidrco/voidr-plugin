@@ -2,10 +2,12 @@ import { runCommand } from './command.mjs'
 import { validateProvisionedRepositorySelection } from './workspace.mjs'
 
 // Publishes the implemented tests from the linked checkout: feature branch,
-// commit, push, and pull request. Runs in the bridge process — outside the
-// Copilot shell sandbox — so the user's own git credentials and gh session
-// apply. Pushing to the default branch is refused because the immutable
-// deploy requires a merged pull request.
+// commit, push, and an optional pull request. Runs in the bridge process —
+// outside the Copilot shell sandbox — so the user's own git credentials and gh
+// session apply. Deploy reads the pushed commit, so the pull request is review,
+// not a step the release waits on. Pushing straight to the default branch is
+// still refused: a release should be traceable to a branch someone can look
+// at.
 export async function publishTests({
   repositoryPath,
   repositoryUrl,
@@ -13,7 +15,7 @@ export async function publishTests({
   commitMessage,
   pullRequestTitle,
   pullRequestBody,
-  createPullRequest = true,
+  createPullRequest = false,
   run = runCommand
 }) {
   const selected = validateProvisionedRepositorySelection(
@@ -41,7 +43,7 @@ export async function publishTests({
   }
   if (branchName === defaultBranch) {
     throw new Error(
-      `Never push directly to the default branch (${defaultBranch}). Publish a feature branch and open a pull request; the immutable deploy requires a merged PR.`
+      `Never push directly to the default branch (${defaultBranch}). Publish a feature branch instead; the deploy releases the commit you just pushed, with no merge in between.`
     )
   }
 
@@ -95,8 +97,8 @@ export async function publishTests({
     pushed: true,
     pullRequestUrl,
     next: pullRequestUrl
-      ? 'Ask the user to review and merge the pull request; deployment requires the merged PR.'
-      : 'Push completed without a pull request; one is required before deployment.'
+      ? 'Pushed, and a pull request is open for review. The release does not wait for it: this commit can be deployed now.'
+      : 'Pushed. This commit is ready to deploy — no pull request needed.'
   }
 }
 

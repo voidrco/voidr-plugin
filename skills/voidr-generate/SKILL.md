@@ -36,6 +36,35 @@ through Voidr MCP and ask the user to choose, then rebuild the manifest with
 Ask which cases to implement (render the manifest's tree with `ask_user`) —
 or take the user's explicit selection (a module, a suite, or case slugs).
 
+## 0b. Ask where the checks run
+
+Before the first probe, ask once with `ask_user` where the checking loop should
+run, and carry the answer through the whole skill. Do not decide this alone: the
+local loop is faster and the platform loop is the one that predicts the result,
+and which trade the person wants is theirs to make.
+
+Offer exactly two options, with the platform first as the suggestion:
+
+- **Na plataforma (sugerido)** — probes through `voidr_explore`, on the same
+  browser, network, and environment the Test Plan will actually run on. Slower
+  per iteration; what passes here passes there.
+- **Local** — probes with Playwright on this machine. Fast, and the answer is
+  about *this* machine: a different browser build, no platform network path, and
+  environment values pulled locally. A pass here is not evidence of a pass on
+  the platform.
+
+Say that last sentence when the answer is Local. It is the whole cost of the
+choice, and it is invisible until a case fails on the platform after passing
+here.
+
+Two things do not change with the answer, because the plan runs on the platform
+either way: `voidr_build` stays the build gate, and any validation run is a
+platform run through `/voidr-execute`. Local mode shortens the loop; it does not
+replace the verdict.
+
+Name the chosen mode in the closing report, so a case that was only ever checked
+locally is not read as a case that was validated.
+
 ## 1. Repository conventions win on style
 
 Before writing a line, read the test repository's own convention file
@@ -122,7 +151,10 @@ the platform.
 When AAA + sessions leave real questions open (is this text a DOM text or an
 attribute? does this click open a submenu?), write a THROWAWAY inspection
 spec under `modules/_probe/` that logs the answers (attributes, shadow-DOM
-structure, composed innerText) and run it with `voidr_explore` — it tolerates
+structure, composed innerText) and run it the way 0b settled — `voidr_explore`
+on the platform, or Playwright locally when that is what the user chose. Never
+invent a third path: a smoke spec run with `npx playwright test` while the mode
+is platform is the local loop taken without asking — it tolerates
 failures, returns per-test stdout and traces plus the Playwright message behind
 each failure, never builds, and never counts as validation. A probe that failed
 still reports why: read that message before editing the probe, or the next

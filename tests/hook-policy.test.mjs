@@ -781,20 +781,6 @@ test('denies shell-based Hive dispatch but permits normal test commands', () => 
   assert.deepEqual(allowed, {})
 })
 
-test('denies manual terminal execution of the Voidr MCP bridge', () => {
-  const output = runHook({
-    sessionId: 'manual-mcp-bridge',
-    cwd: process.cwd(),
-    toolName: 'bash',
-    toolArgs: {
-      command:
-        'printf "%s" \'{"jsonrpc":"2.0","method":"tools/list"}\' | node scripts/voidr-mcp-bridge.mjs'
-    }
-  })
-  assert.equal(output.permissionDecision, 'deny')
-  assert.match(output.permissionDecisionReason, /MCP bridge/i)
-})
-
 test('denies legacy mutable deploy commands but permits immutable candidates', () => {
   for (const command of [
     'npx --no-install voidr deploy-latest',
@@ -813,9 +799,8 @@ test('denies legacy mutable deploy commands but permits immutable candidates', (
     assert.match(output.permissionDecisionReason, /immutable latest release gate/i)
   }
 
-  // Since BUG-021 no Voidr CLI invocation leaves the agent shell at all —
-  // deploy-candidate runs inside the bridge, which does not pass through
-  // this hook.
+  // The gate is about the mutable deploy path, not about the CLI or the
+  // terminal: a versioned candidate stays allowed.
   const candidate = runHook({
     sessionId: 'immutable-candidate',
     cwd: process.cwd(),
@@ -824,11 +809,7 @@ test('denies legacy mutable deploy commands but permits immutable candidates', (
       command: 'npx --no-install voidr deploy-candidate --json'
     }
   })
-  assert.equal(candidate.permissionDecision, 'deny')
-  assert.match(
-    candidate.permissionDecisionReason,
-    /never run the Voidr CLI or Playwright from the terminal/i
-  )
+  assert.deepEqual(candidate, {})
 })
 
 test('denies direct HTTP calls to process-dispatch endpoints', () => {
@@ -1427,7 +1408,7 @@ function transcriptEntry(type, data) {
   return JSON.stringify({ type, data })
 }
 
-test('allows cloning the test repository but blocks a fabricated checkout', () => {
+test('git and gh run freely in the terminal during a workflow', () => {
   const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-materialize-'))
   const sessionId = 'materialization-gate'
   const now = Date.now()
@@ -1467,29 +1448,14 @@ test('allows cloning the test repository but blocks a fabricated checkout', () =
     dataRoot
   )
 
-  // Fabricating a checkout is still denied: a directory with the right origin
-  // but no history passes the origin lookup and then fails everywhere else.
-  const denied = {
-    'git init ; git remote add origin https://github.com/voidrco/voidr-tp-desk-web':
-      /never create a Git repository or add a remote by hand/i,
-    'cd tests && git remote add origin https://example.test/repo.git':
-      /never create a Git repository or add a remote by hand/i
-  }
-  for (const [command, reason] of Object.entries(denied)) {
-    const output = runHook(
-      { sessionId, cwd: workspace, toolName: 'bash', toolArgs: { command } },
-      dataRoot
-    )
-    assert.equal(output.permissionDecision, 'deny', command)
-    assert.match(output.permissionDecisionReason, reason, command)
-  }
-
-  // Cloning runs as the user, with the user's own credentials, so it grants no
-  // access they did not have — the test repository included.
   for (const command of [
+    'git init ; git remote add origin https://github.com/voidrco/voidr-tp-desk-web',
+    'cd tests && git remote add origin https://example.test/repo.git',
     'git clone https://github.com/voidrco/voidr-tp-desk-web tests',
-    'git clone https://github.com/voidrco/voidr-tp-plano-e37c1b5b skeleton',
     'git clone https://github.com/blip/desk-web product',
+    'cd /tmp/tests && git add . && git commit -m "feat: new test"',
+    'git push origin feat/new-tests',
+    'gh pr create --title "tests"',
     'git status',
     'git remote -v'
   ]) {
@@ -1504,7 +1470,7 @@ test('allows cloning the test repository but blocks a fabricated checkout', () =
   }
 })
 
-test('blocks Node runtime installs from the agent terminal during a workflow', () => {
+test('a Node runtime install in the terminal is not blocked', () => {
   const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
   const sessionId = 'runtime-install-gate'
   const now = Date.now()
@@ -1531,89 +1497,8 @@ test('blocks Node runtime installs from the agent terminal during a workflow', (
   for (const command of [
     'nvm install 22',
     'nvm use 22 && npm test',
-    'nvs add 22',
-    'nvs use 22',
     'volta install node@22',
-    'sudo apt-get install -y nodejs',
-    'curl -fsSL https://nodejs.org/dist/v22.0.0/node-v22.0.0-linux-x64.tar.xz -o node.tar.xz'
-  ]) {
-    const output = runHook(
-      {
-        sessionId,
-        cwd: process.cwd(),
-        toolName: 'bash',
-        toolArgs: { command }
-      },
-      dataRoot
-    )
-    assert.equal(output.permissionDecision, 'deny', command)
-    assert.match(output.permissionDecisionReason, /Node 22/, command)
-  }
-
-  assert.deepEqual(
-    runHook(
-      {
-        sessionId,
-        cwd: process.cwd(),
-        toolName: 'bash',
-        toolArgs: { command: 'git status --porcelain' }
-      },
-      dataRoot
-    ),
-    {}
-  )
-})
-
-test('blocks terminal git publishing during a workflow and points to the bridge tool', () => {
-  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
-  const sessionId = 'terminal-publish-gate'
-  const now = Date.now()
-
-  submitPrompt(
-    {
-      sessionId,
-      timestamp: now,
-      prompt: 'Quero desenvolver testes na Voidr',
-      transformedPrompt: 'Quero desenvolver testes na Voidr'
-    },
-    dataRoot
-  )
-  submitPrompt(
-    {
-      sessionId,
-      timestamp: now + 1,
-      prompt: 'Usar Test Plan existente',
-      transformedPrompt: 'Usar Test Plan existente'
-    },
-    dataRoot
-  )
-
-  for (const command of [
-    'cd /tmp/tests && git add . && git commit -m "feat: new test"',
-    'git push origin feat/new-tests',
-    'gh pr create --title "tests"'
-  ]) {
-    const output = runHook(
-      {
-        sessionId,
-        cwd: process.cwd(),
-        toolName: 'bash',
-        toolArgs: { command }
-      },
-      dataRoot
-    )
-    assert.equal(output.permissionDecision, 'deny', command)
-    assert.match(
-      output.permissionDecisionReason,
-      /voidr_workspace_publish_tests/,
-      command
-    )
-  }
-
-  for (const command of [
-    'git status --porcelain',
-    'git reset --soft HEAD~1',
-    'git log --oneline -5'
+    'git status --porcelain'
   ]) {
     assert.deepEqual(
       runHook(

@@ -20,10 +20,10 @@ first: find the activation entry whose summary lists that tool and call it
 with the exact name you were given. On Claude Code the tool is deferred
 instead: load it with `ToolSearch`, selecting its scoped name
 (`mcp__plugin_voidr_voidr__<tool>`) or searching the bare name as keywords,
-then call it. Never invent an activation name, never report the tool as
-unavailable before the host's own mechanism has been tried, and never fall
-back to a terminal command or a manual step. Only when that mechanism still
-does not surface it, say exactly which tool is unreachable and stop.
+then call it. Never invent an activation name, and never report the tool as
+unavailable before the host's own mechanism has been tried. Only when that
+mechanism still does not surface it, say exactly which tool is unreachable and
+stop.
 
 ## Guard denials
 
@@ -32,19 +32,17 @@ policy` message is the plugin steering the flow, not a defect. When the
 denial embeds its own remedy — an exact parameter to add (for example
 `workspaceRoot: "<path>"`), a tool to call first, or a phrase to collect from
 the user — follow it literally: repeat the same call with the indicated
-change in the same turn. Never route around a denial through the terminal,
-never delegate it to a subagent, and never report it to the user as a plugin
-or MCP bug. When the denial names a user authorization phrase, relay that
+change in the same turn. Never delegate a denial to a subagent, and never
+report it to the user as a plugin or MCP bug. When the denial names a user authorization phrase, relay that
 phrase to the user exactly as written — a paraphrase may not be recognized by
 the gate and leaves the user typing authorizations that never work.
 
 ## Terminal
 
-Never run Git, npm, npx, Playwright, or the Voidr CLI in the terminal.
-Repository setup, validation, publishing, and deploy happen only through the
-bridge tools each skill routes. The bridge injects the selected Service
-Account and the plugin endpoints into child processes without exposing
-credentials.
+The terminal is available. Prefer the bridge tool a skill routes for setup,
+validation, publishing, and deploy: it injects the selected Service Account
+and the plugin endpoints into the child process, which a command typed in the
+terminal does not have.
 
 ## Secrets
 
@@ -82,7 +80,7 @@ whose access to the repository is what the clone proves. When a bridge tool
 answers with the clone handover message, relay it exactly as it came — the
 commands, the workspace destination, and the administrator-authorization
 guidance — wait for the user to confirm the clone, then call the same tool
-again. Never clone from the agent terminal on the user's behalf.
+again.
 
 ## Node runtime
 

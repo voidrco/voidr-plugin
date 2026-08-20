@@ -91,25 +91,19 @@ if (forbiddenRequest) {
   )
 }
 
-// VS Code's terminal tool is named run_in_terminal — a shell-name-only match
-// left every shell policy dormant on that host (the agent could run npx
-// voidr, git push, or write specs through the terminal unchecked).
+// The terminal itself is allowed. What survives here are the acts that stay
+// forbidden through any channel: reading .env, rewriting the dependency
+// strategy, legacy mutable deploys, and dispatching a Hive process. VS Code's
+// terminal tool is named run_in_terminal, so the match cannot be shell-name
+// only or these acts go unchecked on that host.
 const isShell = /(^|[-_/])(bash|shell|powershell|terminal|cmd)$/i.test(
   rawToolName
 )
 if (isShell) {
   const shellText = collectStringValues(toolArgs).join('\n').toLowerCase()
   const normalizedShell = shellText.replace(/\s+/g, ' ')
-  if (normalizedShell.includes('voidr-mcp-bridge.mjs')) {
-    deny(
-      'Blocked by Voidr policy: do not invoke the MCP bridge through the terminal. Call the official Voidr MCP authentication tools directly.'
-    )
-  }
   enforceShellEnvFileRead(payload, normalizedShell)
   enforceDependencyStrategyProtection(payload, normalizedShell)
-  enforceRuntimeInstallProtection(payload, normalizedShell)
-  enforcePublishThroughBridge(payload, normalizedShell)
-  enforceRepositoryMaterializationThroughTools(payload, normalizedShell)
   const forbiddenDeploy = (policy.forbiddenDeployShellFragments || []).find(value =>
     normalizedShell.includes(value.toLowerCase())
   )
@@ -123,8 +117,6 @@ if (isShell) {
       `Blocked by Voidr policy: legacy mutable deployment bypasses the merged-PR and immutable latest release gate.`
     )
   }
-  enforceVoidrCliShellUsage(normalizedShell)
-  enforceShellSpecWrite(normalizedShell)
   const fragment = policy.forbiddenShellFragments.find(value =>
     searchable.includes(value.toLowerCase())
   )
@@ -227,7 +219,7 @@ function enforceExplicitWorkspaceRoot(hookPayload, canonicalName, args) {
   denyGated(
     hookPayload,
     'workspace-root',
-    `Blocked by Voidr workflow: the MCP process cannot see the open workspace by itself. Call ${canonicalName} again adding workspaceRoot: "${cwd}" (the absolute path of the open workspace folder). Never use terminal find/ls to locate the test repository.`
+    `Blocked by Voidr workflow: the MCP process cannot see the open workspace by itself. Call ${canonicalName} again adding workspaceRoot: "${cwd}" (the absolute path of the open workspace folder).`
   )
 }
 
@@ -237,51 +229,6 @@ function enforceNewPlanModeListing(hookPayload, canonicalName) {
   if (state.planMode !== 'new') return
   deny(
     'Blocked by Voidr workflow: the user chose to create a new Test Plan. If creation failed, stop, show the exact tool error, and offer to retry or cancel. Never list existing Test Plans to silently replace the new plan. Switching to an existing plan requires the user to explicitly say “Usar Test Plan existente” in a new message.'
-  )
-}
-
-// The Voidr CLI and Playwright runs are bridge-only: the terminal has no
-// Service Account, and interactive `voidr login` would create a user
-// credential session outside the plugin's model. Blocked in every form —
-// npx, direct node invocation, or a PATH binary.
-function enforceVoidrCliShellUsage(normalizedShell) {
-  const invokesVoidrCli =
-    /(?:^|[\s;|&(])npx\b[^;&|\n]*\bvoidr\b/.test(normalizedShell) ||
-    /(?:^|[\s;|&(])voidr\s+(?:login|link|scaffold|env|build|deploy|deploy-candidate)\b/.test(
-      normalizedShell
-    ) ||
-    /voidr\.js\b/.test(normalizedShell) ||
-    normalizedShell.includes('@voidrco/playwright/cli')
-  const invokesPlaywrightRun =
-    /(?:^|[\s;|&(])npx\b[^;&|\n]*\bplaywright\s+test\b/.test(normalizedShell)
-  if (!invokesVoidrCli && !invokesPlaywrightRun) return
-  deny(
-    'Blocked by Voidr policy: never run the Voidr CLI or Playwright from the terminal — it has no Service Account credentials there, and interactive voidr login is forbidden. Use the bridge tools, which inject the credentials automatically: voidr_workspace_prepare_test_repository (setup/link/scaffold/env pull), voidr_build (syntax/packaging gate), voidr_explore (inspection probes), voidr_workspace_publish_tests (commit/push/PR), voidr_release_deploy_validation (validation candidate, no promote), and voidr_release_deploy_merged_pr (immutable LIVE deploy).'
-  )
-}
-
-// Spec files written through the shell bypass enforceTestSpecContentPolicy —
-// the content policy only inspects the editor write tools, so a Set-Content
-// heredoc can smuggle literal credentials, e-mails, or env fallbacks into a
-// spec uninspected. Writing specs is not a terminal job: reads stay allowed,
-// writes are pushed back to the inspected editor tools. Hard gate (content
-// hygiene) — never degrades.
-function enforceShellSpecWrite(normalizedShell) {
-  if (!/\.spec\.[cm]?[jt]sx?\b/.test(normalizedShell)) return
-  const writesViaCommand =
-    /\b(?:set-content|add-content|out-file|new-item)\b/.test(
-      normalizedShell
-    ) ||
-    /\[(?:system\.)?io\.file\]::(?:write|append)/.test(normalizedShell) ||
-    /\bfs\.(?:write|append)filesync?\b/.test(normalizedShell) ||
-    /\btee\b[^;|&\n]*\.spec\.[cm]?[jt]sx?\b/.test(normalizedShell)
-  const redirectsIntoSpec =
-    /[^<>-]>{1,2}\s*["']?[^"'\s;|&]*\.spec\.[cm]?[jt]sx?\b/.test(
-      normalizedShell
-    )
-  if (!writesViaCommand && !redirectsIntoSpec) return
-  deny(
-    'Blocked by Voidr policy: never create or edit Playwright specs through the terminal — shell writes bypass the spec content inspection (credentials, e-mail addresses, env fallbacks). Use the editor file tools to write specs; reading specs in the terminal remains allowed.'
   )
 }
 
@@ -299,7 +246,7 @@ function enforceShellEnvFileRead(hookPayload, normalizedShell) {
     ) || /(?:^|[;|&]\s*)(?:source|\.)\s+\S*\.env\b/.test(normalizedShell)
   if (!readsOrPrints) return
   deny(
-    'Blocked by Voidr policy: never read or print .env contents in the terminal or chat history. Validate only file existence, permissions, and key names through the Voidr tools. If a value was already exposed, recommend rotating it.'
+    'Blocked by Voidr policy: never read or print .env contents. Validate only file existence, permissions, and key names through the Voidr tools. If a value was already exposed, recommend rotating it.'
   )
 }
 
@@ -341,61 +288,6 @@ function enforceEnvFileProtection(hookPayload, name, args) {
   )
 }
 
-function enforcePublishThroughBridge(hookPayload, normalizedShell) {
-  const state = readGateState(hookPayload)
-  if (state.workflowActive !== true) return
-  const publishes =
-    /\bgit\b[^;&|\n]*\bcommit\b/.test(normalizedShell) ||
-    /\bgit\b[^;&|\n]*\bpush\b/.test(normalizedShell) ||
-    /\bgh\b[^;&|\n]*\bpr\b[^;&|\n]*\b(?:create|merge|edit|close)\b/.test(
-      normalizedShell
-    )
-  if (!publishes) return
-  deny(
-    'Blocked by Voidr policy: never run git commit, git push, or gh pr from the agent terminal. Publishing test changes goes only through voidr_workspace_publish_tests, after the user explicitly authorizes the shown branch, changed files, commit message, and PR title. The sandbox has no Git credentials, and pushing to the default branch is forbidden.'
-  )
-}
-
-// A checkout of the linked repository comes from the tools or it does not exist.
-// The terminal has no Voidr credentials, so a manual clone of a private
-// provisioned repository cannot work, and a repository faked with git init plus
-// git remote add only defeats the check that protects the flow: it looks like a
-// checkout of the linked repository without being one.
-function enforceRepositoryMaterializationThroughTools(
-  hookPayload,
-  normalizedShell
-) {
-  const state = readSessionState(hookPayload)
-  if (state.workflowActive !== true) return
-  // Cloning the test repository is allowed: git runs as the user, with the
-  // user's own credentials, so the agent doing it grants no access the user did
-  // not already have. `voidr_context_bootstrap` clones it as part of the
-  // atomic call; a terminal clone is the same act, just visible.
-  const fabricatesCheckout =
-    /(?:^|[\s;|&(])git\b[^;&|\n]*\binit\b/.test(normalizedShell) ||
-    /(?:^|[\s;|&(])git\b[^;&|\n]*\bremote\s+add\b/.test(normalizedShell)
-  if (!fabricatesCheckout) return
-  deny(
-    'Blocked by Voidr policy: never create a Git repository or add a remote by hand during a Voidr flow. A directory with a matching origin is not a checkout of the provisioned repository, and the preparation gate would work on a repository that only looks right. Let voidr_workspace_prepare_test_repository clone the linked repository, or voidr_workspace_bootstrap_test_repository create the skeleton when the plan has no linked repository.'
-  )
-}
-
-function enforceRuntimeInstallProtection(hookPayload, normalizedShell) {
-  const state = readGateState(hookPayload)
-  if (state.workflowActive !== true) return
-  const installsRuntime =
-    /\b(?:nvm|nvs|volta|fnm|asdf)\b[^;&|\n]*\b(?:install|use|add|pin|global|exec)\b/.test(
-      normalizedShell
-    ) ||
-    /\b(?:apt|apt-get|dnf|yum|pacman|brew|snap)\b[^;&|\n]*\binstall\b[^;&|\n]*\bnode/.test(
-      normalizedShell
-    ) ||
-    /nodesource|nodejs\.org\/dist/.test(normalizedShell)
-  if (!installsRuntime) return
-  deny(
-    'Blocked by Voidr policy: never install, switch, or pin a Node runtime from the agent terminal. The Voidr framework requires the pinned Node 22; ask the user to activate it in their own terminal (for example nvm use 22 or volta pin node@22) and then retry voidr_workspace_prepare_test_repository or voidr_build once. Do not keep retrying and do not attempt any other runtime workaround.'
-  )
-}
 
 function enforceSelectedRepositoryBoundary(hookPayload, name, args) {
   if (!isGenericWriteTool(name)) {
@@ -1013,7 +905,7 @@ function enforceConnectFirstTool(hookPayload, rawName, canonicalName, args) {
 
   if (canonicalName !== 'voidr_auth_status') {
     deny(
-      'Blocked by Voidr connect workflow: the first operational action must be the MCP tool voidr_auth_status. Search for it if the host defers tools, but do not inspect files or use the terminal before it.'
+      'Blocked by Voidr connect workflow: the first operational action must be the MCP tool voidr_auth_status. Search for it if the host defers tools, but do not inspect files before it.'
     )
   }
 

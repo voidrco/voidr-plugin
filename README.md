@@ -145,7 +145,7 @@ tools: it sees groups it must activate by name, and the ones it fails to
 activate are invisible. Observed effect on this plugin: only 26 of its 52
 tools reached the model, `file_embeddings_search_documents` and
 `voidr_smoke_build` among the missing, so documentation assimilation was
-skipped and the local smoke run fell back to a forbidden terminal command.
+skipped and the local smoke run fell back to a terminal command.
 
 The plugin cannot set this — it is a client-side user setting. Add it to
 `settings.json`:

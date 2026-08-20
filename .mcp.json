@@ -68,6 +68,7 @@
         "executions_list_executions",
         "executions_create_execution",
         "executions_get_execution",
+        "executions_cancel_execution",
         "playwright_get_execution_analytics",
         "playwright_list_executions",
         "playwright_list_test_results",

@@ -35,6 +35,7 @@
     "executions_list_executions",
     "executions_create_execution",
     "executions_get_execution",
+    "executions_cancel_execution",
     "playwright_get_execution_analytics",
     "playwright_list_executions",
     "playwright_list_test_results",
@@ -75,7 +76,8 @@
     "defects_update_defect",
     "defects_update_defect_status",
     "defects_assign_defect",
-    "executions_create_execution"
+    "executions_create_execution",
+    "executions_cancel_execution"
   ],
   "writeLocalTools": [
     "voidr_context_bootstrap",

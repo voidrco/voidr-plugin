@@ -20,6 +20,7 @@ test('execute skill routes only its execution, release, and sync tools', () => {
   // explained from the timeline and the DOM before anything is corrected.
   assert.deepEqual(referencedTools.sort(), [
     'assistant_context_get_step_detail',
+    'executions_cancel_execution',
     'executions_create_execution',
     'executions_get_execution',
     'failure_analysis_get_context',

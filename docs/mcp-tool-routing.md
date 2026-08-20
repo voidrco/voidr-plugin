@@ -71,6 +71,7 @@ Routing invariants:
 | `voidr_create_validation_execution` | `voidr-execute` | The only tool that starts a validation execution: SHADOW, pinned to the candidate `codebaseVersion`, outside LIVE governance. |
 | `executions_create_execution` | `voidr-execute` | The only tool that starts a LIVE platform execution, always behind a typed confirmation. |
 | `executions_get_execution` | `voidr-execute` | Lifecycle status of the execution just created. |
+| `executions_cancel_execution` | `voidr-execute` | Stops a run still in progress. A write: the user decides, and the state is read back afterwards. |
 | `executions_list_executions` | none | Reserved. No current skill routes to it; listing failed executions for analysis uses `playwright_list_executions`. |
 
 ## Validation-run diagnosis (restructured flow)

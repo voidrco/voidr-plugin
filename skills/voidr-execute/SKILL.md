@@ -168,6 +168,20 @@ Track the execution until a terminal state (completed, failed, cancelled):
 Name the mechanism by host instead of guessing: offering a fallback the host
 forbids costs several rounds before the flow recovers.
 
+### When to offer cancelling instead of waiting
+
+An execution that is clearly not going to answer anything is worth stopping, and
+until now the only way out was the platform UI. Offer `executions_cancel_execution`
+when the run was created against the wrong plan, environment, or
+`codebaseVersion`; when the specs it is running were already superseded by an
+edit; or when it has sat in the same state far past the duration its own history
+suggests. Say which execution and why, and let the user decide — cancelling
+destroys the evidence a failure would have produced, so a run that is merely slow
+is not a candidate. Never cancel to retry faster.
+
+After a cancel, read the execution back and report its persisted state. A cancel
+that did not take is not a cancel.
+
 On completion report pass/fail/flaky counts (`playwright_get_execution_analytics`
 when totals are needed) and the execution link. On failures, offer
 `/voidr-failure-analysis` for the evidence-backed diagnosis; never trigger
@@ -222,6 +236,8 @@ A case whose validation run failed is never offered for promotion.
 - `voidr_create_validation_execution` — the ONLY validation-execution write;
   SHADOW pinned to the candidate.
 - `executions_create_execution` — the ONLY LIVE execution write.
+- `executions_cancel_execution` — stops a run still in progress. A write, and
+  the user's call: never cancel on your own initiative.
 - `voidr_workspace_publish_tests` / `voidr_release_inspect` /
   `voidr_release_deploy_live` — the promotion path, only after a passing
   validation and an explicit user decision.

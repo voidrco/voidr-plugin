@@ -115,12 +115,9 @@ corporate network may never load. When it fails twice, stop probing and
 implement from the evidence you have, saying which assertion stayed weaker
 for it.
 
-A probe does NOT inherit the specs' boilerplate. Copying `useStealth` /
-`withStealth` into one costs a run to rediscover that the stealth browser
-rejects the runner's viewport (`Browser.setDefaultViewport … isMobile`) — it
-has happened on every first probe. Write it against the plain `{ page }`
-fixture; stealth belongs to the specs that run on the platform, not to a local
-inspection.
+A probe does NOT inherit the specs' boilerplate. Write it against the plain
+`{ page }` fixture — a probe is a local inspection, not a spec that runs on
+the platform.
 
 When AAA + sessions leave real questions open (is this text a DOM text or an
 attribute? does this click open a submenu?), write a THROWAWAY inspection

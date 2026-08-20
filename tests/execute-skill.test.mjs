@@ -36,7 +36,7 @@ test('execute skill routes only its execution, release, and sync tools', () => {
     'test_plans_update_test_case_tag',
     'voidr_build',
     'voidr_create_validation_execution',
-    'voidr_release_deploy_merged_pr',
+    'voidr_release_deploy_live',
     'voidr_release_deploy_validation',
     'voidr_release_inspect',
     'voidr_workspace_publish_tests'

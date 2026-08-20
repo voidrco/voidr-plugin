@@ -1,58 +1,42 @@
 const FULL_GIT_SHA = /^[a-f0-9]{40}$/i
 const SHA256 = /^[a-f0-9]{64}$/
 
-export function assertMergedPullRequestEvidence(evidence) {
-  const required = [
-    'pullRequestNumber',
-    'pullRequestUrl',
-    'state',
-    'defaultBranch',
-    'baseBranch',
-    'mergeCommitSha',
-    'localHeadSha'
-  ]
+// A release no longer needs a merged pull request. What it still needs is a
+// source another person can find later: the exact commit the build came from,
+// clean on disk and present on the remote.
+export function assertDeployableSourceEvidence(evidence) {
+  const required = ['commitSha', 'localHeadSha']
   for (const field of required) {
     if (evidence?.[field] === undefined || evidence[field] === null) {
-      throw new Error(`Missing merged PR evidence: ${field}.`)
+      throw new Error(`Missing deploy source evidence: ${field}.`)
     }
   }
-  if (evidence.state !== 'MERGED' || !evidence.mergedAt) {
-    throw new Error('The pull request is not merged.')
+  if (!FULL_GIT_SHA.test(String(evidence.commitSha))) {
+    throw new Error('The deploy source has no valid commit SHA.')
   }
-  if (evidence.baseBranch !== evidence.defaultBranch) {
+  if (evidence.localHeadSha !== evidence.commitSha) {
     throw new Error(
-      `The pull request targets ${evidence.baseBranch}, not the default branch ${evidence.defaultBranch}.`
+      'The selected repository HEAD moved. Build and deploy must run from the same commit.'
     )
   }
-  if (!FULL_GIT_SHA.test(evidence.mergeCommitSha)) {
-    throw new Error('The pull request has no valid merge commit SHA.')
-  }
-  if (evidence.localHeadSha !== evidence.mergeCommitSha) {
+  if (!evidence.commitOnRemote) {
     throw new Error(
-      'The selected repository HEAD is not the merged PR commit. Build and deploy must run from that exact commit.'
+      'The commit is not on the remote. Push it so the release stays traceable to a commit others can fetch.'
     )
-  }
-  if (!evidence.mergeCommitOnRemoteDefault) {
-    throw new Error('The merged PR commit is not present on origin/default.')
   }
   if (!evidence.worktreeClean) {
     throw new Error('The selected repository has uncommitted or untracked changes.')
   }
   return {
-    pullRequestNumber: Number(evidence.pullRequestNumber),
-    pullRequestUrl: evidence.pullRequestUrl,
-    defaultBranch: evidence.defaultBranch,
-    mergeCommitSha: evidence.mergeCommitSha.toLowerCase(),
-    mergedAt: evidence.mergedAt
+    repository: evidence.repository ?? null,
+    defaultBranch: evidence.defaultBranch ?? null,
+    commitSha: String(evidence.commitSha).toLowerCase()
   }
 }
 
 export function assertCompletedImmutableDeployment(evidence) {
-  if (!evidence?.prMerged) {
-    throw new Error('Deployment cannot complete without a merged pull request.')
-  }
-  if (!FULL_GIT_SHA.test(String(evidence.mergeCommitSha || ''))) {
-    throw new Error('Deployment has no valid merged commit SHA.')
+  if (!FULL_GIT_SHA.test(String(evidence?.commitSha || ''))) {
+    throw new Error('Deployment has no valid source commit SHA.')
   }
   if (!evidence.immutableCandidateVerified) {
     throw new Error('The immutable candidate was not verified.')
@@ -67,7 +51,7 @@ export function assertCompletedImmutableDeployment(evidence) {
     throw new Error('Latest does not point to the promoted immutable release.')
   }
   return {
-    mergeCommitSha: evidence.mergeCommitSha.toLowerCase(),
+    commitSha: String(evidence.commitSha).toLowerCase(),
     codebaseVersion: evidence.codebaseVersion,
     latestCodebaseVersion: evidence.latestCodebaseVersion
   }

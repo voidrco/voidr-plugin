@@ -316,47 +316,54 @@ test('project.json mismatch cannot silently change the selected plan', () => {
   assert.equal(workflow.context.planId, 'abcdef0123456789abcdef01')
 })
 
-test('deployment is impossible until a clean merged PR is verified', () => {
+test('deployment is impossible until a clean pushed commit is verified', () => {
   let workflow = readyToDeploy()
-  assert.match(workflow.prompt, /PR.*mergeado/i)
   assert.throws(
     () => transition(workflow, { type: 'DEPLOY_APPROVED' }),
-    /Expected PR_MERGE_VERIFIED/
+    /Expected DEPLOY_SOURCE_VERIFIED/
   )
+  // A commit that never left the machine is not a deployable source.
   assert.throws(
     () =>
       transition(workflow, {
-        type: 'PR_MERGE_VERIFIED',
-        ...mergedPrEvidence(),
-        prMerged: false,
-        state: 'OPEN'
+        type: 'DEPLOY_SOURCE_VERIFIED',
+        ...deployableSource(),
+        commitOnRemote: false
+      }),
+    /Deploy requires/
+  )
+  // Neither is a dirty worktree.
+  assert.throws(
+    () =>
+      transition(workflow, {
+        type: 'DEPLOY_SOURCE_VERIFIED',
+        ...deployableSource(),
+        worktreeClean: false
       }),
     /Deploy requires/
   )
 })
 
-test('execution requires merged PR, immutable latest, and independent sync', () => {
+test('execution requires the deployed commit, immutable latest, and independent sync', () => {
   let workflow = readyToDeploy()
   workflow = transition(workflow, {
-    type: 'PR_MERGE_VERIFIED',
-    ...mergedPrEvidence()
+    type: 'DEPLOY_SOURCE_VERIFIED',
+    ...deployableSource()
   })
-  assert.equal(workflow.state, States.PR_MERGE_VERIFIED)
+  assert.equal(workflow.state, States.DEPLOY_SOURCE_VERIFIED)
   assert.match(workflow.prompt, /release imutável.*latest/i)
 
   workflow = transition(workflow, { type: 'DEPLOY_APPROVED' })
   assert.deepEqual(workflow.actions, [
     {
-      tool: 'voidr_release_deploy_merged_pr',
+      tool: 'voidr_release_deploy_live',
       mutation: true,
-      pullRequestNumber: 42,
-      mergeCommitSha: 'a'.repeat(40)
+      commitSha: 'a'.repeat(40)
     }
   ])
   workflow = transition(workflow, {
     type: 'RELEASE_DEPLOYED',
-    prMerged: true,
-    mergeCommitSha: 'a'.repeat(40),
+    commitSha: 'a'.repeat(40),
     immutableCandidateVerified: true,
     codebaseVersion: 'b'.repeat(64),
     latestVerified: true,
@@ -371,8 +378,7 @@ test('execution requires merged PR, immutable latest, and independent sync', () 
 
   workflow = transition(workflow, {
     type: 'RELEASE_DEPLOYED',
-    prMerged: true,
-    mergeCommitSha: 'a'.repeat(40),
+    commitSha: 'a'.repeat(40),
     immutableCandidateVerified: true,
     codebaseVersion: 'b'.repeat(64),
     latestVerified: true,
@@ -502,18 +508,13 @@ function readyToDeploy() {
   return transition(workflow, { type: 'LOCAL_VALIDATION_PASSED' })
 }
 
-function mergedPrEvidence() {
+function deployableSource() {
   return {
-    prMerged: true,
-    pullRequestNumber: 42,
-    pullRequestUrl: 'https://github.com/acme/tests/pull/42',
-    state: 'MERGED',
-    mergedAt: '2026-07-28T12:00:00Z',
+    repository: 'acme/tests',
     defaultBranch: 'main',
-    baseBranch: 'main',
-    mergeCommitSha: 'a'.repeat(40),
+    commitSha: 'a'.repeat(40),
     localHeadSha: 'a'.repeat(40),
-    mergeCommitOnRemoteDefault: true,
+    commitOnRemote: true,
     worktreeClean: true
   }
 }

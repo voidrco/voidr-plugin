@@ -20,10 +20,10 @@ first: find the activation entry whose summary lists that tool and call it
 with the exact name you were given. On Claude Code the tool is deferred
 instead: load it with `ToolSearch`, selecting its scoped name
 (`mcp__plugin_voidr_voidr__<tool>`) or searching the bare name as keywords,
-then call it. Never invent an activation name, never report the tool as
-unavailable before the host's own mechanism has been tried, and never fall
-back to a terminal command or a manual step. Only when that mechanism still
-does not surface it, say exactly which tool is unreachable and stop.
+then call it. Never invent an activation name, and never report the tool as
+unavailable before the host's own mechanism has been tried. Only when that
+mechanism still does not surface it, say exactly which tool is unreachable and
+stop.
 
 ## Authentication
 

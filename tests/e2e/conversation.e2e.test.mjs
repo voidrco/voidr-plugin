@@ -135,20 +135,14 @@ test('natural-language greenfield journey reaches deploy and execution through e
   assert.match(workflow.prompt, /criar project\.json/i)
   workflow = transition(workflow, { type: 'PROJECT_LINK_APPROVED' })
   workflow = transition(workflow, { type: 'LOCAL_VALIDATION_PASSED' })
-  assert.match(workflow.prompt, /PR.*mergeado/i)
 
   workflow = transition(workflow, {
-    type: 'PR_MERGE_VERIFIED',
-    prMerged: true,
-    pullRequestNumber: 17,
-    pullRequestUrl: 'https://github.com/blip/monitor-tests/pull/17',
-    state: 'MERGED',
-    mergedAt: '2026-07-28T12:00:00Z',
+    type: 'DEPLOY_SOURCE_VERIFIED',
+    repository: 'blip/monitor-tests',
     defaultBranch: 'main',
-    baseBranch: 'main',
-    mergeCommitSha: 'a'.repeat(40),
+    commitSha: 'a'.repeat(40),
     localHeadSha: 'a'.repeat(40),
-    mergeCommitOnRemoteDefault: true,
+    commitOnRemote: true,
     worktreeClean: true
   })
   assert.match(workflow.prompt, /release imutável.*latest/i)
@@ -156,16 +150,14 @@ test('natural-language greenfield journey reaches deploy and execution through e
   workflow = transition(workflow, { type: 'DEPLOY_APPROVED' })
   assert.deepEqual(workflow.actions, [
     {
-      tool: 'voidr_release_deploy_merged_pr',
+      tool: 'voidr_release_deploy_live',
       mutation: true,
-      pullRequestNumber: 17,
-      mergeCommitSha: 'a'.repeat(40)
+      commitSha: 'a'.repeat(40)
     }
   ])
   workflow = transition(workflow, {
     type: 'RELEASE_DEPLOYED',
-    prMerged: true,
-    mergeCommitSha: 'a'.repeat(40),
+    commitSha: 'a'.repeat(40),
     immutableCandidateVerified: true,
     codebaseVersion: 'b'.repeat(64),
     latestVerified: true,

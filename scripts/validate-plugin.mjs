@@ -312,16 +312,14 @@ assert(
   /grouped, not absent/i.test(contractsFlat) &&
     /activation entry whose summary lists that tool/i.test(contractsFlat) &&
     /never invent an activation name/i.test(contractsFlat) &&
-    /never fall back to a terminal command/i.test(contractsFlat) &&
     /ToolSearch/.test(contractsFlat) &&
     /before the host's own mechanism has been tried/i.test(contractsFlat),
   'CONTRACTS.md must carry the grouped/deferred tool contract for both hosts.'
 )
 assert(
-  /Never run Git, npm, npx, Playwright, or the Voidr CLI in the terminal/i.test(
-    contracts
-  ),
-  'CONTRACTS.md must keep framework commands inside the bridge.'
+  /The terminal is available/i.test(contracts) &&
+    /injects the selected Service Account/i.test(contractsFlat),
+  'CONTRACTS.md must say the terminal is allowed and why the bridge tools are preferred.'
 )
 assert(
   /Never reproduce credentials/i.test(contractsFlat) &&
@@ -398,8 +396,10 @@ assert(
 )
 assert(
   /ONLY setup path/i.test(contextSkill) &&
-    /never run npm, git, or the Voidr CLI in the terminal/i.test(contextSkill),
-  'Context skill must forbid separate setup tools and terminal commands.'
+    /never call prepare\/scaffold tools separately/i.test(
+      contextSkill.replace(/\s+/g, ' ')
+    ),
+  'Context skill must forbid separate setup tools.'
 )
 assert(
   /never creates or changes Test\s+Plan content/i.test(contextSkill.replace(/\n/g, ' ')) ||
@@ -470,8 +470,8 @@ assert(
 assert(
   /voidr_workspace_publish_tests/.test(executeSkill) &&
     /voidr_release_inspect/.test(executeSkill) &&
-    /voidr_release_deploy_merged_pr/.test(executeSkill),
-  'Execute skill must keep the reviewed promotion path through the release gates.'
+    /voidr_release_deploy_live/.test(executeSkill),
+  'Execute skill must keep the promotion path through the release gates.'
 )
 assert(
   /Never deploy a\s+repository that did not build/i.test(executeSkill),

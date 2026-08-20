@@ -90,4 +90,4 @@ automated).
   application (read-only).
 - `voidr_context_bootstrap` — the atomic context + preparation gate. It is
   the ONLY setup path: never call prepare/scaffold tools separately from this
-  skill, and never run npm, git, or the Voidr CLI in the terminal.
+  skill.

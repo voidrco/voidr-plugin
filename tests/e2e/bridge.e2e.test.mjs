@@ -945,7 +945,7 @@ test('bridge blocks platform data that was never returned by a tool this session
     .map(item => item.text)
     .join('\n')
   assert.match(enriched, /Do NOT re-create modules/i)
-  assert.match(enriched, /voidr_release_deploy_merged_pr/)
+  assert.match(enriched, /voidr_release_deploy_live/)
 
   const blockedRecreate = await client.requestRaw('tools/call', {
     name: 'test_plans_create_module',
@@ -1021,7 +1021,7 @@ test('bridge blocks writes for an account without write scope before network', a
   assert.match(result.error.message, /does not declare the write scope/i)
 
   const localRelease = await client.requestRaw('tools/call', {
-    name: 'voidr_release_deploy_merged_pr',
+    name: 'voidr_release_deploy_live',
     arguments: {
       repositoryPath: temp,
       pullRequestNumber: 1,

@@ -23,14 +23,14 @@ When this skill is invoked explicitly, follow this contract literally:
    `voidr_auth_status` with `{}`.
 4. Use only `voidr_auth_status`, `voidr_auth_select_organization`, and
    `voidr_auth_login` during this connection workflow.
-5. Never use a shell, terminal, `node`, `npx`, `curl`, or a manually invoked
-   `voidr-mcp-bridge.mjs` as an authentication fallback.
+5. Authentication happens only through those three tools — never through a
+   manually invoked `voidr-mcp-bridge.mjs` as a fallback.
 6. Do not ask whether the user prefers a status check or browser login. The
    status result determines the next action automatically.
 7. If `voidr_auth_status` is not available as an MCP tool in the current
    session, stop and say that the Voidr MCP tools are unavailable and that the
    user must reload the plugin and start a new chat. Do not investigate through
-   files or the terminal.
+   files.
 8. Selecting an organization already returned in `serviceAccounts` takes
    precedence over browser login. Never call `voidr_auth_login` merely because
    the requested organization differs from the currently selected one.

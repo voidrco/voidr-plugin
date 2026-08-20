@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
@@ -10,11 +10,18 @@ const guard = join(root, 'scripts/guard-hive-tools.mjs')
 
 function makeRunner() {
   const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-probe-gate-'))
-  return (toolName, toolArgs = {}) => {
+  // The plugin-boundary gate resolves every path argument against this cwd, so
+  // the edited files have to live in a real workspace outside the plugin.
+  const workspace = realpathSync(
+    mkdtempSync(join(tmpdir(), 'voidr-probe-workspace-'))
+  )
+  mkdirSync(join(workspace, 'modules', 'a'), { recursive: true })
+  mkdirSync(join(workspace, 'helpers'), { recursive: true })
+  const call = (toolName, toolArgs = {}) => {
     const result = spawnSync(process.execPath, [guard], {
       input: JSON.stringify({
         sessionId: 'probe-gate',
-        cwd: root,
+        cwd: workspace,
         toolName,
         toolArgs
       }),
@@ -24,13 +31,14 @@ function makeRunner() {
     assert.equal(result.status, 0, result.stderr)
     return JSON.parse(result.stdout || '{}')
   }
+  return { call, workspace }
 }
 
 // The cheap remediation loop, enforced: execution → edits → probe each spec
 // with voidr_explore → only then another execution. The first execution of a
 // session is always free.
 test('a re-execution after spec edits requires an explore probe first', () => {
-  const call = makeRunner()
+  const { call, workspace } = makeRunner()
 
   // First execution of the session: free.
   assert.deepEqual(call('voidr-voidr_create_validation_execution', {}), {})
@@ -38,7 +46,7 @@ test('a re-execution after spec edits requires an explore probe first', () => {
   // Specs are edited after the run...
   assert.deepEqual(
     call('replace_string_in_file', {
-      filePath: 'd:\\repo\\modules\\a\\confi-09.spec.js',
+      filePath: join(workspace, 'modules', 'a', 'confi-09.spec.js'),
       newString: 'await expect(x).toBeVisible()'
     }),
     {}
@@ -58,18 +66,18 @@ test('a re-execution after spec edits requires an explore probe first', () => {
 })
 
 test('re-running without new edits never blocks', () => {
-  const call = makeRunner()
+  const { call } = makeRunner()
   assert.deepEqual(call('voidr-voidr_create_validation_execution', {}), {})
   // No edits in between: an immediate re-run (e.g. flake retry) stays free.
   assert.deepEqual(call('voidr-voidr_create_validation_execution', {}), {})
 })
 
 test('edits to non-spec files do not arm the gate', () => {
-  const call = makeRunner()
+  const { call, workspace } = makeRunner()
   assert.deepEqual(call('voidr-voidr_create_validation_execution', {}), {})
   assert.deepEqual(
     call('replace_string_in_file', {
-      filePath: 'd:\\repo\\helpers\\auth.js',
+      filePath: join(workspace, 'helpers', 'auth.js'),
       newString: 'force: true'
     }),
     {}

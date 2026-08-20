@@ -45,17 +45,19 @@ and which trade the person wants is theirs to make.
 
 Offer exactly two options, with the platform first as the suggestion:
 
-- **Na plataforma (sugerido)** — probes through `voidr_explore`, on the same
-  browser, network, and environment the Test Plan will actually run on. Slower
-  per iteration; what passes here passes there.
-- **Local** — probes with Playwright on this machine. Fast, and the answer is
-  about *this* machine: a different browser build, no platform network path, and
-  environment values pulled locally. A pass here is not evidence of a pass on
-  the platform.
+- **Pelo fluxo (sugerido)** — probes through `voidr_explore`. It runs Playwright
+  on this machine like any other probe, so the browser is this machine's; what
+  it buys is the flow: the selected environment's `baseUrl`, the credentials
+  from `project.json`, per-test stdout and traces returned as evidence, and a
+  run that never counts as validation.
+- **Local** — Playwright invoked directly. Same browser, none of the rest: you
+  wire the URL and the credentials yourself, and the output is whatever the
+  terminal printed.
 
-Say that last sentence when the answer is Local. It is the whole cost of the
-choice, and it is invisible until a case fails on the platform after passing
-here.
+Say this either way, because it is true of BOTH answers: neither mode is a
+verdict. Both run on this machine, so a green probe is not evidence that the
+case passes on the platform. The only platform result is a validation run
+through `/voidr-execute`.
 
 Two things do not change with the answer, because the plan runs on the platform
 either way: `voidr_build` stays the build gate, and any validation run is a

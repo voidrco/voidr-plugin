@@ -18,11 +18,14 @@ test('where the checking loop runs is the user\'s choice, asked once', () => {
   assert.match(section, /ask_user/)
   assert.match(section, /voidr_explore/)
   assert.match(section, /\bLocal\b/)
+  // The suggested option is not 'the platform': voidr_explore runs here too.
+  assert.doesNotMatch(section, /on the same\s+browser, network, and environment/)
 
   // Local shortens the loop; it does not stand in for the platform verdict.
   assert.match(section, /voidr_build/)
   assert.match(section, /voidr-execute/)
-  assert.match(section, /not evidence of a pass on\s+the platform/)
+  assert.match(section, /neither mode is a\s+verdict/)
+  assert.match(section, /Both run on this machine/)
 
   // And the report has to say which mode produced the result.
   assert.match(section, /closing report/)

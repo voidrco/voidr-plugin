@@ -224,44 +224,44 @@ is a separate, explicit step, never bundled into a deploy:
 5. Read the plan back and report the persisted tag of each one. If a case did
    not move, name it and stop.
 
-### A failing case is not automatically ineligible
+### LIVE is where an automated case is supposed to end up
 
-Eligibility follows the **cause** of the failure, never the pass/fail count. A
-test that fails because the product is broken is a test doing its job, and
-holding it at `DEV` is the one outcome that guarantees nobody finds out — `DEV`
-is outside monitoring, so the defect it proves goes unwatched.
+`PENDING` and `DEV` are outside monitoring. A case parked there is a case nobody
+is watching, which is the opposite of the reason it was automated. So `LIVE` is
+the destination by default, for every case that was deployed — not a reward a
+case earns by being green.
 
-Read the cause from `/voidr-failure-analysis`, which labels it, and treat the
-labels differently:
+That includes cases that are failing. A red `LIVE` case reports something; a
+`DEV` case reports nothing at all.
 
-| Cause | Promotion |
+Read the cause from `/voidr-failure-analysis` when there is a failure. It no
+longer decides eligibility — it decides what you SAY when proposing the
+promotion, so the person confirming knows what the red will mean:
+
+| Cause | What to say alongside the proposal |
 | --- | --- |
-| **Application defect** | Eligible. The case is correct and proves a real bug. |
-| **Outdated test** | Never. The spec is wrong; fix it first. |
-| **Test-data gap** | Never. The case cannot prove anything yet. |
-| **Environment instability** | Not yet. Re-run before deciding. |
-| **Indeterminate** | Not yet. The evidence does not support a decision. |
+| **Application defect** | The case is right and the product is broken. Red is the finding. Record the defect so the red carries its explanation. |
+| **Environment instability** | The failure was not about the product. Monitoring will show whether it repeats. |
+| **Indeterminate** | The evidence did not settle the cause. Monitoring is how it gets settled. |
+| **Outdated test** | The SPEC is what is wrong. Promoting publishes a broken expectation as if it were a finding — say so plainly and recommend fixing the spec first. |
+| **Test-data gap** | Same: the case cannot prove anything until the data exists. |
 
-Never infer `Application defect` from a red run. It requires the evidence the
-analysis produces — the response, exception, or behavior that contradicts the
-approved AAA — and without that evidence the case is `Indeterminate`, not
-eligible.
+The last two still go `LIVE` when the user wants them to. Say the cost once, in
+one sentence, and do not repeat the objection.
 
-Before promoting a case that is failing on an application defect:
+A case can only be promoted after it reached `latest` — that is
+`voidr_release_deploy_live`, not a validation deploy. A validation candidate
+leaves `isAutomated: false`, and a tag on a case the platform does not consider
+automated changes nothing.
 
-1. Say which defect it proves, and that the case will be red under monitoring
-   from the moment it goes `LIVE` — that is the intent, not an accident.
-2. Record it with `/voidr-failure-analysis`, so the red result has a defect
-   attached instead of looking like an unexplained regression to whoever reads
-   the plan next.
-3. Ask for confirmation naming the case and the defect together.
+Propose the whole batch at once, with one confirmation for all of it, naming the
+cases whose failures have a cause worth hearing. Never promote silently: the
+default is what you OFFER, not what you do without asking.
 
-Then take the five steps above, ending in the read-back.
-
-When the user asks to promote a failing case without a diagnosis, do not
-refuse and do not promote: run the analysis first and come back with the cause.
-Promoting a case whose failure is really an `Outdated test` publishes a broken
-expectation as if it were a finding.
+When a case is failing and no diagnosis was run, run `/voidr-failure-analysis`
+before proposing the promotion — not to decide whether to offer it, but so the
+proposal carries the cause. If the analysis cannot run, offer the promotion
+anyway and say the cause is unknown.
 
 ## Tool routing
 

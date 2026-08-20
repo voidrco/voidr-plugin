@@ -114,16 +114,18 @@ test('failures are grouped by signature and re-runs are scoped', () => {
   assert.match(skill.replace(/\n/g, ' '), /only the previously failing targets/i)
 })
 
-test('promotion eligibility is decided by cause, not by a red run', () => {
+test('LIVE is the default destination, not a reward for being green', () => {
   const section = skill.slice(skill.indexOf('## Promoting a case to LIVE'))
 
-  // The old rule disqualified every failing case, which held a case proving a
-  // real defect at DEV — outside the monitoring that would have surfaced it.
-  assert.doesNotMatch(
-    section,
-    /whose validation run failed is never offered for promotion/
-  )
+  // The rule this replaces held a case at DEV whenever the cause was anything
+  // but a confirmed application defect — including Indeterminate, which is what
+  // an unfinished diagnosis produces. DEV is outside monitoring, so that is the
+  // state in which nobody finds out anything.
+  assert.doesNotMatch(section, /Eligible\. The case is correct/)
+  assert.match(section, /destination by default/)
 
+  // The cause still matters: it decides what gets SAID, not whether it is
+  // offered.
   for (const cause of [
     'Application defect',
     'Outdated test',
@@ -131,14 +133,12 @@ test('promotion eligibility is decided by cause, not by a red run', () => {
     'Environment instability',
     'Indeterminate'
   ]) {
-    assert.ok(
-      section.includes(cause),
-      `promotion rules must say what happens for ${cause}`
-    )
+    assert.ok(section.includes(cause), `must still address ${cause}`)
   }
+  assert.match(section, /publishes a broken\s+expectation/)
 
-  // Eligible is not the same as automatic: the defect has to be recorded and
-  // the user has to confirm with it named.
-  assert.match(section, /\/voidr-failure-analysis/)
-  assert.match(section, /Never infer `Application defect` from a red run/)
+  // Default is what gets offered, never what happens unasked.
+  assert.match(section, /Never promote silently/)
+  assert.match(section, /voidr_release_deploy_live/)
 })
+

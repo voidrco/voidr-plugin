@@ -57,6 +57,10 @@ recordEnvironmentSelectionRequest(payload, toolName, toolArgs)
 enforceExplicitEnvironmentSelection(payload, toolName, toolArgs)
 enforceExplicitWorkspaceRoot(payload, toolName, toolArgs)
 enforceTestSpecContentPolicy(rawToolName, toolArgs)
+recordSpecEditForProbe(payload, rawToolName, toolArgs)
+enforceProbeBeforeReexecution(payload, toolName)
+recordExploreProbe(payload, toolName)
+recordValidationExecutionAttempt(payload, toolName)
 recordSmokeAttempt(payload, toolName)
 
 const protectedCredential =
@@ -703,6 +707,60 @@ function enforcePostSmokeStop(hookPayload, rawName, canonicalName) {
     'post-build-stop',
     `Blocked by Voidr workflow: after voidr_build, stop and report its exact result. Do not inspect files, edit specs, retry the build, or diagnose by guessing in the same turn. Wait for the user to authorize the investigation or correction in a new chat message or an ask_user answer before continuing. When you ask for that authorization, quote an accepted phrase verbatim — “corrige e roda de novo” or “roda o build de novo” — never a paraphrase of your own (a wording the gate does not recognize leaves the user typing authorizations that never unlock anything).${fallback}`
   )
+}
+
+// Full platform executions are the most expensive validation step, and the
+// observed anti-pattern is running one to check every one-spec fix: each run
+// converts a single test while the shared root cause survives. These four
+// hooks encode the cheap loop instead — after an execution, changed specs
+// must be probed individually with voidr_explore before the next execution.
+// The first execution of a session is always free.
+function recordSpecEditForProbe(hookPayload, rawName, args) {
+  if (!isGenericWriteTool(rawName)) return
+  const paths = [
+    ...collectPathArguments(args),
+    ...collectPatchPathsFromValue(args)
+  ]
+  if (!paths.some(path => /\.spec\.[cm]?[jt]sx?$/i.test(path))) return
+  updateSessionState(hookPayload, { specEditedAt: Date.now() })
+}
+
+function enforceProbeBeforeReexecution(hookPayload, canonicalName) {
+  if (
+    canonicalName !== 'voidr_create_validation_execution' &&
+    canonicalName !== 'executions_create_execution'
+  ) {
+    return
+  }
+  const state = readSessionState(hookPayload)
+  if (!Number.isFinite(state.lastValidationExecutionAt)) return
+  const edited = state.specEditedAt
+  if (!Number.isFinite(edited) || edited < state.lastValidationExecutionAt) {
+    return
+  }
+  const probed =
+    Number.isFinite(state.exploreProbeAt) && state.exploreProbeAt > edited
+  if (probed) return
+  denyGated(
+    hookPayload,
+    'probe-before-reexecution',
+    'Blocked by Voidr workflow: specs changed since the last platform execution, and a full execution is the most expensive way to validate a fix. First address the shared root cause, then probe each changed spec in isolation with voidr_explore, and only create a new execution once the probes pass.'
+  )
+}
+
+function recordExploreProbe(hookPayload, canonicalName) {
+  if (canonicalName !== 'voidr_explore') return
+  updateSessionState(hookPayload, { exploreProbeAt: Date.now() })
+}
+
+function recordValidationExecutionAttempt(hookPayload, canonicalName) {
+  if (
+    canonicalName !== 'voidr_create_validation_execution' &&
+    canonicalName !== 'executions_create_execution'
+  ) {
+    return
+  }
+  updateSessionState(hookPayload, { lastValidationExecutionAt: Date.now() })
 }
 
 function recordSmokeAttempt(hookPayload, name) {

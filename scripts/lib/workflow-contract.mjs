@@ -17,7 +17,7 @@ export const States = Object.freeze({
   TEST_REPOSITORY_SELECTED: 'TEST_REPOSITORY_SELECTED',
   REPOSITORY_LINK_VALIDATED: 'REPOSITORY_LINK_VALIDATED',
   LOCAL_VALIDATION_PASSED: 'LOCAL_VALIDATION_PASSED',
-  PR_MERGE_VERIFIED: 'PR_MERGE_VERIFIED',
+  DEPLOY_SOURCE_VERIFIED: 'DEPLOY_SOURCE_VERIFIED',
   DEPLOY_APPROVED: 'DEPLOY_APPROVED',
   RELEASE_LATEST_VERIFIED: 'RELEASE_LATEST_VERIFIED',
   DEPLOY_SYNC_VERIFIED: 'DEPLOY_SYNC_VERIFIED',
@@ -330,48 +330,40 @@ export function transition(workflow, event) {
       requireState(next, States.REPOSITORY_LINK_VALIDATED)
       next.state = States.LOCAL_VALIDATION_PASSED
       next.prompt =
-        'Qual é o PR destes testes já mergeado na branch principal? O deploy permanece bloqueado até eu verificar o merge.'
+        'Os testes estão validados localmente. Posso verificar o commit que será publicado?'
       return next
 
-    case 'PR_MERGE_VERIFIED':
+    case 'DEPLOY_SOURCE_VERIFIED':
       requireState(next, States.LOCAL_VALIDATION_PASSED)
-      requireMergedPullRequest(event)
-      next.context.pullRequest = {
-        number: event.pullRequestNumber,
-        url: event.pullRequestUrl,
-        defaultBranch: event.defaultBranch,
-        mergedAt: event.mergedAt
-      }
-      next.context.mergeCommitSha = event.mergeCommitSha
-      next.state = States.PR_MERGE_VERIFIED
+      requireDeployableSource(event)
+      next.context.commitSha = event.commitSha
+      next.state = States.DEPLOY_SOURCE_VERIFIED
       next.prompt =
         'Posso publicar a release imutável deste commit e promovê-la para latest na Voidr?'
       return next
 
     case 'DEPLOY_APPROVED':
-      requireState(next, States.PR_MERGE_VERIFIED)
+      requireState(next, States.DEPLOY_SOURCE_VERIFIED)
       next.context.deployConfirmed = true
       next.state = States.DEPLOY_APPROVED
       next.actions.push({
-        tool: 'voidr_release_deploy_merged_pr',
+        tool: 'voidr_release_deploy_live',
         mutation: true,
-        pullRequestNumber: next.context.pullRequest.number,
-        mergeCommitSha: next.context.mergeCommitSha
+        commitSha: next.context.commitSha
       })
       return next
 
     case 'RELEASE_DEPLOYED':
       requireState(next, States.DEPLOY_APPROVED)
       const releaseVerified =
-        event.prMerged === true &&
         event.immutableCandidateVerified === true &&
         event.latestVerified === true &&
-        event.mergeCommitSha === next.context.mergeCommitSha &&
+        event.commitSha === next.context.commitSha &&
         /^[a-f0-9]{64}$/.test(String(event.codebaseVersion || '')) &&
         event.latestCodebaseVersion === event.codebaseVersion
       if (!releaseVerified) {
         next.prompt =
-          'O deploy não terminou: PR, release imutável e latest precisam apontar para o mesmo release. A execução permanece bloqueada.'
+          'O deploy não terminou: a release imutável e o latest precisam apontar para o mesmo commit. A execução permanece bloqueada.'
         return next
       }
       next.context.codebaseVersion = event.codebaseVersion
@@ -427,19 +419,15 @@ function requireState(workflow, expected) {
   }
 }
 
-function requireMergedPullRequest(event) {
+function requireDeployableSource(event) {
   if (
-    event.prMerged !== true ||
-    event.state !== 'MERGED' ||
-    !event.mergedAt ||
-    event.baseBranch !== event.defaultBranch ||
-    event.localHeadSha !== event.mergeCommitSha ||
-    event.mergeCommitOnRemoteDefault !== true ||
+    event.localHeadSha !== event.commitSha ||
+    event.commitOnRemote !== true ||
     event.worktreeClean !== true ||
-    !/^[a-f0-9]{40}$/i.test(String(event.mergeCommitSha || ''))
+    !/^[a-f0-9]{40}$/i.test(String(event.commitSha || ''))
   ) {
     throw new Error(
-      'Deploy requires a clean repository at the exact PR commit already merged into the default branch.'
+      'Deploy requires a clean repository at a commit that is present on the remote.'
     )
   }
 }

@@ -129,7 +129,7 @@ if (isShell) {
     )
   if (forbiddenDeploy || legacyMutableDeploy) {
     deny(
-      `Blocked by Voidr policy: legacy mutable deployment bypasses the merged-PR and immutable latest release gate.`
+      `Blocked by Voidr policy: legacy mutable deployment bypasses the immutable latest release gate.`
     )
   }
   const fragment = policy.forbiddenShellFragments.find(value =>
@@ -582,7 +582,7 @@ function enforcePostSmokeStop(hookPayload, rawName, canonicalName) {
   }
   if (
     [
-      'voidr_release_deploy_merged_pr',
+      'voidr_release_deploy_live',
       'voidr_release_deploy_validation',
       'voidr_create_validation_execution',
       'voidr_workspace_publish_tests'
@@ -863,7 +863,7 @@ function enforceSelectedTestPlanIdentity(hookPayload, canonicalName, args) {
       'voidr_workspace_scaffold_test_cases',
       'voidr_build',
       'voidr_explore',
-      'voidr_release_deploy_merged_pr',
+      'voidr_release_deploy_live',
       'voidr_release_deploy_validation',
       'voidr_create_validation_execution'
     ].includes(canonicalName)

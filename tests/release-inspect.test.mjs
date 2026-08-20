@@ -26,7 +26,7 @@ function createCheckout(workspace) {
   return repositoryPath
 }
 
-function fakeInspectRun({ pulls, dirty = false }) {
+function fakeInspectRun({ pushed = true, dirty = false } = {}) {
   return async (file, args) => {
     if (file === 'git' && args.includes('get-url')) {
       return { stdout: `${repositoryUrl}\n` }
@@ -45,31 +45,21 @@ function fakeInspectRun({ pulls, dirty = false }) {
     if (file === 'git' && args[0] === 'status') {
       return { stdout: dirty ? ' M modules/x.spec.js\n' : '' }
     }
-    if (file === 'gh' && args[0] === 'api') {
-      return { stdout: JSON.stringify(pulls) }
+    if (file === 'git' && args[0] === 'branch') {
+      return { stdout: pushed ? '  origin/feat/new-tests\n' : '' }
     }
     return { stdout: '' }
   }
 }
 
-test('discovers plan, repository URL, and merged PR without asking the user', async () => {
+test('discovers plan, repository URL, and the commit to release without asking the user', async () => {
   const workspace = mkdtempSync(join(tmpdir(), 'voidr-inspect-'))
   const repositoryPath = createCheckout(workspace)
 
   const result = await inspectReleaseReadiness({
     repositoryPath,
     workspaceRoot: workspace,
-    run: fakeInspectRun({
-      pulls: [
-        {
-          number: 12,
-          html_url: 'https://github.com/voidrco/voidr-tp-inspect/pull/12',
-          merged_at: '2026-07-30T12:00:00Z',
-          merge_commit_sha: headSha,
-          base: { ref: 'main' }
-        }
-      ]
-    })
+    run: fakeInspectRun()
   })
 
   assert.equal(result.ready, true)
@@ -78,24 +68,41 @@ test('discovers plan, repository URL, and merged PR without asking the user', as
     result.repositoryUrl,
     'https://github.com/voidrco/voidr-tp-inspect'
   )
-  assert.equal(result.mergedPullRequest.number, 12)
-  assert.equal(result.mergedPullRequest.headIsMergeCommit, true)
-  assert.match(result.next, /voidr_release_deploy_merged_pr/)
+  assert.equal(result.headSha, headSha)
+  assert.equal(result.commitOnRemote, true)
+  assert.match(result.next, /voidr_release_deploy_live/)
   assert.match(result.next, /Do not ask the user/)
 })
 
-test('reports the missing merged PR with actionable guidance', async () => {
-  const workspace = mkdtempSync(join(tmpdir(), 'voidr-inspect-nopr-'))
+// A commit on any remote branch is releasable: readiness never looks for a
+// pull request, merged or otherwise.
+test('a commit on a feature branch is ready to release', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-inspect-branch-'))
   const repositoryPath = createCheckout(workspace)
 
   const result = await inspectReleaseReadiness({
     repositoryPath,
     workspaceRoot: workspace,
-    run: fakeInspectRun({ pulls: [] })
+    run: fakeInspectRun({ pushed: true })
+  })
+
+  assert.equal(result.ready, true)
+  assert.doesNotMatch(result.next, /pull request/i)
+})
+
+test('reports an unpushed commit with actionable guidance', async () => {
+  const workspace = mkdtempSync(join(tmpdir(), 'voidr-inspect-local-'))
+  const repositoryPath = createCheckout(workspace)
+
+  const result = await inspectReleaseReadiness({
+    repositoryPath,
+    workspaceRoot: workspace,
+    run: fakeInspectRun({ pushed: false })
   })
 
   assert.equal(result.ready, false)
-  assert.equal(result.mergedPullRequest, null)
+  assert.equal(result.commitOnRemote, false)
+  assert.match(result.next, /not on the remote/)
   assert.match(result.next, /voidr_workspace_publish_tests/)
 })
 
@@ -106,18 +113,7 @@ test('reports a dirty worktree instead of proceeding', async () => {
   const result = await inspectReleaseReadiness({
     repositoryPath,
     workspaceRoot: workspace,
-    run: fakeInspectRun({
-      dirty: true,
-      pulls: [
-        {
-          number: 12,
-          html_url: 'https://github.com/voidrco/voidr-tp-inspect/pull/12',
-          merged_at: '2026-07-30T12:00:00Z',
-          merge_commit_sha: headSha,
-          base: { ref: 'main' }
-        }
-      ]
-    })
+    run: fakeInspectRun({ dirty: true })
   })
 
   assert.equal(result.ready, false)

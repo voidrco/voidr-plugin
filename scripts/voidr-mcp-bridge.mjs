@@ -17,7 +17,7 @@ import {
   validateProvisionedRepositorySelection,
   validateRepositorySelection
 } from './lib/workspace.mjs'
-import { deployMergedPullRequest } from './lib/release-deploy.mjs'
+import { deployRelease } from './lib/release-deploy.mjs'
 import {
   createValidationExecution,
   deployValidationCandidate
@@ -352,7 +352,7 @@ const localTools = [
   {
     name: 'voidr_release_inspect',
     description:
-      'Read-only release readiness inspection of the selected test repository: reads project.json (Test Plan/organization/application IDs), the Git origin URL, the default branch, HEAD and worktree state, and locates the merged pull request for the current HEAD via gh. Call this instead of asking the user for a Test Plan ID, repository URL, or PR number. Pass workspaceRoot with the absolute path of the open VS Code workspace folder.',
+      'Read-only release readiness inspection of the selected test repository: reads project.json (Test Plan/organization/application IDs), the Git origin URL, the default branch, HEAD and worktree state, and whether the current commit is present on the remote. Call this instead of asking the user for a Test Plan ID or repository URL. Pass workspaceRoot with the absolute path of the open VS Code workspace folder.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -365,7 +365,7 @@ const localTools = [
   {
     name: 'voidr_workspace_publish_tests',
     description:
-      'Publish the implemented tests from the linked checkout after the user explicitly authorized it in chat: create or reuse a feature branch, commit, push with an explicit refspec, and open (or reuse) a pull request to the default branch. Runs outside the Copilot shell sandbox with the user Git credentials. Pushing to the default branch is refused; the immutable deploy requires a merged pull request.',
+      'Publish the implemented tests from the linked checkout after the user explicitly authorized it in chat: create or reuse a feature branch, commit, push with an explicit refspec, and open (or reuse) a pull request to the default branch. Runs outside the Copilot shell sandbox with the user Git credentials. Pushing to the default branch is refused.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -384,9 +384,9 @@ const localTools = [
     }
   },
   {
-    name: 'voidr_release_deploy_merged_pr',
+    name: 'voidr_release_deploy_live',
     description:
-      'Build, upload, promote, and verify an immutable Voidr release only when the selected test repository is clean and exactly at a PR commit already merged into the GitHub default branch. The tool reports completion only after latest points to that immutable codebaseVersion.',
+      'Build, upload, promote, and verify an immutable Voidr LIVE release from the commit the selected test repository is on. Requires a clean worktree and that the commit is present on the remote; no pull request is required. The tool reports completion only after latest points to that immutable codebaseVersion.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -395,15 +395,9 @@ const localTools = [
           type: 'string',
           pattern: '^https://github\\.com/[^/]+/[^/]+(?:\\.git)?$'
         },
-        pullRequestNumber: { type: 'integer', minimum: 1 },
         testPlanId: { type: 'string', pattern: '^[a-fA-F0-9]{24}$' }
       },
-      required: [
-        'repositoryPath',
-        'repositoryUrl',
-        'pullRequestNumber',
-        'testPlanId'
-      ]
+      required: ['repositoryPath', 'repositoryUrl', 'testPlanId']
     }
   },
   {
@@ -620,7 +614,7 @@ async function callTool(params) {
   if (name === 'executions_create_execution') {
     if (!planReadAt || !countsReadAt) {
       throw new Error(
-        'Blocked by Voidr workflow: an execution requires the sync verification first. Read the plan with test_plans_get_test_plan and the counts with test_plans_get_test_counts, confirm every selected case is automated, and only then create the execution. If cases are not automated, the fix is deploying the merged PR with voidr_release_deploy_merged_pr — never re-creating modules, suites, or cases.'
+        'Blocked by Voidr workflow: an execution requires the sync verification first. Read the plan with test_plans_get_test_plan and the counts with test_plans_get_test_counts, confirm every selected case is automated, and only then create the execution. If cases are not automated, the fix is deploying the current commit with voidr_release_deploy_live — never re-creating modules, suites, or cases.'
       )
     }
     const result = await remote.callTool(name, args)
@@ -632,7 +626,7 @@ async function callTool(params) {
           ...(result.content || []),
           {
             type: 'text',
-            text: 'The selected cases exist in the Test Plan but are not deployed (not automated). Do NOT re-create modules, suites, or cases — that never fixes this. Merge the tests pull request, run voidr_release_deploy_merged_pr, verify sync with test_plans_get_test_plan and test_plans_get_test_counts, then retry the execution.'
+            text: 'The selected cases exist in the Test Plan but are not deployed (not automated). Do NOT re-create modules, suites, or cases — that never fixes this. Push the tests, run voidr_release_deploy_live, verify sync with test_plans_get_test_plan and test_plans_get_test_counts, then retry the execution.'
           }
         ]
       }
@@ -762,7 +756,7 @@ async function callStructureTool(name, args) {
   }
   if (executionNeedsDeploy) {
     throw new Error(
-      'Blocked by Voidr workflow: the platform already reported that the cases exist but are not automated (not deployed). Creating modules, suites, or cases again will never fix that and duplicates the plan. Merge the tests pull request, run voidr_release_deploy_merged_pr, verify sync, and retry the execution.'
+      'Blocked by Voidr workflow: the platform already reported that the cases exist but are not automated (not deployed). Creating modules, suites, or cases again will never fix that and duplicates the plan. Push the tests, run voidr_release_deploy_live, verify sync, and retry the execution.'
     )
   }
   enforceKnownStructureRefs(name, planId, args)
@@ -1072,7 +1066,7 @@ const REPOSITORY_DEPENDENT_TOOLS = new Set([
   'voidr_build',
   'voidr_explore',
   'voidr_workspace_publish_tests',
-  'voidr_release_deploy_merged_pr',
+  'voidr_release_deploy_live',
   'voidr_release_deploy_validation',
   'voidr_create_validation_execution',
   'executions_create_execution'
@@ -1787,11 +1781,10 @@ async function callLocal(name, args) {
           createPullRequest: args.createPullRequest !== false
         })
       )
-    case 'voidr_release_deploy_merged_pr': {
-      const deployed = await deployMergedPullRequest({
+    case 'voidr_release_deploy_live': {
+      const deployed = await deployRelease({
         repositoryPath: String(args.repositoryPath || ''),
         repositoryUrl: String(args.repositoryUrl || ''),
-        pullRequestNumber: Number(args.pullRequestNumber),
         testPlanId: String(args.testPlanId || '')
       })
       if (deployed?.completed) executionNeedsDeploy = false

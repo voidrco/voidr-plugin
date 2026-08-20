@@ -83,7 +83,7 @@
     "voidr_workspace_scaffold_test_cases",
     "voidr_build",
     "voidr_workspace_publish_tests",
-    "voidr_release_deploy_merged_pr",
+    "voidr_release_deploy_live",
     "voidr_release_deploy_validation",
     "voidr_create_validation_execution"
   ],
@@ -103,7 +103,7 @@
     "voidr_explore",
     "voidr_release_inspect",
     "voidr_workspace_publish_tests",
-    "voidr_release_deploy_merged_pr",
+    "voidr_release_deploy_live",
     "voidr_release_deploy_validation",
     "voidr_create_validation_execution"
   ],

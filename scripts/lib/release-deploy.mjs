@@ -4,25 +4,21 @@ import { runCommand } from './command.mjs'
 import { validateProvisionedRepositorySelection } from './workspace.mjs'
 import {
   assertCompletedImmutableDeployment,
-  assertMergedPullRequestEvidence,
+  assertDeployableSourceEvidence,
   latestCodebaseVersion
 } from './release-contract.mjs'
 import { VoidrRestClient } from './voidr-rest.mjs'
 import { voidrCliEnvironment } from './credentials.mjs'
 
-export async function deployMergedPullRequest({
+export async function deployRelease({
   repositoryPath,
   repositoryUrl,
-  pullRequestNumber,
   testPlanId,
   workspaceRoot = process.cwd(),
   restClient = new VoidrRestClient(),
   cliEnvironment,
   run = runCommand
 }) {
-  if (!Number.isInteger(Number(pullRequestNumber)) || Number(pullRequestNumber) < 1) {
-    throw new Error('A valid pull request number is required.')
-  }
   if (!/^[a-f0-9]{24}$/i.test(String(testPlanId || ''))) {
     throw new Error('A valid Test Plan ID is required.')
   }
@@ -46,35 +42,11 @@ export async function deployMergedPullRequest({
     throw new Error('project.json does not match the explicitly selected Test Plan.')
   }
 
-  let source = await inspectMergedSource({
+  const sourceEvidence = await inspectDeploySource({
     repositoryPath: selected.path,
-    pullRequestNumber: Number(pullRequestNumber),
     run
   })
-  // A clean checkout that is merely behind the merged PR commit is healed
-  // here: inspectMergedSource already fetched with the user's credentials
-  // (the bridge runs outside the sandbox), so a fast-forward to the exact
-  // merge commit is safe and deterministic. Divergent or dirty checkouts
-  // still fail closed.
-  if (
-    source.state === 'MERGED' &&
-    source.worktreeClean &&
-    source.mergeCommitOnRemoteDefault &&
-    source.mergeCommitSha &&
-    source.localHeadSha !== source.mergeCommitSha &&
-    (await fastForwardToMergeCommit({
-      repositoryPath: selected.path,
-      source,
-      run
-    }))
-  ) {
-    source = await inspectMergedSource({
-      repositoryPath: selected.path,
-      pullRequestNumber: Number(pullRequestNumber),
-      run
-    })
-  }
-  const merged = assertMergedPullRequestEvidence(source)
+  const deployed = assertDeployableSourceEvidence(sourceEvidence)
   const effectiveCliEnvironment =
     cliEnvironment || voidrCliEnvironment()
 
@@ -83,13 +55,9 @@ export async function deployMergedPullRequest({
     timeout: 180_000,
     env: effectiveCliEnvironment
   })
-  assertSameMergedSource(
-    merged,
-    await inspectMergedSource({
-      repositoryPath: selected.path,
-      pullRequestNumber: Number(pullRequestNumber),
-      run
-    })
+  assertSameSource(
+    deployed,
+    await inspectDeploySource({ repositoryPath: selected.path, run })
   )
   const candidateOutput = await run(
     'npx',
@@ -110,13 +78,9 @@ export async function deployMergedPullRequest({
   if (manifest.codebaseVersion !== candidate.codebaseVersion) {
     throw new Error('Candidate output does not match the built immutable manifest.')
   }
-  assertSameMergedSource(
-    merged,
-    await inspectMergedSource({
-      repositoryPath: selected.path,
-      pullRequestNumber: Number(pullRequestNumber),
-      run
-    })
+  assertSameSource(
+    deployed,
+    await inspectDeploySource({ repositoryPath: selected.path, run })
   )
 
   // `deploy-latest` publishes the SAME build the candidate was cut from: it
@@ -159,8 +123,7 @@ export async function deployMergedPullRequest({
     )
   }
   const completed = assertCompletedImmutableDeployment({
-    prMerged: true,
-    mergeCommitSha: merged.mergeCommitSha,
+    commitSha: deployed.commitSha,
     immutableCandidateVerified: true,
     codebaseVersion: candidate.codebaseVersion,
     latestVerified: currentVersion === candidate.codebaseVersion,
@@ -169,7 +132,7 @@ export async function deployMergedPullRequest({
 
   return {
     completed: true,
-    pullRequest: merged,
+    source: deployed,
     release: {
       ...completed,
       storagePrefix: candidate.prefix || null
@@ -177,29 +140,11 @@ export async function deployMergedPullRequest({
   }
 }
 
-async function fastForwardToMergeCommit({ repositoryPath, source, run }) {
-  try {
-    await run('git', ['checkout', source.defaultBranch], {
-      cwd: repositoryPath,
-      timeout: 60_000
-    })
-    await run('git', ['merge', '--ff-only', source.mergeCommitSha], {
-      cwd: repositoryPath,
-      timeout: 60_000
-    })
-    return true
-  } catch {
-    // Not fast-forwardable (diverged local branch); the evidence check
-    // below reports the precise failure.
-    return false
-  }
-}
-
-export async function inspectMergedSource({
-  repositoryPath,
-  pullRequestNumber,
-  run = runCommand
-}) {
+// The source of a release is the commit the checkout is on. No pull request is
+// consulted: the questions are whether the build matches what is committed
+// (clean worktree) and whether anyone else can fetch that commit later (it is
+// on the remote) — the traceability a merged PR used to carry.
+export async function inspectDeploySource({ repositoryPath, run = runCommand }) {
   const repo = JSON.parse(
     (
       await run('gh', ['repo', 'view', '--json', 'nameWithOwner,defaultBranchRef'], {
@@ -207,25 +152,7 @@ export async function inspectMergedSource({
       })
     ).stdout
   )
-  const defaultBranch = repo.defaultBranchRef?.name
-  if (!defaultBranch) throw new Error('Could not resolve the repository default branch.')
-
-  const pr = JSON.parse(
-    (
-      await run(
-        'gh',
-        [
-          'pr',
-          'view',
-          String(pullRequestNumber),
-          '--json',
-          'number,url,state,mergedAt,mergeCommit,baseRefName'
-        ],
-        { cwd: repositoryPath }
-      )
-    ).stdout
-  )
-  await run('git', ['fetch', '--quiet', 'origin', defaultBranch], {
+  await run('git', ['fetch', '--quiet', 'origin'], {
     cwd: repositoryPath,
     timeout: 120_000
   })
@@ -235,37 +162,23 @@ export async function inspectMergedSource({
       cwd: repositoryPath
     })
   ])
-  const mergeCommitSha = pr.mergeCommit?.oid || ''
-  let mergeCommitOnRemoteDefault = false
-  if (mergeCommitSha) {
-    try {
-      await run(
-        'git',
-        [
-          'merge-base',
-          '--is-ancestor',
-          mergeCommitSha,
-          `refs/remotes/origin/${defaultBranch}`
-        ],
-        { cwd: repositoryPath }
-      )
-      mergeCommitOnRemoteDefault = true
-    } catch {
-      mergeCommitOnRemoteDefault = false
-    }
+  const commitSha = head.stdout.trim()
+  let commitOnRemote = false
+  if (commitSha) {
+    const remoteBranches = await run(
+      'git',
+      ['branch', '--remotes', '--contains', commitSha],
+      { cwd: repositoryPath }
+    ).catch(() => ({ stdout: '' }))
+    commitOnRemote = String(remoteBranches.stdout || '').trim() !== ''
   }
 
   return {
-    repository: repo.nameWithOwner,
-    pullRequestNumber: pr.number,
-    pullRequestUrl: pr.url,
-    state: pr.state,
-    mergedAt: pr.mergedAt,
-    defaultBranch,
-    baseBranch: pr.baseRefName,
-    mergeCommitSha,
-    localHeadSha: head.stdout.trim(),
-    mergeCommitOnRemoteDefault,
+    repository: repo.nameWithOwner || null,
+    defaultBranch: repo.defaultBranchRef?.name || null,
+    commitSha,
+    localHeadSha: commitSha,
+    commitOnRemote,
     worktreeClean: status.stdout.trim() === ''
   }
 }
@@ -288,14 +201,10 @@ function parseCandidateOutput(stdout) {
   return parsed
 }
 
-function assertSameMergedSource(expected, evidence) {
-  const actual = assertMergedPullRequestEvidence(evidence)
-  if (
-    actual.pullRequestNumber !== expected.pullRequestNumber ||
-    actual.defaultBranch !== expected.defaultBranch ||
-    actual.mergeCommitSha !== expected.mergeCommitSha
-  ) {
-    throw new Error('Merged PR evidence changed while preparing the release.')
+function assertSameSource(expected, evidence) {
+  const actual = assertDeployableSourceEvidence(evidence)
+  if (actual.commitSha !== expected.commitSha) {
+    throw new Error('The deploy source changed while preparing the release.')
   }
 }
 

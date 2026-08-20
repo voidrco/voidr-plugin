@@ -65,8 +65,8 @@ Routing invariants:
 
 | Tool | Owner skills | Purpose |
 | --- | --- | --- |
-| `voidr_release_inspect` | `voidr-execute` | Rediscover repository, plan, and merged PR from the checkout. Never ask the user for these IDs. |
-| `voidr_release_deploy_merged_pr` | `voidr-execute` | Fast-forward the clean checkout and publish the immutable release (the reviewed promotion path). |
+| `voidr_release_inspect` | `voidr-execute` | Rediscover repository, plan, and the commit to release from the checkout. Never ask the user for these IDs. |
+| `voidr_release_deploy_live` | `voidr-execute` | Publish the immutable LIVE release from the commit the clean checkout is on. |
 | `voidr_release_deploy_validation` | `voidr-execute` | Upload the content-addressed validation candidate WITHOUT promoting it; `latest` stays untouched and no PR/merge is required. Returns the immutable `codebaseVersion`. |
 | `voidr_create_validation_execution` | `voidr-execute` | The only tool that starts a validation execution: SHADOW, pinned to the candidate `codebaseVersion`, outside LIVE governance. |
 | `executions_create_execution` | `voidr-execute` | The only tool that starts a LIVE platform execution, always behind a typed confirmation. |

@@ -234,6 +234,15 @@ Changing a tag is a separate mutation:
 Never set `PENDING`; only automation synchronization can leave that state.
 Never change a tag automatically because a failure occurred.
 
+A failure diagnosed as an **application defect** does not disqualify the case
+from `LIVE`. The opposite: the case proved a real bug, and `DEV` keeps that bug
+outside monitoring. When the user asks about promoting it, say the case is
+eligible, that it will be red under monitoring by design, and that the defect
+should be recorded first so the red result carries its explanation. The other
+causes — outdated test, test-data gap, environment instability, indeterminate —
+are not eligible, because the case has not proved anything about the product
+yet.
+
 ## Tool routing
 
 Use exactly these tools for these needs. Any Voidr MCP tool not listed here is

@@ -210,7 +210,44 @@ is a separate, explicit step, never bundled into a deploy:
 5. Read the plan back and report the persisted tag of each one. If a case did
    not move, name it and stop.
 
-A case whose validation run failed is never offered for promotion.
+### A failing case is not automatically ineligible
+
+Eligibility follows the **cause** of the failure, never the pass/fail count. A
+test that fails because the product is broken is a test doing its job, and
+holding it at `DEV` is the one outcome that guarantees nobody finds out — `DEV`
+is outside monitoring, so the defect it proves goes unwatched.
+
+Read the cause from `/voidr-failure-analysis`, which labels it, and treat the
+labels differently:
+
+| Cause | Promotion |
+| --- | --- |
+| **Application defect** | Eligible. The case is correct and proves a real bug. |
+| **Outdated test** | Never. The spec is wrong; fix it first. |
+| **Test-data gap** | Never. The case cannot prove anything yet. |
+| **Environment instability** | Not yet. Re-run before deciding. |
+| **Indeterminate** | Not yet. The evidence does not support a decision. |
+
+Never infer `Application defect` from a red run. It requires the evidence the
+analysis produces — the response, exception, or behavior that contradicts the
+approved AAA — and without that evidence the case is `Indeterminate`, not
+eligible.
+
+Before promoting a case that is failing on an application defect:
+
+1. Say which defect it proves, and that the case will be red under monitoring
+   from the moment it goes `LIVE` — that is the intent, not an accident.
+2. Record it with `/voidr-failure-analysis`, so the red result has a defect
+   attached instead of looking like an unexplained regression to whoever reads
+   the plan next.
+3. Ask for confirmation naming the case and the defect together.
+
+Then take the five steps above, ending in the read-back.
+
+When the user asks to promote a failing case without a diagnosis, do not
+refuse and do not promote: run the analysis first and come back with the cause.
+Promoting a case whose failure is really an `Outdated test` publishes a broken
+expectation as if it were a finding.
 
 ## Tool routing
 

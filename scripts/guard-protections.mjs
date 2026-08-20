@@ -1,13 +1,12 @@
 #!/usr/bin/env node
 
-// A PreToolUse hook that enforces only the protections: the credential store,
-// .env contents, legacy mutable deploys, and reaching a worker process. None of
-// the workflow choreography that used to travel with them — no typed phrases,
-// no question ordering, no stop-after-build — because that is what made the
-// gates unusable and got them switched off wholesale.
+// A PreToolUse hook with exactly one rule: a worker job is not started from
+// here. None of the workflow choreography that used to travel with it — no
+// typed phrases, no question ordering, no stop-after-build — because that is
+// what made the gates unusable and got them switched off wholesale.
 //
-// Nothing here reads session state. A protection that only applies once a
-// workflow is "active" is not a protection.
+// Nothing here reads session state. A rule that only applies once a workflow
+// is "active" is not a rule: the flag is armed from prompt wording alone.
 
 import { CLAUDE, detectHost } from './lib/host.mjs'
 import { canonicalToolName, loadPolicy } from './lib/policy.mjs'

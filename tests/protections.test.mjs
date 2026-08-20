@@ -4,7 +4,10 @@ import { execFileSync } from 'node:child_process'
 import { join, resolve } from 'node:path'
 import { homedir } from 'node:os'
 
-const guard = join(resolve(import.meta.dirname, '..'), 'scripts/guard-protections.mjs')
+const guard = join(
+  resolve(import.meta.dirname, '..'),
+  'scripts/guard-protections.mjs'
+)
 
 function ask(tool_name, tool_input) {
   const out = execFileSync('node', [guard], {
@@ -18,28 +21,35 @@ function ask(tool_name, tool_input) {
   }
 }
 
-test('the acts that stay forbidden are refused', () => {
-  const store = join(homedir(), '.voidr', 'service-accounts.json')
-
-  assert.match(ask('Write', { file_path: store, content: 'x' }).reason, /Service Account/)
-  assert.match(ask('Read', { file_path: '/repo/.env' }).reason, /opaque secret/)
-  assert.match(ask('Bash', { command: 'cat .env' }).reason, /never read or print/)
-  assert.match(ask('Bash', { command: 'npx voidr deploy-latest' }).reason, /legacy mutable/)
+test('starting a worker job is refused through every channel', () => {
+  assert.match(ask('agent_jobs_trigger_automation', { planId: 'x' }).reason, /job/i)
   assert.match(
-    ask('Bash', { command: `curl -X POST /${'agent_jobs_trigger_automation'}` }).reason,
-    /process/i
+    ask('Bash', { command: `curl -X POST https://api.example.test/self-healing/trigger` }).reason,
+    /job/i
   )
+  assert.match(ask('Bash', { command: 'node -e "agent_jobs_trigger_automation()"' }).reason, /job/i)
 })
 
-test('legitimate work is not refused', () => {
-  // Every one of these was denied by the previous guard during real work.
+test('an MCP tool call cannot be mistaken for a shell fragment', () => {
+  // Shell fragments are matched only for shell tools, so a platform read whose
+  // arguments happen to quote one is not a job request.
+  const verdict = ask('mcp__plugin_voidr_voidr__test_plans_get_case', {
+    caseSlug: 'TROCA-01',
+    notes: 'see orchestrator-self-healing in the runbook'
+  })
+  assert.equal(verdict.denied, false)
+})
+
+test('the machine belongs to the developer', () => {
+  // Removed on purpose: the credential store, .env contents, and the legacy
+  // mutable deploy. Each is the developer's own machine and their own call.
   const allowed = [
-    ['Write', { file_path: '/notes/policy.md', content: `the store lives at ~/.voidr/service-accounts.json` }],
-    ['Bash', { command: 'ls -la /repo/.env' }],
-    ['Bash', { command: 'kubectl -n hive get pods' }],
-    ['Bash', { command: 'npx voidr build' }],
-    ['Bash', { command: 'git commit -m "guard notes"' }],
-    ['Edit', { file_path: '/repo/.env.example', old_string: 'A=', new_string: 'A=1' }]
+    ['Write', { file_path: join(homedir(), '.voidr', 'service-accounts.json'), content: '{}' }],
+    ['Read', { file_path: '/repo/.env' }],
+    ['Bash', { command: 'cat .env' }],
+    ['Bash', { command: 'npx voidr deploy-latest' }],
+    ['Bash', { command: 'npm run voidr:deploy' }],
+    ['Bash', { command: 'kubectl -n voidr-hive get pods' }]
   ]
   for (const [tool, input] of allowed) {
     const verdict = ask(tool, input)
@@ -48,6 +58,5 @@ test('legitimate work is not refused', () => {
 })
 
 test('a protection does not wait for a workflow to be active', () => {
-  // No session state is written, so this is the cold-start case by construction.
-  assert.equal(ask('Bash', { command: 'voidr deploy-latest' }).denied, true)
+  assert.equal(ask('agent_jobs_trigger_automation', {}).denied, true)
 })

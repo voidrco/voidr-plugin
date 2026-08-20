@@ -157,15 +157,60 @@ Always end the report with the execution link:
 
 Track the execution until a terminal state (completed, failed, cancelled):
 
-- in a harness with background monitors, arm one that polls
-  `executions_get_execution` and reports the terminal result;
-- otherwise poll `executions_get_execution` with at least 30 seconds between
-  calls — never a tight loop.
+- **Claude Code**: arm the `Monitor` tool with an until-loop that polls
+  `executions_get_execution`. A bare `sleep` is refused by this host, and
+  working around it with a backgrounded sleep floods the user with completion
+  notices that mean nothing — one observed run spent three consecutive messages
+  explaining that the previous notifications meant nothing.
+- **GitHub Copilot CLI**: poll `executions_get_execution`
+  with at least 30 seconds between calls — never a tight loop.
+
+Name the mechanism by host instead of guessing: offering a fallback the host
+forbids costs several rounds before the flow recovers.
 
 On completion report pass/fail/flaky counts (`playwright_get_execution_analytics`
 when totals are needed) and the execution link. On failures, offer
 `/voidr-failure-analysis` for the evidence-backed diagnosis; never trigger
 self-healing or any Hive process.
+
+## Closing: read the state back before describing it
+
+Never report a governance state you have not just read. Finish every run by
+calling `test_plans_get_test_plan` and reporting each target case's literal
+`current_tag`.
+
+Two different things are called "promoting", and reporting one as the other is
+the failure this section exists to prevent:
+
+| Word | What it moves |
+| --- | --- |
+| **deploy** | `latest` → an immutable `codebaseVersion` (the release) |
+| **promote** | a case's `current_tag`, `DEV` → `LIVE` (governance) |
+
+`voidr_release_deploy_merged_pr` does the first. It leaves every case at `DEV`.
+Observed twice in one session: the run announced "promovido com sucesso …
+governança LIVE" and "todos promovidos em produção" while all eight cases sat
+at `DEV` — the second time after the tags had already been read six times.
+
+Use "deploy" only for the release and "promote" only for a tag, and never write
+`LIVE` in a report without the read-back that proves it.
+
+## Promoting a case to LIVE
+
+A case at `DEV` is deployed but ungoverned: outside monitoring and outside
+self-healing auto-trigger — the reason the plan was automated at all. Promotion
+is a separate, explicit step, never bundled into a deploy:
+
+1. Report each target case's current tag, read from the platform.
+2. Say plainly what `LIVE` changes: the case starts being monitored and becomes
+   eligible for self-healing.
+3. Ask for confirmation with `ask_user`. Never promote on your own initiative.
+4. Confirm `canWrite: true`, then call `test_plans_update_test_case_tag` once
+   per confirmed case.
+5. Read the plan back and report the persisted tag of each one. If a case did
+   not move, name it and stop.
+
+A case whose validation run failed is never offered for promotion.
 
 ## Tool routing
 

@@ -52,6 +52,16 @@ AAA decides WHAT to test; the next two steps decide HOW.
 
 ## 3. Runtime evidence — recorded sessions
 
+**Not optional, and not replaced by the repository.** A repository that already
+carries `selectors/*.json` from earlier cases makes it tempting to skip
+straight to writing — one observed run implemented six cases with a single
+exploration probe and no session call at all. It worked only because those
+cases shared a flow with a case someone had already grounded in evidence; the
+first case of a new flow written that way has nothing behind its selectors.
+
+Consult the sessions for every case whose flow is not already covered by an
+implemented spec. When a flow is covered, say which spec you took it from.
+
 For the manifest's session IDs (prefer sessions whose entry URL matches the
 flow under test):
 
@@ -264,9 +274,25 @@ Two kinds of case must NOT inherit it: the one whose subject IS the login, and
 the one that requires the absence of a session. Those keep driving the UI and
 declare no inherited state — inheriting it would make them assert nothing.
 
-Skip the preflight entirely when no selected case needs a session. A plan that
-never logs in gains nothing from one, and an unnecessary preflight is one more
-thing that can fail before any test runs.
+**The preflight is required whenever any selected case has to be authenticated,
+and absent when none does.** It is not a judgement call:
+
+- at least one selected case needs a session → `preflight/preflight.spec.js`
+  must exist. Create it before implementing the cases.
+- no selected case needs a session → do not create one. A plan that never logs
+  in gains nothing, and an unnecessary preflight is one more thing that can
+  fail before any test runs.
+
+A case "needs a session" when its Arrange assumes the user is already logged
+in, or its Act starts after authentication.
+
+`voidr_build` enforces this: it refuses a build whose cases need a session
+while the repository has no preflight, and names the cases that require it.
+
+The cost of getting it wrong is not theoretical. In one observed run five cases
+each logged in from scratch, and the fifth consecutive login hung for 30s on an
+identity-provider screen already showing "Login e/ou senha inválidos" — the
+provider throttling repeated logins, surfacing as a flaky test.
 
 ## 5. Implement
 

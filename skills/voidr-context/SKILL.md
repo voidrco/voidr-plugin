@@ -50,12 +50,20 @@ with values kept opaque.
 Handle its three non-success answers:
 
 1. **`needsEnvironmentSelection`** — the application has multiple
-   environments. Render the returned listing with `ask_user` and call the
-   tool again with the chosen `environmentSlug`.
-2. **Clone handover message** — the checkout does not exist and the plugin
-   never clones on the user's behalf. Relay the message exactly as it came
-   (commands, destination, authorization guidance), wait for the user to
-   confirm the clone, then call the tool again.
+   environments. Render the returned listing with `ask_user`, carrying each
+   environment's URL in the option description: the person deciding may have
+   never heard of this application, and the domain is what makes the choice
+   obvious. Put the likeliest first — the one the plan already used, otherwise
+   the one named `principal`/`production` — and mark it as the suggestion, so
+   the answer is one keystroke instead of research. Then call the tool again
+   with the chosen `environmentSlug`.
+2. **Clone handover message** — the tool clones the checkout itself; this
+   answer means git could not. Lead with the reason git gave. When the same
+   clone works in the user's own terminal the repository is authorized and this
+   process simply could not reach the credential helper — say that, and ask
+   them to clone it, rather than sending them to request access they already
+   have. Relay the commands and destination as they came, then call the tool
+   again.
 3. **Preparation failure** — report the failing step as the tool named it.
    Do not run Git or setup commands manually. A Node-runtime message follows
    the shared Node contract.

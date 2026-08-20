@@ -459,8 +459,8 @@ assert(
 assert(
   /voidr_workspace_publish_tests/.test(executeSkill) &&
     /voidr_release_inspect/.test(executeSkill) &&
-    /voidr_release_deploy_merged_pr/.test(executeSkill),
-  'Execute skill must keep the reviewed promotion path through the release gates.'
+    /voidr_release_deploy_live/.test(executeSkill),
+  'Execute skill must keep the promotion path through the release gates.'
 )
 assert(
   /Never deploy a\s+repository that did not build/i.test(executeSkill),

@@ -5,10 +5,10 @@ import {
   validateRepositorySelection
 } from './workspace.mjs'
 
-// Read-only release readiness inspection. Everything the deploy needs —
-// Test Plan ID, repository URL, default branch, and the merged PR for the
-// current HEAD — is discovered from the checkout itself (project.json, Git
-// origin, gh) so the model never has to ask the user for identifiers.
+// Read-only release readiness inspection. Everything the deploy needs — Test
+// Plan ID, repository URL, default branch, and the commit being released — is
+// discovered from the checkout itself (project.json, Git origin, gh) so the
+// model never has to ask the user for identifiers.
 export async function inspectReleaseReadiness({
   repositoryPath,
   workspaceRoot,
@@ -56,45 +56,29 @@ export async function inspectReleaseReadiness({
       )
     ).stdout.trim() === ''
 
-  let mergedPullRequest = null
-  if (nameWithOwner) {
+  // A release is traceable when the commit it was built from is on the remote,
+  // so someone else can fetch it later. That is what a merged pull request used
+  // to prove, and it is all that is required now.
+  let commitOnRemote = false
+  if (headSha) {
     try {
-      const pulls = JSON.parse(
-        (
-          await run(
-            'gh',
-            ['api', `repos/${nameWithOwner}/commits/${headSha}/pulls`],
-            { cwd: selected.path, timeout: 60_000 }
-          )
-        ).stdout
+      await run('git', ['fetch', '--quiet', 'origin'], {
+        cwd: selected.path,
+        timeout: 120_000
+      })
+      const remoteBranches = await run(
+        'git',
+        ['branch', '--remotes', '--contains', headSha],
+        { cwd: selected.path }
       )
-      const candidates = (Array.isArray(pulls) ? pulls : []).filter(
-        pull => pull?.merged_at && pull?.base?.ref === defaultBranch
-      )
-      const exact = candidates.find(
-        pull => pull?.merge_commit_sha === headSha
-      )
-      const chosen = exact || candidates[0] || null
-      if (chosen) {
-        mergedPullRequest = {
-          number: chosen.number,
-          url: chosen.html_url,
-          mergedAt: chosen.merged_at,
-          mergeCommitSha: chosen.merge_commit_sha,
-          headIsMergeCommit: chosen.merge_commit_sha === headSha
-        }
-      }
+      commitOnRemote = String(remoteBranches.stdout || '').trim() !== ''
     } catch {
-      // gh may be unauthenticated or offline; report null and let the
-      // guidance below explain the next step.
+      // Offline, or no remote access: report false and let the guidance below
+      // name the next step.
     }
   }
 
-  const ready = Boolean(
-    worktreeClean &&
-      project?.testPlanId &&
-      mergedPullRequest?.headIsMergeCommit
-  )
+  const ready = Boolean(worktreeClean && project?.testPlanId && commitOnRemote)
 
   return {
     repositoryPath: selected.path,
@@ -103,16 +87,14 @@ export async function inspectReleaseReadiness({
     defaultBranch,
     headSha,
     worktreeClean,
-    mergedPullRequest,
+    commitOnRemote,
     ready,
     next: ready
-      ? `Show this summary to the user and, after confirmation, call voidr_release_deploy_merged_pr with testPlanId ${project.testPlanId}, repositoryUrl ${repositoryUrl}, and pullRequestNumber ${mergedPullRequest.number}. Do not ask the user for these values.`
+      ? `Show this summary to the user and, after confirmation, call voidr_release_deploy_live with testPlanId ${project.testPlanId} and repositoryUrl ${repositoryUrl}. Do not ask the user for these values.`
       : !project?.testPlanId
         ? 'project.json is missing or has no testPlanId; prepare the repository through the linked Test Plan before deploying.'
         : !worktreeClean
-          ? 'The worktree has uncommitted changes; publish them through voidr_workspace_publish_tests and merge the pull request before deploying.'
-          : !mergedPullRequest
-            ? 'No merged pull request was found for the current HEAD. Publish the tests with voidr_workspace_publish_tests, ask the user to merge the PR, and inspect again.'
-            : 'HEAD is behind the merged PR commit. Call voidr_release_deploy_merged_pr directly: it fetches with the user credentials and fast-forwards the default branch to the exact merge commit. Never run git pull in the sandboxed terminal.'
+          ? 'The worktree has uncommitted changes; publish them through voidr_workspace_publish_tests before deploying, so the release matches a commit.'
+          : 'The commit at HEAD is not on the remote. Push it through voidr_workspace_publish_tests and inspect again, so the release stays traceable to a commit others can fetch.'
   }
 }

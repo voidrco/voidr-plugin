@@ -66,9 +66,9 @@ Ask (or infer from the request) which mode applies:
 5. **Follow to completion** (see "Monitoring") and read the outcome with
    "Reading a failed run" below.
 6. **Promotion is a separate decision**: when the validation passes and the
-   user wants the version in the main pipeline, that is the reviewed path —
-   publish with `voidr_workspace_publish_tests`, merge by the user, then
-   `voidr_release_inspect` + `voidr_release_deploy_merged_pr`.
+   user wants the version in the main pipeline, publish with
+   `voidr_workspace_publish_tests`, then `voidr_release_inspect` +
+   `voidr_release_deploy_live`.
 
 ## Reading a failed run
 
@@ -178,8 +178,8 @@ self-healing or any Hive process.
   SHADOW pinned to the candidate.
 - `executions_create_execution` — the ONLY LIVE execution write.
 - `voidr_workspace_publish_tests` / `voidr_release_inspect` /
-  `voidr_release_deploy_merged_pr` — the reviewed promotion path, only after
-  a passing validation and an explicit user decision.
+  `voidr_release_deploy_live` — the promotion path, only after a passing
+  validation and an explicit user decision.
 - `executions_get_execution` / `playwright_get_execution_analytics` —
   monitoring and result reporting.
 - `playwright_list_execution_failures` — the per-case failures with their

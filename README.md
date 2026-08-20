@@ -10,7 +10,7 @@ This plugin guides a developer from “I want to develop tests in Voidr” throu
 2. selecting and confirming the planning inputs before generating a draft;
 3. selecting or bootstrapping one test repository;
 4. implementing and validating Playwright cases;
-5. requiring a PR already merged into the repository default branch;
+5. requiring a clean checkout at a commit already pushed to the remote;
 6. deploying that exact commit as an immutable release after confirmation;
 7. verifying `latest` and platform sync independently;
 8. creating an execution after a second confirmation;
@@ -177,10 +177,11 @@ the draft still requires the separate approval `Aprovo este Test Plan`. Both
 phrases must be typed by the user in the normal chat input; `ask_user`
 selections do not satisfy these runtime gates.
 
-Before deploy, the selected test changes must be in a merged GitHub pull
-request. The plugin rebuilds from that exact merge commit, uploads a
-content-addressed candidate, promotes it, and reports success only when the
-platform read-back proves `latest` points to the same `codebaseVersion`.
+Before deploy, the selected test repository must be clean and its commit must
+exist on the remote — no pull request is required. The plugin rebuilds from
+that exact commit, uploads a content-addressed candidate, promotes it, and
+reports success only when the platform read-back proves `latest` points to the
+same `codebaseVersion`.
 Legacy `voidr deploy-latest` and `npm run voidr:deploy` shell paths are denied.
 
 ## Authentication prerequisite

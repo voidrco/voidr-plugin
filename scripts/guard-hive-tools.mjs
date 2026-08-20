@@ -120,7 +120,7 @@ if (isShell) {
     )
   if (forbiddenDeploy || legacyMutableDeploy) {
     deny(
-      `Blocked by Voidr policy: legacy mutable deployment bypasses the merged-PR and immutable latest release gate.`
+      `Blocked by Voidr policy: legacy mutable deployment bypasses the immutable latest release gate.`
     )
   }
   enforceVoidrCliShellUsage(normalizedShell)
@@ -256,7 +256,7 @@ function enforceVoidrCliShellUsage(normalizedShell) {
     /(?:^|[\s;|&(])npx\b[^;&|\n]*\bplaywright\s+test\b/.test(normalizedShell)
   if (!invokesVoidrCli && !invokesPlaywrightRun) return
   deny(
-    'Blocked by Voidr policy: never run the Voidr CLI or Playwright from the terminal — it has no Service Account credentials there, and interactive voidr login is forbidden. Use the bridge tools, which inject the credentials automatically: voidr_workspace_prepare_test_repository (setup/link/scaffold/env pull), voidr_build (syntax/packaging gate), voidr_explore (inspection probes), voidr_workspace_publish_tests (commit/push/PR), voidr_release_deploy_validation (validation candidate, no promote), and voidr_release_deploy_merged_pr (immutable LIVE deploy).'
+    'Blocked by Voidr policy: never run the Voidr CLI or Playwright from the terminal — it has no Service Account credentials there, and interactive voidr login is forbidden. Use the bridge tools, which inject the credentials automatically: voidr_workspace_prepare_test_repository (setup/link/scaffold/env pull), voidr_build (syntax/packaging gate), voidr_explore (inspection probes), voidr_workspace_publish_tests (commit/push/PR), voidr_release_deploy_validation (validation candidate, no promote), and voidr_release_deploy_live (immutable LIVE deploy).'
   )
 }
 
@@ -675,7 +675,7 @@ function enforcePostSmokeStop(hookPayload, rawName, canonicalName) {
   }
   if (
     [
-      'voidr_release_deploy_merged_pr',
+      'voidr_release_deploy_live',
       'voidr_release_deploy_validation',
       'voidr_create_validation_execution',
       'voidr_workspace_publish_tests'
@@ -956,7 +956,7 @@ function enforceSelectedTestPlanIdentity(hookPayload, canonicalName, args) {
       'voidr_workspace_scaffold_test_cases',
       'voidr_build',
       'voidr_explore',
-      'voidr_release_deploy_merged_pr',
+      'voidr_release_deploy_live',
       'voidr_release_deploy_validation',
       'voidr_create_validation_execution'
     ].includes(canonicalName)

@@ -33,7 +33,7 @@
         "voidr_create_validation_execution",
         "voidr_release_inspect",
         "voidr_workspace_publish_tests",
-        "voidr_release_deploy_merged_pr",
+        "voidr_release_deploy_live",
         "applications_list_applications",
         "applications_get_application",
         "applications_list_environments",

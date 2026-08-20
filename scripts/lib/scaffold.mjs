@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
-import { existsSync } from 'node:fs'
-import { isAbsolute, relative, resolve, sep } from 'node:path'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
 import { runCommand } from './command.mjs'
 import {
@@ -100,6 +100,62 @@ export async function scaffoldTestCases({
 // esbuild, so a syntax error fails here with the file and line. Functional
 // validation happens on the platform, as a SHADOW execution pinned to the
 // deployed codebaseVersion — never as a local Playwright run.
+// A repository where several specs log in from scratch pays the whole SSO
+// handshake per case and makes the most fragile flow in the product a
+// dependency of every result. Observed: the fifth consecutive login hung for
+// 30s on an identity-provider screen already showing invalid credentials — the
+// provider throttling, surfacing as a flaky test.
+//
+// One spec logging in is legitimate: the case whose subject IS the login, and
+// the one that requires the absence of a session, both have to drive the UI.
+// Two or more is the pattern the preflight exists to remove.
+const INLINE_LOGIN = /\b(?:auth|login)\w*\s*\.\s*login\s*\(|\blogin\s*\(\s*\)/
+const PREFLIGHT_INHERIT = /getPreflightArtifactPath|storageState/
+
+export function specsAuthenticatingInline(repositoryPath) {
+  const modules = join(repositoryPath, 'modules')
+  if (!existsSync(modules)) return []
+  const found = []
+  const walk = directory => {
+    for (const entry of readdirSync(directory, { withFileTypes: true })) {
+      const full = join(directory, entry.name)
+      if (entry.isDirectory()) {
+        walk(full)
+        continue
+      }
+      if (!/\.spec\.[cm]?js$/i.test(entry.name)) continue
+      let source = ''
+      try {
+        source = readFileSync(full, 'utf8')
+      } catch {
+        continue
+      }
+      // A spec that inherits the session is already doing the right thing,
+      // even when it still mentions the auth factory.
+      if (PREFLIGHT_INHERIT.test(source)) continue
+      if (INLINE_LOGIN.test(source)) found.push(relative(repositoryPath, full))
+    }
+  }
+  walk(modules)
+  return found.sort()
+}
+
+function assertPreflightWhenCasesAuthenticate(repositoryPath) {
+  if (existsSync(join(repositoryPath, 'preflight', 'preflight.spec.js'))) return
+  const authenticating = specsAuthenticatingInline(repositoryPath)
+  if (authenticating.length < 2) return
+  throw new Error(
+    `${authenticating.length} specs log in from scratch and this repository has no ` +
+      'preflight, so every case pays the SSO handshake again and the identity ' +
+      'provider starts throttling — it surfaces as a flaky test, not as an error. ' +
+      'Create preflight/preflight.spec.js, performing the login through the same ' +
+      'action factory the cases call, and have these specs inherit its session ' +
+      'with getPreflightArtifactPath. The case whose subject IS the login, and the ' +
+      'one that requires no session, keep driving the UI and stay as they are. ' +
+      `Specs logging in inline: ${authenticating.join(', ')}.`
+  )
+}
+
 export async function buildRepository({
   repositoryPath,
   repositoryUrl,
@@ -123,6 +179,8 @@ export async function buildRepository({
       'project.json does not match the explicitly selected Test Plan.'
     )
   }
+
+  assertPreflightWhenCasesAuthenticate(selected.path)
 
   const runtime = await assertSupportedNodeRuntime({
     repositoryPath: selected.path,

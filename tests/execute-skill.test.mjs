@@ -31,6 +31,9 @@ test('execute skill routes only its execution, release, and sync tools', () => {
     'playwright_list_execution_failures',
     'test_plans_get_test_counts',
     'test_plans_get_test_plan',
+    // Promotion to LIVE closes the flow: a deployed case sits at DEV, outside
+    // monitoring and self-healing, until this tool moves its tag.
+    'test_plans_update_test_case_tag',
     'voidr_build',
     'voidr_create_validation_execution',
     'voidr_release_deploy_merged_pr',

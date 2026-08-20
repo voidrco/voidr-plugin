@@ -331,10 +331,21 @@ assert(
   /returned it in this session/i.test(contracts),
   'CONTRACTS.md must carry the data-provenance contract.'
 )
+// The tools clone the checkout now, so the handover means git failed. The
+// contract has to separate the two causes: a clone that works in the user's
+// own terminal is a credential-helper problem, not a missing authorization —
+// reporting it as the latter sent people to ask an administrator for access
+// they already had.
 assert(
-  /never clones the test repository/i.test(contracts) &&
-    /clone handover message/i.test(contracts),
-  'CONTRACTS.md must hand the clone to the user.'
+  /clone the test repository themselves/i.test(contractsFlat) &&
+    /credential helper/i.test(contractsFlat) &&
+    /not authorized/i.test(contractsFlat),
+  'CONTRACTS.md must tell a failed clone apart from a missing authorization.'
+)
+assert(
+  /Writing to the person, not about them/i.test(contracts) &&
+    /No tool names/i.test(contracts),
+  'CONTRACTS.md must carry the contract for messages the user reads.'
 )
 assert(
   /Never install, switch, or pin a Node runtime/i.test(contracts),

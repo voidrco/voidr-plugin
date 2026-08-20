@@ -63,10 +63,33 @@ recordExploreProbe(payload, toolName)
 recordValidationExecutionAttempt(payload, toolName)
 recordSmokeAttempt(payload, toolName)
 
+// The terminal itself is allowed. What the shell policies still enforce are the
+// acts that stay forbidden through any channel: the credential store, .env
+// contents, the dependency strategy, legacy mutable deploys, and dispatching a
+// Hive process. VS Code's terminal tool is named run_in_terminal, so the match
+// cannot be shell-name only or those acts go unchecked on that host.
+const isShell = /(^|[-_/])(bash|shell|powershell|terminal|cmd)$/i.test(
+  rawToolName
+)
+
+// Matched against the paths and the command, never the file CONTENT: a write
+// carries the whole body in its arguments, so scanning everything refused a
+// document that merely mentioned the credential path — and the .env rule
+// refused an `ls` checking existence, which its own message calls allowed.
+const credentialSurface = [
+  rawToolName,
+  toolName,
+  ...collectPathArguments(toolArgs),
+  ...collectPatchPathsFromValue(toolArgs),
+  ...(isShell ? collectStringValues(toolArgs) : [])
+]
+  .join('\n')
+  .toLowerCase()
 const protectedCredential =
   (policy.protectedCredentialFragments || []).find(fragment =>
-    searchable.includes(fragment.toLowerCase())
-  ) || (touchesCredentialDirectory(searchable) ? 'the credential store' : null)
+    credentialSurface.includes(fragment.toLowerCase())
+  ) ||
+  (touchesCredentialDirectory(credentialSurface) ? 'the credential store' : null)
 if (protectedCredential) {
   deny(
     'Blocked by Voidr policy: Service Account credential files can only be handled by the protected local authentication tools.'
@@ -91,14 +114,6 @@ if (forbiddenRequest) {
   )
 }
 
-// The terminal itself is allowed. What survives here are the acts that stay
-// forbidden through any channel: reading .env, rewriting the dependency
-// strategy, legacy mutable deploys, and dispatching a Hive process. VS Code's
-// terminal tool is named run_in_terminal, so the match cannot be shell-name
-// only or these acts go unchecked on that host.
-const isShell = /(^|[-_/])(bash|shell|powershell|terminal|cmd)$/i.test(
-  rawToolName
-)
 if (isShell) {
   const shellText = collectStringValues(toolArgs).join('\n').toLowerCase()
   const normalizedShell = shellText.replace(/\s+/g, ' ')

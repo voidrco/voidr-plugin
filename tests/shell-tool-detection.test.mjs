@@ -42,6 +42,16 @@ test('every host shell name reaches the surviving shell policies', () => {
     const hiveDispatch = shell(tool, 'node dispatch.js trigger_hive_automation')
     assert.equal(hiveDispatch.permissionDecision, 'deny', tool)
     assert.match(hiveDispatch.permissionDecisionReason, /Hive/i, tool)
+
+    // The credential surface only reads the command for tools it recognizes as
+    // a shell, so it has to use the same wide match.
+    const credentials = shell(tool, 'cat ~/.voidr/service-accounts.json')
+    assert.equal(credentials.permissionDecision, 'deny', tool)
+    assert.match(
+      credentials.permissionDecisionReason,
+      /Service Account credential files/i,
+      tool
+    )
   }
 })
 

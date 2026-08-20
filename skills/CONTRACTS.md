@@ -73,14 +73,33 @@ rendered instead; a pasted ID volunteered by the user is acceptable. The
 question UI rejects a question with a single option: when exactly one
 candidate exists, confirm it with two options — `Usar <nome>` and `Cancelar`.
 
+## Writing to the person, not about them
+
+The reader was told to use this platform and wants to get back to work. They do
+not know its vocabulary and cannot call a tool.
+
+- Lead with **one sentence of action**, imperative, in the user's language.
+- No tool names, no "call this again", no describing the user in third person.
+  A message that says *"Ask the user to clone … then call this tool again"*
+  reaches a human who has no tool to call and sees himself described.
+- Name things by their effect, not their mechanism: "o repositório de testes
+  ainda não está aqui", not "manifest-context.json não encontrado".
+- Technical detail goes after the action, or nowhere. If it only helps the
+  agent, it does not belong in the answer.
+
 ## Clone handover
 
-The plugin never clones the test repository: the clone is done by the user,
-whose access to the repository is what the clone proves. When a bridge tool
-answers with the clone handover message, relay it exactly as it came — the
-commands, the workspace destination, and the administrator-authorization
-guidance — wait for the user to confirm the clone, then call the same tool
-again.
+`voidr_context_bootstrap` and `voidr_workspace_prepare_test_repository` clone
+the test repository themselves, with the user's own credentials. The handover
+message means git failed, and the two causes are not the same:
+
+- the clone works in the user's terminal → the repository is authorized and
+  this process could not reach the credential helper. Ask them to clone it.
+- git reports "Repository not found" or a permission error → the account is
+  genuinely not authorized, and only a Voidr administrator can grant it.
+
+Lead with git's own words, then the action. Never send someone to request
+access they already have.
 
 ## Node runtime
 

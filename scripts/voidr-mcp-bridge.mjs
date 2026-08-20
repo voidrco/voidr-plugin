@@ -577,8 +577,9 @@ async function callTool(params) {
       recordProvenance(name, args, result)
       if (name === 'test_plans_get_test_plan') planReadAt = Date.now()
       if (name === 'test_plans_get_test_counts') countsReadAt = Date.now()
+      return result
     }
-    return result
+    return withActiveOrganization(result)
   }
 
   if (name === 'test_plans_list_test_plans') {
@@ -782,6 +783,32 @@ async function callStructureTool(name, args) {
   recordCreatedStructure(name, planId, args, result)
   recordPlanSlugs(planId, remoteResultData(result))
   return slimStructureResult(name, planId, args, result)
+}
+
+// "does not exist in this organization" never says WHICH organization, and its
+// advice — list the plans to find the right id — points away from the cause: an
+// id that is perfectly valid in the account the user is not currently using.
+// Observed costing several rounds before anyone suspected the account.
+function withActiveOrganization(result) {
+  const text = String(structureResultText(result) || '')
+  if (!/organiza(?:tion|ção|cao)/i.test(text)) return result
+  let status
+  try {
+    status = authStatus()
+  } catch {
+    return result
+  }
+  if (!status?.authenticated) return result
+  const others = (status.serviceAccounts || []).length - 1
+  const hint =
+    ` The active organization is ${status.organizationName || status.organizationId}.` +
+    (others > 0
+      ? ` ${others} other account${others === 1 ? ' is' : 's are'} available locally: when the plan belongs to one of them, switch with voidr_auth_select_organization instead of listing plans.`
+      : ' When the plan belongs to another organization, connect that one — listing plans here will not find it.')
+  return {
+    ...result,
+    content: [{ type: 'text', text: `${text}${hint}` }]
+  }
 }
 
 function slimStructureResult(name, planId, args, result) {

@@ -1,8 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { mkdtempSync, realpathSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { environmentDoctor } from '../scripts/lib/environment-doctor.mjs'
 
 const pluginRoot = resolve(import.meta.dirname, '..')
@@ -15,10 +15,34 @@ async function stubRun(file, args) {
   return { stdout: '', stderr: '', exitCode: 0 }
 }
 
+// resolveWorkspaceRoot now also consults the shared prompt state, so tests
+// about the no-state behavior must pin the state root at an isolated
+// directory — otherwise real machine state leaks into the assertion.
+async function withPromptState(state, run) {
+  const previous = process.env.COPILOT_PLUGIN_DATA
+  const dataRoot = mkdtempSync(join(tmpdir(), 'voidr-doctor-state-'))
+  if (state) {
+    mkdirSync(join(dataRoot, 'sessions'), { recursive: true })
+    writeFileSync(
+      join(dataRoot, 'sessions', 'latest-prompt-state.json'),
+      JSON.stringify(state)
+    )
+  }
+  process.env.COPILOT_PLUGIN_DATA = dataRoot
+  try {
+    return await run()
+  } finally {
+    if (previous === undefined) delete process.env.COPILOT_PLUGIN_DATA
+    else process.env.COPILOT_PLUGIN_DATA = previous
+  }
+}
+
 test('an unscoped call never claims a verdict about the plugin installation', async () => {
   // The bridge process starts inside the plugin installation, so this is what
   // /voidr-setup's first call actually looks like.
-  const report = await environmentDoctor({ cwd: pluginRoot, run: stubRun })
+  const report = await withPromptState(null, () =>
+    environmentDoctor({ cwd: pluginRoot, run: stubRun })
+  )
 
   assert.equal(report.inspectionScope, 'unresolved')
   assert.equal(report.repositoryPath, null)
@@ -35,6 +59,21 @@ test('an unscoped call never claims a verdict about the plugin installation', as
     report.checks.some(check => check.name === 'node-runtime'),
     true
   )
+})
+
+// The flip side of the hermetic test above: when the prompt hook recorded a
+// workspace, an unscoped doctor call adopts it — the bridge adapting to the
+// user's workspace instead of giving up.
+test('an unscoped call adopts the workspace recorded by the prompt hook', async () => {
+  const recorded = realpathSync(
+    mkdtempSync(resolve(tmpdir(), 'voidr-doctor-recorded-'))
+  )
+  const report = await withPromptState(
+    { lastWorkspaceRoot: recorded },
+    () => environmentDoctor({ cwd: pluginRoot, run: stubRun })
+  )
+  assert.equal(report.inspectionScope, 'workspace')
+  assert.equal(report.inspectedPath, recorded)
 })
 
 test('a named workspace or repository scopes the report to it', async () => {

@@ -57,6 +57,10 @@ recordEnvironmentSelectionRequest(payload, toolName, toolArgs)
 enforceExplicitEnvironmentSelection(payload, toolName, toolArgs)
 enforceExplicitWorkspaceRoot(payload, toolName, toolArgs)
 enforceTestSpecContentPolicy(rawToolName, toolArgs)
+recordSpecEditForProbe(payload, rawToolName, toolArgs)
+enforceProbeBeforeReexecution(payload, toolName)
+recordExploreProbe(payload, toolName)
+recordValidationExecutionAttempt(payload, toolName)
 recordSmokeAttempt(payload, toolName)
 
 const protectedCredential =
@@ -87,7 +91,12 @@ if (forbiddenRequest) {
   )
 }
 
-const isShell = /(^|[-_/])(bash|shell|powershell)$/i.test(rawToolName)
+// VS Code's terminal tool is named run_in_terminal — a shell-name-only match
+// left every shell policy dormant on that host (the agent could run npx
+// voidr, git push, or write specs through the terminal unchecked).
+const isShell = /(^|[-_/])(bash|shell|powershell|terminal|cmd)$/i.test(
+  rawToolName
+)
 if (isShell) {
   const shellText = collectStringValues(toolArgs).join('\n').toLowerCase()
   const normalizedShell = shellText.replace(/\s+/g, ' ')
@@ -115,6 +124,7 @@ if (isShell) {
     )
   }
   enforceVoidrCliShellUsage(normalizedShell)
+  enforceShellSpecWrite(normalizedShell)
   const fragment = policy.forbiddenShellFragments.find(value =>
     searchable.includes(value.toLowerCase())
   )
@@ -247,6 +257,31 @@ function enforceVoidrCliShellUsage(normalizedShell) {
   if (!invokesVoidrCli && !invokesPlaywrightRun) return
   deny(
     'Blocked by Voidr policy: never run the Voidr CLI or Playwright from the terminal — it has no Service Account credentials there, and interactive voidr login is forbidden. Use the bridge tools, which inject the credentials automatically: voidr_workspace_prepare_test_repository (setup/link/scaffold/env pull), voidr_build (syntax/packaging gate), voidr_explore (inspection probes), voidr_workspace_publish_tests (commit/push/PR), voidr_release_deploy_validation (validation candidate, no promote), and voidr_release_deploy_merged_pr (immutable LIVE deploy).'
+  )
+}
+
+// Spec files written through the shell bypass enforceTestSpecContentPolicy —
+// the content policy only inspects the editor write tools, so a Set-Content
+// heredoc can smuggle literal credentials, e-mails, or env fallbacks into a
+// spec uninspected. Writing specs is not a terminal job: reads stay allowed,
+// writes are pushed back to the inspected editor tools. Hard gate (content
+// hygiene) — never degrades.
+function enforceShellSpecWrite(normalizedShell) {
+  if (!/\.spec\.[cm]?[jt]sx?\b/.test(normalizedShell)) return
+  const writesViaCommand =
+    /\b(?:set-content|add-content|out-file|new-item)\b/.test(
+      normalizedShell
+    ) ||
+    /\[(?:system\.)?io\.file\]::(?:write|append)/.test(normalizedShell) ||
+    /\bfs\.(?:write|append)filesync?\b/.test(normalizedShell) ||
+    /\btee\b[^;|&\n]*\.spec\.[cm]?[jt]sx?\b/.test(normalizedShell)
+  const redirectsIntoSpec =
+    /[^<>-]>{1,2}\s*["']?[^"'\s;|&]*\.spec\.[cm]?[jt]sx?\b/.test(
+      normalizedShell
+    )
+  if (!writesViaCommand && !redirectsIntoSpec) return
+  deny(
+    'Blocked by Voidr policy: never create or edit Playwright specs through the terminal — shell writes bypass the spec content inspection (credentials, e-mail addresses, env fallbacks). Use the editor file tools to write specs; reading specs in the terminal remains allowed.'
   )
 }
 
@@ -672,6 +707,60 @@ function enforcePostSmokeStop(hookPayload, rawName, canonicalName) {
     'post-build-stop',
     `Blocked by Voidr workflow: after voidr_build, stop and report its exact result. Do not inspect files, edit specs, retry the build, or diagnose by guessing in the same turn. Wait for the user to authorize the investigation or correction in a new chat message or an ask_user answer before continuing. When you ask for that authorization, quote an accepted phrase verbatim — “corrige e roda de novo” or “roda o build de novo” — never a paraphrase of your own (a wording the gate does not recognize leaves the user typing authorizations that never unlock anything).${fallback}`
   )
+}
+
+// Full platform executions are the most expensive validation step, and the
+// observed anti-pattern is running one to check every one-spec fix: each run
+// converts a single test while the shared root cause survives. These four
+// hooks encode the cheap loop instead — after an execution, changed specs
+// must be probed individually with voidr_explore before the next execution.
+// The first execution of a session is always free.
+function recordSpecEditForProbe(hookPayload, rawName, args) {
+  if (!isGenericWriteTool(rawName)) return
+  const paths = [
+    ...collectPathArguments(args),
+    ...collectPatchPathsFromValue(args)
+  ]
+  if (!paths.some(path => /\.spec\.[cm]?[jt]sx?$/i.test(path))) return
+  updateSessionState(hookPayload, { specEditedAt: Date.now() })
+}
+
+function enforceProbeBeforeReexecution(hookPayload, canonicalName) {
+  if (
+    canonicalName !== 'voidr_create_validation_execution' &&
+    canonicalName !== 'executions_create_execution'
+  ) {
+    return
+  }
+  const state = readSessionState(hookPayload)
+  if (!Number.isFinite(state.lastValidationExecutionAt)) return
+  const edited = state.specEditedAt
+  if (!Number.isFinite(edited) || edited < state.lastValidationExecutionAt) {
+    return
+  }
+  const probed =
+    Number.isFinite(state.exploreProbeAt) && state.exploreProbeAt > edited
+  if (probed) return
+  denyGated(
+    hookPayload,
+    'probe-before-reexecution',
+    'Blocked by Voidr workflow: specs changed since the last platform execution, and a full execution is the most expensive way to validate a fix. First address the shared root cause, then probe each changed spec in isolation with voidr_explore, and only create a new execution once the probes pass.'
+  )
+}
+
+function recordExploreProbe(hookPayload, canonicalName) {
+  if (canonicalName !== 'voidr_explore') return
+  updateSessionState(hookPayload, { exploreProbeAt: Date.now() })
+}
+
+function recordValidationExecutionAttempt(hookPayload, canonicalName) {
+  if (
+    canonicalName !== 'voidr_create_validation_execution' &&
+    canonicalName !== 'executions_create_execution'
+  ) {
+    return
+  }
+  updateSessionState(hookPayload, { lastValidationExecutionAt: Date.now() })
 }
 
 function recordSmokeAttempt(hookPayload, name) {

@@ -113,3 +113,32 @@ test('failures are grouped by signature and re-runs are scoped', () => {
   )
   assert.match(skill.replace(/\n/g, ' '), /only the previously failing targets/i)
 })
+
+test('promotion eligibility is decided by cause, not by a red run', () => {
+  const section = skill.slice(skill.indexOf('## Promoting a case to LIVE'))
+
+  // The old rule disqualified every failing case, which held a case proving a
+  // real defect at DEV — outside the monitoring that would have surfaced it.
+  assert.doesNotMatch(
+    section,
+    /whose validation run failed is never offered for promotion/
+  )
+
+  for (const cause of [
+    'Application defect',
+    'Outdated test',
+    'Test-data gap',
+    'Environment instability',
+    'Indeterminate'
+  ]) {
+    assert.ok(
+      section.includes(cause),
+      `promotion rules must say what happens for ${cause}`
+    )
+  }
+
+  // Eligible is not the same as automatic: the defect has to be recorded and
+  // the user has to confirm with it named.
+  assert.match(section, /\/voidr-failure-analysis/)
+  assert.match(section, /Never infer `Application defect` from a red run/)
+})

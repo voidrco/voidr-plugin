@@ -5,22 +5,34 @@
 // typed phrases, no question ordering, no stop-after-build — because that is
 // what made the gates unusable and got them switched off wholesale.
 //
-// Nothing here reads session state. A rule that only applies once a workflow
-// is "active" is not a rule: the flag is armed from prompt wording alone.
+// The first rule reads no session state: a rule that only applies once a
+// workflow is "active" is not a rule, since that flag is armed from prompt
+// wording alone. The second one is the opposite by nature — it exists only
+// because the user answered a question, so it reads the answer and nothing
+// else.
 
 import { CLAUDE, detectHost } from './lib/host.mjs'
 import { canonicalToolName, loadPolicy } from './lib/policy.mjs'
 import { findProtectionDenial } from './lib/protections.mjs'
+import { findRunModeDenial } from './lib/run-mode.mjs'
+import { readSessionState } from './lib/session-state.mjs'
 
 const payload = await readPayload()
 const rawToolName = String(payload.toolName || payload.tool_name || '')
 
-const reason = findProtectionDenial({
-  rawToolName,
-  toolName: canonicalToolName(rawToolName),
-  toolArgs: normalizeToolArgs(payload.toolArgs ?? payload.tool_input ?? {}),
-  policy: loadPolicy()
-})
+const toolArgs = normalizeToolArgs(payload.toolArgs ?? payload.tool_input ?? {})
+const reason =
+  findProtectionDenial({
+    rawToolName,
+    toolName: canonicalToolName(rawToolName),
+    toolArgs,
+    policy: loadPolicy()
+  }) ||
+  findRunModeDenial({
+    rawToolName,
+    toolArgs,
+    state: readSessionState(payload)
+  })
 
 if (reason) deny(reason)
 allow()

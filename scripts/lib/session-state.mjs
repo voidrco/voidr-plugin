@@ -280,6 +280,12 @@ export function recordAskUserSelections(
           changed = true
         }
       }
+      const checkMode = extractCheckMode(header, text)
+      if (checkMode && next.checkMode !== checkMode) {
+        next.checkMode = checkMode
+        next.checkModeAt = Date.now()
+        changed = true
+      }
       if (isSmokeRemediationPrompt(text)) {
         next.smokeAttemptedAt = null
         next.smokeRemediationAt = Date.now()
@@ -534,6 +540,19 @@ function isVoidrConnectPrompt(prompt) {
 
 function skillInvocation(suffix) {
   return new RegExp(`${SKILL_INVOCATION_PREFIX}${suffix}`, 'i')
+}
+
+// The 0b answer in /voidr-generate. Matched on the header plus the option text
+// the skill renders, so a stray sentence containing "local" elsewhere in the
+// conversation does not set a mode.
+export function extractCheckMode(header, text) {
+  if (!/modo de check|check mode|onde.*rodar/i.test(String(header || ''))) {
+    return null
+  }
+  const answer = String(text || '')
+  if (/plataforma|platform/i.test(answer)) return 'platform'
+  if (/\blocal\b/i.test(answer)) return 'local'
+  return null
 }
 
 export function isNewPlanChoice(prompt) {

@@ -65,6 +65,13 @@ replace the verdict.
 Name the chosen mode in the closing report, so a case that was only ever checked
 locally is not read as a case that was validated.
 
+The answer is recorded and enforced: under platform mode a local test run is
+refused, and the refusal says to use `voidr_explore`. If a local run turns out to
+be what the work needs, ask to switch the mode and say why — do not work around
+the refusal. This exists because the question alone did not hold: answered
+"platform" at 19:12, a local run went out at 19:16, with both the carry-through
+sentence and the smoke-spec warning already in this file.
+
 ## 1. Repository conventions win on style
 
 Before writing a line, read the test repository's own convention file

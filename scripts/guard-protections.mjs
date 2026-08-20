@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
-// A PreToolUse hook with exactly one rule: a worker job is not started from
-// here. None of the workflow choreography that used to travel with it — no
-// typed phrases, no question ordering, no stop-after-build — because that is
-// what made the gates unusable and got them switched off wholesale.
+// A PreToolUse hook with two rules: a worker job is not started from here, and
+// an MCP tool is called by calling it. None of the workflow choreography that
+// used to travel with the first — no typed phrases, no question ordering, no
+// stop-after-build — because that is what made the gates unusable and got them
+// switched off wholesale.
 //
 // Nothing here reads session state. A rule that only applies once a workflow
 // is "active" is not a rule: the flag is armed from prompt wording alone.

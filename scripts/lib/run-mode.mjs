@@ -36,9 +36,11 @@ export function findRunModeDenial({ rawToolName, toolArgs, state }) {
   }
   return (
     'Blocked by Voidr policy: the checking loop for this work was set to the ' +
-    'platform, and this runs the tests on this machine instead. Use ' +
-    'voidr_explore for an inspection probe and voidr_build for the build gate. ' +
-    'If a local run is genuinely what is needed now, ask the user to switch the ' +
-    'mode and say why — a pass here is not evidence of a pass on the platform.'
+    'platform, and this runs the tests on this machine instead. On the platform ' +
+    'a check is voidr_build, then voidr_release_deploy_validation, then a SHADOW ' +
+    'execution through /voidr-execute. For a quick DOM question, voidr_explore ' +
+    'is the local probe that still wires the environment and returns traces. If ' +
+    'this work genuinely needs a direct run, ask the user to switch the mode and ' +
+    'say why.'
   )
 }

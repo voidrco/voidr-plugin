@@ -214,7 +214,9 @@ function enforceExplicitWorkspaceRoot(hookPayload, canonicalName, args) {
   if (String(args?.workspaceRoot || '').trim()) return
   const cwd = String(hookPayload.cwd || '').trim()
   if (!cwd) return
-  deny(
+  denyGated(
+    hookPayload,
+    'workspace-root',
     `Blocked by Voidr workflow: the MCP process cannot see the open workspace by itself. Call ${canonicalName} again adding workspaceRoot: "${cwd}" (the absolute path of the open workspace folder). Never use terminal find/ls to locate the test repository.`
   )
 }
@@ -580,9 +582,12 @@ function enforceExplicitEnvironmentSelection(hookPayload, name, args) {
     ) {
       return
     }
-    deny(
+    denyGated(
+      hookPayload,
+      'environment-selection',
       'Blocked by Voidr workflow: list environments with applications_list_environments, show the selected environment on the confirmation card, and wait for the user to type “Criar testes” before repository setup, scaffold, build, or exploration.'
     )
+    return
   }
 
   const selectionFresh =
@@ -594,9 +599,12 @@ function enforceExplicitEnvironmentSelection(hookPayload, name, args) {
     Number.isFinite(state.environmentSelectionRequestedAt) &&
     Date.now() - state.environmentSelectionRequestedAt <= 4 * 60 * 60 * 1000
   if (!selectionFresh && !environmentsListed) {
-    deny(
+    denyGated(
+      hookPayload,
+      'environment-selection',
       'Blocked by Voidr workflow: list environments with applications_list_environments and confirm one with the user before repository setup, selection, scaffold, build, or exploration.'
     )
+    return
   }
 
   if (
@@ -659,8 +667,10 @@ function enforcePostSmokeStop(hookPayload, rawName, canonicalName) {
   const fallback = hookBehindSmoke
     ? ' The prompt hook has not recorded a user message since this smoke run, so a typed chat authorization is not reaching the runtime: collect it with an ask_user question containing a single free-text field where the user types the authorization (for example “corrige e roda de novo”). A clicked option never counts. If the user already typed it in chat, say that the plugin needs a VS Code window reload to record typed messages again.'
     : ''
-  deny(
-    `Blocked by Voidr workflow: after voidr_build, stop and report its exact result. Do not inspect files, edit specs, retry the build, or diagnose by guessing in the same turn. Wait for the user to authorize the investigation or correction in a new chat message or an ask_user answer (for example “corrige e roda de novo”) before continuing.${fallback}`
+  denyGated(
+    hookPayload,
+    'post-build-stop',
+    `Blocked by Voidr workflow: after voidr_build, stop and report its exact result. Do not inspect files, edit specs, retry the build, or diagnose by guessing in the same turn. Wait for the user to authorize the investigation or correction in a new chat message or an ask_user answer before continuing. When you ask for that authorization, quote an accepted phrase verbatim — “corrige e roda de novo” or “roda o build de novo” — never a paraphrase of your own (a wording the gate does not recognize leaves the user typing authorizations that never unlock anything).${fallback}`
   )
 }
 
@@ -831,7 +841,9 @@ function enforcePlanModeGate(hookPayload, rawName, canonicalName) {
   if (/(?:ask_user|askuserquestion|skill|todo)/i.test(rawName)) {
     return
   }
-  deny(
+  denyGated(
+    hookPayload,
+    'plan-choice',
     'Blocked by Voidr workflow: ask the user to choose “Criar novo Test Plan” or “Usar Test Plan existente” before reading the platform or codebase.'
   )
 }
@@ -1036,6 +1048,47 @@ function deny(reason) {
   }
   process.stdout.write(`${JSON.stringify(output)}\n`)
   process.exit(0)
+}
+
+// Graduated enforcement for SETUP gates only (circuit-breaker ladder). A
+// workflow gate that keeps blocking in the same session, even though every
+// denial carries its own remedy, is stronger evidence of a broken gate (for
+// example a path bug specific to this machine) than of a wrong call. So a
+// gate routed through denyGated teaches on the first blocks, then announces
+// itself degraded — loudly, through the same deny channel the model already
+// reads — and stops blocking for the rest of the session. The next session
+// re-arms it. Security gates (credentials, Hive dispatch, publishing, the
+// plugin-installation boundary, secret hygiene) keep calling deny() directly
+// and NEVER degrade.
+function denyGated(hookPayload, gateId, reason) {
+  // Local (not module-level const): the guard's enforcement runs as top-level
+  // statements before this point in the file, and a module const would still
+  // be in its temporal dead zone when the hoisted function is first called.
+  const GATE_DEGRADE_THRESHOLD = 3
+  const state = readSessionState(hookPayload)
+  const degraded = state.gateDegraded || {}
+  if (degraded[gateId]) return // gate already open for this session
+  const counts = state.gateDenyCounts || {}
+  const attempt = (counts[gateId] || 0) + 1
+  if (attempt < GATE_DEGRADE_THRESHOLD) {
+    updateSessionState(hookPayload, {
+      gateDenyCounts: { ...counts, [gateId]: attempt }
+    })
+    deny(
+      `${reason} [Setup gate "${gateId}": block ${attempt} of ${GATE_DEGRADE_THRESHOLD} in this session. Follow the remedy in this message; after ${GATE_DEGRADE_THRESHOLD} blocks this gate assumes it is itself broken and stops blocking.]`
+    )
+  }
+  updateSessionState(hookPayload, {
+    gateDenyCounts: { ...counts, [gateId]: attempt },
+    gateDegraded: { ...degraded, [gateId]: Date.now() }
+  })
+  deny(
+    `Setup gate "${gateId}" DEGRADED: it blocked ${GATE_DEGRADE_THRESHOLD} times in one session despite carrying its own remedy, so the likely defect is in the gate, not in the call. It will not block again in this session — repeat the exact same call once and it will pass. You MUST relay this to the user verbatim before continuing: 'O gate de setup "${gateId}" foi desativado automaticamente nesta sessão após ${GATE_DEGRADE_THRESHOLD} bloqueios. Reporte ao time Voidr com este diagnóstico: cwd=${String(
+      hookPayload?.cwd || 'unknown'
+    )}, tool=${String(
+      payload?.toolName || payload?.tool_name || ''
+    )}.' Original block reason: ${reason}`
+  )
 }
 
 function allowUpdatedInput(updatedInput) {

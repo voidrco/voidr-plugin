@@ -58,6 +58,7 @@ test('publishes a feature branch with commit, explicit refspec push, and PR', as
     repositoryUrl,
     branch: 'feat/recarga-creditos-tests',
     commitMessage: 'test: cenários de recarga de créditos',
+    createPullRequest: true,
     run: fakePublishRun({ calls })
   })
 
@@ -118,6 +119,7 @@ test('reuses the existing pull request when creation reports a duplicate', async
     repositoryUrl,
     branch: 'feat/recarga-creditos-tests',
     commitMessage: 'test: cenários de recarga',
+    createPullRequest: true,
     run: fakePublishRun({
       calls,
       prCreateError:
@@ -160,4 +162,30 @@ test('rejects a checkout whose origin does not match the linked repository', asy
     }),
     /origin does not match/
   )
+})
+
+test('a finished publish never reads as a blocked one', async () => {
+  const repositoryPath = createCheckout()
+
+  const withPr = await publishTests({
+    repositoryPath,
+    repositoryUrl,
+    branch: 'feat/recarga-creditos-tests',
+    commitMessage: 'test: cenários de recarga de créditos',
+    createPullRequest: true,
+    run: fakePublishRun({ calls: [] })
+  })
+  const withoutPr = await publishTests({
+    repositoryPath,
+    repositoryUrl,
+    branch: 'feat/recarga-creditos-tests',
+    commitMessage: 'test: cenários de recarga de créditos',
+    run: fakePublishRun({ calls: [] })
+  })
+
+  for (const result of [withPr, withoutPr]) {
+    assert.equal(result.completed, true)
+    assert.doesNotMatch(result.next, /requires|required|merge the pull request/i)
+  }
+  assert.match(withoutPr.next, /ready to deploy/i)
 })

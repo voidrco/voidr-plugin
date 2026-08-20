@@ -37,8 +37,9 @@ Ask (or infer from the request) which mode applies:
    `test_plans_get_test_counts` — confirm the selected cases are automated
    and the platform artifact is in sync. An "Only automated test cases can be
    executed" error later means the cases need a deploy, never re-creation.
-2. **Confirmation gate**: show plan, environment, and target cases; wait for
-   the user's explicit go.
+2. **Confirmation gate**: name the plan, the environment, and the cases, and
+   say that this is the run whose result counts. Wait for the explicit go. See
+   "Writing the confirmation gates".
 3. `executions_create_execution` for the selected scope. Share the execution
    link the platform returns.
 4. **Follow to completion** (see "Monitoring").
@@ -48,17 +49,19 @@ Ask (or infer from the request) which mode applies:
 1. **Build gate**: `voidr_build` completed in this session. The build is the
    local syntax and packaging gate; tests never run locally. Never deploy a
    repository that did not build.
-2. **Validation deploy**: `voidr_release_deploy_validation` — uploads the
-   content-addressed candidate WITHOUT promoting it (`latest` stays exactly
-   as it was) and returns the immutable `codebaseVersion`. Behind its own
-   confirmation gate.
+2. **Validation deploy**: `voidr_release_deploy_validation` uploads this
+   version of the code without replacing the one running today, and returns
+   its identifier. Behind its own confirmation gate — ask it as "subir esta
+   versão para a Voidr rodar? Ela fica guardada separada e não substitui a que
+   está no ar hoje", not in terms of candidates, promotion, or `latest`.
 3. **Pilot execution**: `voidr_create_validation_execution` with that
-   `codebaseVersion` and a SINGLE representative target — the shortest case
+   identifier and a SINGLE representative target — the shortest case
    that still exercises the shared preconditions (login, environment, base
    URL). Every case in a plan repeats those preconditions, so a broken one
    fails all of them: the pilot buys that verdict for one case's runtime
-   instead of the whole plan's. Confirm the scope with the user first and
-   share the execution link.
+   instead of the whole plan's. Confirm the scope first — "rodar o CASO na
+   Voidr agora? Roda em paralelo, sem contar como resultado oficial" — and
+   share the execution link. Say how long it takes when the case is long.
 4. **Full run**: only after the pilot passes, execute the remaining targets in
    ONE execution. Never split a plan into one execution per case: results are
    already reported per case, and separate executions pay queue and pod
@@ -69,6 +72,43 @@ Ask (or infer from the request) which mode applies:
    user wants the version in the main pipeline, publish with
    `voidr_workspace_publish_tests`, then `voidr_release_inspect` +
    `voidr_release_deploy_live`.
+
+## Writing the confirmation gates
+
+Every gate in this skill asks a person to authorize a write. That person often
+does not work at Voidr and has never seen this vocabulary. Observed live, on the
+deploy gate:
+
+> Sobe a build **content-addressed** e devolve um **codebaseVersion** imutável.
+> O **latest** NÃO é tocado — monitoramento, **self-healing** e **governança
+> LIVE** ficam intactos.
+
+Six internal terms in two lines, none defined, plus the tool name. Nothing in it
+answers what the person actually needs to decide.
+
+A gate answers three questions, in the reader's language:
+
+1. **What changes** — for the product, not for the system. "Nothing that runs
+   today changes" beats "`latest` is untouched".
+2. **Can it be undone** — or why it does not need to be.
+3. **How long it takes**, when the answer is minutes rather than seconds.
+
+Rules for the wording:
+
+- No term that does not exist outside Voidr. `codebaseVersion`, `latest`,
+  SHADOW, content-addressed, promote, governance tag — none of them belong in a
+  question. If a concept is unavoidable, name it by what it does: "a versão que
+  está no ar hoje", "roda em paralelo, sem contar como resultado oficial".
+- No tool names. `voidr_release_deploy_validation` tells the reader nothing
+  about what they are approving.
+- Say the consequence, not the mechanism. "Não substitui a que está no ar" is
+  the consequence; "sem promote" is the mechanism.
+- Keep the option labels concrete: "Sim, subir" and "Não, parar aqui" beat
+  "Prosseguir" and "Cancelar".
+
+The technical detail still belongs in the report AFTER the action — the
+`codebaseVersion`, the execution link, the tags read back. There it is a record.
+In the question it is noise standing between the person and the decision.
 
 ## Reading a failed run
 

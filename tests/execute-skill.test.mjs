@@ -142,3 +142,28 @@ test('LIVE is the default destination, not a reward for being green', () => {
   assert.match(section, /voidr_release_deploy_live/)
 })
 
+
+test('a confirmation gate is written for the person approving it', () => {
+  const rules = skill.slice(
+    skill.indexOf('## Writing the confirmation gates'),
+    skill.indexOf('## Reading a failed run')
+  )
+
+  // Observed live: "Sobe a build content-addressed e devolve um codebaseVersion
+  // imutável. O latest NÃO é tocado — monitoramento, self-healing e governança
+  // LIVE ficam intactos." Six internal terms, none defined, in the question
+  // that asks someone to authorize a write.
+  assert.match(rules, /content-addressed/)
+  assert.match(rules, /No tool names/)
+
+  for (const question of [
+    /What changes/,
+    /Can it be undone/,
+    /How long it takes/
+  ]) {
+    assert.match(rules, question)
+  }
+
+  // The vocabulary is not banned from the skill — only from the question.
+  assert.match(rules, /AFTER the action/)
+})

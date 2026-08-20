@@ -1033,7 +1033,14 @@ test('a bare remediation verb authorizes the post-smoke fix', async () => {
     'investiga a falha',
     'roda de novo',
     'tenta outra vez',
-    'ajusta o teste do valor minimo'
+    'ajusta o teste do valor minimo',
+    // Rerunning the build/smoke is itself the authorization — these are the
+    // wordings agents most naturally relay, and they used to fail silently.
+    'rodar build',
+    'roda o build',
+    'Pode rodar o build',
+    'executa o build novamente',
+    'run the build'
   ]) {
     assert.equal(isSmokeRemediationPrompt(prompt), true, prompt)
   }
@@ -1041,7 +1048,9 @@ test('a bare remediation verb authorizes the post-smoke fix', async () => {
     'ajusta o cenario 2',
     'Criar testes',
     'Aprovo este Test Plan',
-    'obrigado, ficou otimo'
+    'obrigado, ficou otimo',
+    // "build" alone, without a run verb, is a report — not an authorization.
+    'o build ficou bom'
   ]) {
     assert.equal(isSmokeRemediationPrompt(prompt), false, prompt)
   }

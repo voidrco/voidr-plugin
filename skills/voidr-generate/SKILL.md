@@ -36,43 +36,43 @@ through Voidr MCP and ask the user to choose, then rebuild the manifest with
 Ask which cases to implement (render the manifest's tree with `ask_user`) —
 or take the user's explicit selection (a module, a suite, or case slugs).
 
-## 0b. Ask where the checks run
+## 0b. Ask where the checking loop runs
 
-Before the first probe, ask once with `ask_user` where the checking loop should
-run, and carry the answer through the whole skill. Do not decide this alone: the
-local loop is faster and the platform loop is the one that predicts the result,
-and which trade the person wants is theirs to make.
+Before the first probe, ask once with `ask_user`, and carry the answer through
+the whole skill. The axis is **platform or this machine** — not which local tool
+to use. Do not decide it alone: one loop is fast and the other is the one that
+answers the question, and which trade the person wants is theirs.
 
-Offer exactly two options, with the platform first as the suggestion:
+Offer exactly two options, platform first as the suggestion:
 
-- **Pelo fluxo (sugerido)** — probes through `voidr_explore`. It runs Playwright
-  on this machine like any other probe, so the browser is this machine's; what
-  it buys is the flow: the selected environment's `baseUrl`, the credentials
-  from `project.json`, per-test stdout and traces returned as evidence, and a
-  run that never counts as validation.
-- **Local** — Playwright invoked directly. Same browser, none of the rest: you
-  wire the URL and the credentials yourself, and the output is whatever the
-  terminal printed.
+- **Na plataforma (sugerido)** — every check is a real run: `voidr_build`, then
+  `voidr_release_deploy_validation` for a candidate, then a SHADOW execution
+  through `/voidr-execute`. Minutes per iteration, and it is the verdict — the
+  browser, the network, and the environment the Test Plan actually runs on.
+- **Nesta máquina** — probes here, seconds per iteration, and never a verdict: a
+  green probe is not evidence the case passes on the platform. Use it to answer
+  DOM and flow questions, then confirm on the platform before calling anything
+  done.
 
-Say this either way, because it is true of BOTH answers: neither mode is a
-verdict. Both run on this machine, so a green probe is not evidence that the
-case passes on the platform. The only platform result is a validation run
-through `/voidr-execute`.
+Inside the local answer, prefer `voidr_explore` over invoking the runner
+directly. Both run here; `voidr_explore` wires the selected environment's
+`baseUrl` and the `project.json` credentials, and returns per-test stdout and
+traces as evidence, while a direct invocation leaves you to wire those yourself
+and gives back whatever the terminal printed. Go direct only when the
+repository's own documented flow requires it — some repositories have one, and
+that is the repository's call to make.
 
-Two things do not change with the answer, because the plan runs on the platform
-either way: `voidr_build` stays the build gate, and any validation run is a
-platform run through `/voidr-execute`. Local mode shortens the loop; it does not
-replace the verdict.
+Two things do not move with the answer: `voidr_build` is the build gate either
+way, and nothing is reported as validated without a platform run.
 
 Name the chosen mode in the closing report, so a case that was only ever checked
-locally is not read as a case that was validated.
+on this machine is not read as a case that was validated.
 
-The answer is recorded and enforced: under platform mode a local test run is
-refused, and the refusal says to use `voidr_explore`. If a local run turns out to
-be what the work needs, ask to switch the mode and say why — do not work around
-the refusal. This exists because the question alone did not hold: answered
-"platform" at 19:12, a local run went out at 19:16, with both the carry-through
-sentence and the smoke-spec warning already in this file.
+The answer is recorded and enforced: under platform mode, invoking the runner
+directly is refused. If the work genuinely needs it, ask to switch the mode and
+say why — do not work around the refusal. This exists because the question alone
+did not hold: answered "platform" at 19:12, a direct run went out at 19:16, with
+the carry-through sentence already in this file.
 
 ## 1. Repository conventions win on style
 

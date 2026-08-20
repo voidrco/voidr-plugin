@@ -24,7 +24,8 @@ test('platform mode refuses a local test run', () => {
     checkMode: 'platform'
   })
   assert.match(verdict, /voidr_explore/)
-  assert.match(verdict, /returns stdout and\s*traces as evidence/)
+  assert.match(verdict, /voidr_release_deploy_validation/)
+  assert.match(verdict, /voidr_explore/)
 })
 
 test('local mode, and no answer at all, refuse nothing', () => {

@@ -35,11 +35,12 @@ export function findRunModeDenial({ rawToolName, toolArgs, state }) {
     return null
   }
   return (
-    'Blocked by Voidr policy: the checking loop for this work was set to run ' +
-    'through the flow, and this invokes Playwright directly. Use voidr_explore ' +
-    'for an inspection probe — it runs on this machine too, but with the ' +
-    "selected environment's baseUrl and credentials, and it returns stdout and " +
-    'traces as evidence — and voidr_build for the build gate. If a direct run ' +
-    'is genuinely what this needs, ask the user to switch the mode and say why.'
+    'Blocked by Voidr policy: the checking loop for this work was set to the ' +
+    'platform, and this runs the tests on this machine instead. On the platform ' +
+    'a check is voidr_build, then voidr_release_deploy_validation, then a SHADOW ' +
+    'execution through /voidr-execute. For a quick DOM question, voidr_explore ' +
+    'is the local probe that still wires the environment and returns traces. If ' +
+    'this work genuinely needs a direct run, ask the user to switch the mode and ' +
+    'say why.'
   )
 }

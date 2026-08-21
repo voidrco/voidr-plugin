@@ -2,12 +2,19 @@ import { runCommand } from './command.mjs'
 import { validateProvisionedRepositorySelection } from './workspace.mjs'
 
 // Publishes the implemented tests from the linked checkout: feature branch,
-// commit, push, and an optional pull request. Runs in the bridge process —
-// outside the Copilot shell sandbox — so the user's own git credentials and gh
-// session apply. Deploy reads the pushed commit, so the pull request is review,
-// not a step the release waits on. Pushing straight to the default branch is
-// still refused: a release should be traceable to a branch someone can look
-// at.
+// commit, push, pull request, and the merge into the default branch. Runs in
+// the bridge process — outside the Copilot shell sandbox — so the user's own
+// git credentials and gh session apply.
+//
+// The work has to land on the default branch. A pushed branch nobody merges is
+// not a delivered test: the next agent clones the default branch, does not find
+// the test there, and writes it a second time. So the pull request is not
+// optional and the merge is not somebody else's follow-up — this function is
+// finished when the default branch contains the tests.
+//
+// Pushing straight to the default branch is still refused. The branch and the
+// pull request are what make the change reviewable after the fact, and skipping
+// them buys nothing, because this function merges anyway.
 export async function publishTests({
   repositoryPath,
   repositoryUrl,
@@ -15,7 +22,7 @@ export async function publishTests({
   commitMessage,
   pullRequestTitle,
   pullRequestBody,
-  createPullRequest = false,
+  mergeToDefaultBranch = true,
   run = runCommand
 }) {
   const selected = validateProvisionedRepositorySelection(
@@ -43,7 +50,7 @@ export async function publishTests({
   }
   if (branchName === defaultBranch) {
     throw new Error(
-      `Never push directly to the default branch (${defaultBranch}). Publish a feature branch instead; the deploy releases the commit you just pushed, with no merge in between.`
+      `Never push directly to the default branch (${defaultBranch}). Pass a feature branch name instead: this call pushes that branch, opens the pull request, and merges it into ${defaultBranch} for you.`
     )
   }
 
@@ -74,16 +81,24 @@ export async function publishTests({
     timeout: 180_000
   })
 
-  let pullRequestUrl = null
-  if (createPullRequest) {
-    pullRequestUrl = await createOrFindPullRequest({
+  const pullRequestUrl = await createOrFindPullRequest({
+    repositoryPath: selected.path,
+    branchName,
+    defaultBranch,
+    title: String(pullRequestTitle || '').trim() || message,
+    body:
+      String(pullRequestBody || '').trim() ||
+      'Testes gerados com o plugin Voidr Copilot.',
+    run
+  })
+
+  let merged = false
+  if (mergeToDefaultBranch) {
+    merged = await mergePullRequest({
       repositoryPath: selected.path,
       branchName,
       defaultBranch,
-      title: String(pullRequestTitle || '').trim() || message,
-      body:
-        String(pullRequestBody || '').trim() ||
-        'Testes gerados com o plugin Voidr Copilot.',
+      pullRequestUrl,
       run
     })
   }
@@ -96,10 +111,50 @@ export async function publishTests({
     commitSha,
     pushed: true,
     pullRequestUrl,
-    next: pullRequestUrl
-      ? 'Pushed, and a pull request is open for review. The release does not wait for it: this commit can be deployed now.'
-      : 'Pushed. This commit is ready to deploy — no pull request needed.'
+    merged,
+    next: merged
+      ? `Merged into ${defaultBranch}. The tests are on the default branch, so the next clone finds them and this commit is ready to deploy.`
+      : `Pushed, and the pull request is open, but ${defaultBranch} does NOT have the tests yet. Until someone merges it, a fresh clone of ${defaultBranch} will not contain them. Do not report this work as delivered: say the pull request is waiting and name it — ${pullRequestUrl || branchName}.`
   }
+}
+
+// Merges the pull request into the default branch. Returns false — never
+// throws — when GitHub refuses: a required review, a failing check, a conflict,
+// or a protected branch are all the repository working as configured, and the
+// push and the pull request survive either way. The caller has to be able to
+// tell the difference, so the reason is spelled out in the returned message
+// rather than left for whoever reads the logs.
+async function mergePullRequest({
+  repositoryPath,
+  branchName,
+  defaultBranch,
+  pullRequestUrl,
+  run
+}) {
+  const target = pullRequestUrl || branchName
+  try {
+    await run('gh', ['pr', 'merge', target, '--merge'], {
+      cwd: repositoryPath,
+      timeout: 180_000
+    })
+  } catch (error) {
+    return false
+  }
+  // gh reports success before the merge is visible on the ref often enough that
+  // trusting it produces a "merged" that a later clone contradicts.
+  await run('git', ['fetch', 'origin', defaultBranch], {
+    cwd: repositoryPath,
+    timeout: 120_000
+  }).catch(() => null)
+  const contains = await run(
+    'git',
+    ['merge-base', '--is-ancestor', branchName, `origin/${defaultBranch}`],
+    { cwd: repositoryPath, timeout: 60_000 }
+  ).then(
+    () => true,
+    () => false
+  )
+  return contains
 }
 
 async function createOrFindPullRequest({

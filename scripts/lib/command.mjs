@@ -15,6 +15,11 @@ const WINDOWS_CLI_ENTRIES = {
   npx: 'npx-cli.js'
 }
 const WINDOWS_EXECUTABLE_SUFFIXES = ['.exe', '.cmd', '.bat']
+const WINDOWS_GH_INSTALL_LOCATIONS = [
+  ['ProgramFiles', 'GitHub CLI', 'gh.exe'],
+  ['LOCALAPPDATA', 'Programs', 'GitHub CLI', 'gh.exe'],
+  ['LOCALAPPDATA', 'Microsoft', 'WinGet', 'Links', 'gh.exe']
+]
 
 const NETWORK_ERROR_MARKERS = [
   'eai_again',
@@ -51,10 +56,14 @@ export async function runCommand(file, args, options = {}) {
   }
 }
 
-// Only npm and npx are rewritten: node, git, and gh are real .exe files that
-// resolve normally, and every other platform runs the command as given.
+// npm/npx shims are rewritten to their JS entry points. gh remains a real
+// executable, but Windows gets an absolute-path fallback because GUI hosts can
+// inherit a PATH that differs from the user's terminal.
 export function resolveNodeToolchainCommand(file, args, options = {}) {
   const platform = options.platform || process.platform
+  if (platform === 'win32' && String(file || '').toLowerCase() === 'gh') {
+    return resolveWindowsGhCommand(args, options)
+  }
   const entry = WINDOWS_CLI_ENTRIES[String(file || '').toLowerCase()]
   if (platform !== 'win32' || !entry) return { file, args }
 
@@ -102,6 +111,49 @@ export function resolveNodeToolchainCommand(file, args, options = {}) {
   )
 }
 
+// GUI-hosted MCP processes can inherit a different PATH from PowerShell. On
+// Windows, resolve GitHub CLI before spawning it so a standard winget/MSI
+// installation remains usable even when its directory is missing from the
+// extension host's PATH.
+export function resolveWindowsGhCommand(args, options = {}) {
+  const env = options.env || process.env
+  const exists = options.exists || existsSync
+  const configuredPath = windowsEnvValue(env, 'VOIDR_GH_PATH')
+
+  if (configuredPath) {
+    const explicit = configuredPath.trim().replace(/^"|"$/g, '')
+    if (exists(explicit)) return { file: explicit, args }
+    throw new Error(
+      `VOIDR_GH_PATH points to ${explicit}, but gh.exe does not exist there. ` +
+        'Correct or remove VOIDR_GH_PATH, restart Codex, and retry.'
+    )
+  }
+
+  const fromPath = findWindowsCommand(
+    'gh',
+    windowsPathEntries(env),
+    exists,
+    ['.exe']
+  )
+  if (fromPath) return { file: fromPath.path, args }
+
+  for (const [variable, ...segments] of WINDOWS_GH_INSTALL_LOCATIONS) {
+    const root = windowsEnvValue(env, variable)
+    if (!root) continue
+    const candidate = windowsPath.join(root, ...segments)
+    if (exists(candidate)) return { file: candidate, args }
+  }
+
+  throw new Error(
+    'GitHub CLI (gh.exe) was not found in VOIDR_GH_PATH, PATH, Program Files, ' +
+      'or the standard per-user installation directories. Install it in ' +
+      "PowerShell with 'winget install --id GitHub.cli', then run 'gh auth " +
+      "login', close Codex completely, reopen it, and retry. If gh already " +
+      'works in PowerShell, set VOIDR_GH_PATH to the absolute path returned by ' +
+      "'(Get-Command gh).Source' and restart Codex."
+  )
+}
+
 // The runtime gate has to measure the Node that will actually execute Playwright.
 // On Windows that is the node.exe of the toolchain that owns the npx shim, which
 // is not necessarily the one a bare `node` resolves to; anywhere else, and when
@@ -117,18 +169,27 @@ export function nodeExecutableForToolchain(options = {}) {
 }
 
 function windowsPathEntries(env) {
-  const key = Object.keys(env || {}).find(
-    name => name.toLowerCase() === 'path'
-  )
-  return String((key && env[key]) || '')
+  return String(windowsEnvValue(env, 'PATH') || '')
     .split(';')
     .map(entry => entry.trim().replace(/^"|"$/g, ''))
     .filter(Boolean)
 }
 
-function findWindowsCommand(file, directories, exists) {
+function windowsEnvValue(env, requestedName) {
+  const key = Object.keys(env || {}).find(
+    name => name.toLowerCase() === requestedName.toLowerCase()
+  )
+  return key ? env[key] : undefined
+}
+
+function findWindowsCommand(
+  file,
+  directories,
+  exists,
+  suffixes = WINDOWS_EXECUTABLE_SUFFIXES
+) {
   for (const directory of directories) {
-    for (const suffix of WINDOWS_EXECUTABLE_SUFFIXES) {
+    for (const suffix of suffixes) {
       const candidate = windowsPath.join(directory, `${file}${suffix}`)
       if (exists(candidate)) return { path: candidate, directory, suffix }
     }

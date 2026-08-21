@@ -365,7 +365,7 @@ const localTools = [
   {
     name: 'voidr_workspace_publish_tests',
     description:
-      'Publish the implemented tests from the linked checkout after the user explicitly authorized it in chat: create or reuse a feature branch, commit, and push with an explicit refspec. With createPullRequest, it also opens (or reuses) a pull request to the default branch — review only, since the release deploys the pushed commit and never waits for a merge. Runs outside the Copilot shell sandbox with the user Git credentials. Pushing to the default branch is refused.',
+      'Publish the implemented tests from the linked checkout after the user explicitly authorized it in chat: create or reuse a feature branch, commit, push with an explicit refspec, open (or reuse) a pull request, and merge it into the default branch. The merge is the point — a pushed branch nobody merges is not a delivered test, because the next clone of the default branch will not contain it. Read `merged` in the result: when it is false the default branch does NOT have the tests, and the pull request named in `next` is waiting on a review, a check, or a conflict. Runs outside the Copilot shell sandbox with the user Git credentials. Pushing to the default branch is refused; pass a feature branch and this tool merges it for you.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -378,7 +378,7 @@ const localTools = [
         commitMessage: { type: 'string' },
         pullRequestTitle: { type: 'string' },
         pullRequestBody: { type: 'string' },
-        createPullRequest: { type: 'boolean', default: false }
+        mergeToDefaultBranch: { type: 'boolean', default: true }
       },
       required: ['repositoryPath', 'repositoryUrl', 'branch', 'commitMessage']
     }
@@ -1778,7 +1778,7 @@ async function callLocal(name, args) {
           pullRequestBody: args.pullRequestBody
             ? String(args.pullRequestBody)
             : undefined,
-          createPullRequest: args.createPullRequest !== false
+          mergeToDefaultBranch: args.mergeToDefaultBranch !== false
         })
       )
     case 'voidr_release_deploy_live': {

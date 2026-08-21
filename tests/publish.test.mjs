@@ -20,7 +20,12 @@ function createCheckout() {
   return repositoryPath
 }
 
-function fakePublishRun({ calls, prCreateError = null }) {
+function fakePublishRun({
+  calls = [],
+  prCreateError = null,
+  prMergeError = null,
+  ancestorOfDefault = true
+}) {
   return async (file, args, options) => {
     calls.push({ file, args, options })
     if (file === 'gh' && args[0] === 'repo') {
@@ -32,11 +37,19 @@ function fakePublishRun({ calls, prCreateError = null }) {
     if (file === 'git' && args[0] === 'rev-parse') {
       return { stdout: `${'a'.repeat(40)}\n` }
     }
+    if (file === 'git' && args[0] === 'merge-base') {
+      if (!ancestorOfDefault) throw new Error('not an ancestor')
+      return { stdout: '' }
+    }
     if (file === 'gh' && args[0] === 'pr' && args[1] === 'create') {
       if (prCreateError) throw new Error(prCreateError)
       return {
         stdout: 'https://github.com/voidrco/voidr-tp-publish/pull/7\n'
       }
+    }
+    if (file === 'gh' && args[0] === 'pr' && args[1] === 'merge') {
+      if (prMergeError) throw new Error(prMergeError)
+      return { stdout: '' }
     }
     if (file === 'gh' && args[0] === 'pr' && args[1] === 'view') {
       return {
@@ -49,7 +62,7 @@ function fakePublishRun({ calls, prCreateError = null }) {
   }
 }
 
-test('publishes a feature branch with commit, explicit refspec push, and PR', async () => {
+test('publishes a feature branch and merges it into the default branch', async () => {
   const repositoryPath = createCheckout()
   const calls = []
 
@@ -58,7 +71,6 @@ test('publishes a feature branch with commit, explicit refspec push, and PR', as
     repositoryUrl,
     branch: 'feat/recarga-creditos-tests',
     commitMessage: 'test: cenários de recarga de créditos',
-    createPullRequest: true,
     run: fakePublishRun({ calls })
   })
 
@@ -69,17 +81,25 @@ test('publishes a feature branch with commit, explicit refspec push, and PR', as
     result.pullRequestUrl,
     'https://github.com/voidrco/voidr-tp-publish/pull/7'
   )
+  assert.equal(result.merged, true)
 
-  const sequence = calls.map(call => `${call.file} ${call.args[0]}`)
+  const sequence = calls.map(call =>
+    call.file === 'gh'
+      ? `gh ${call.args[0]} ${call.args[1]}`
+      : `git ${call.args[0]}`
+  )
   assert.deepEqual(sequence, [
-    'gh repo',
+    'gh repo view',
     'git checkout',
     'git add',
     'git status',
     'git commit',
     'git rev-parse',
     'git push',
-    'gh pr'
+    'gh pr create',
+    'gh pr merge',
+    'git fetch',
+    'git merge-base'
   ])
   const push = calls.find(call => call.args[0] === 'push')
   assert.deepEqual(push.args, [
@@ -88,6 +108,62 @@ test('publishes a feature branch with commit, explicit refspec push, and PR', as
     'origin',
     'feat/recarga-creditos-tests:feat/recarga-creditos-tests'
   ])
+})
+
+test('opens the pull request even when the merge is not wanted', async () => {
+  const repositoryPath = createCheckout()
+  const calls = []
+
+  const result = await publishTests({
+    repositoryPath,
+    repositoryUrl,
+    branch: 'feat/recarga-creditos-tests',
+    commitMessage: 'test: cenários de recarga',
+    mergeToDefaultBranch: false,
+    run: fakePublishRun({ calls })
+  })
+
+  assert.equal(
+    result.pullRequestUrl,
+    'https://github.com/voidrco/voidr-tp-publish/pull/7'
+  )
+  assert.equal(result.merged, false)
+  assert.equal(
+    calls.some(call => call.file === 'gh' && call.args[1] === 'merge'),
+    false
+  )
+})
+
+test('a refused merge is reported as unmerged, not as a failure', async () => {
+  const repositoryPath = createCheckout()
+
+  const result = await publishTests({
+    repositoryPath,
+    repositoryUrl,
+    branch: 'feat/recarga-creditos-tests',
+    commitMessage: 'test: cenários de recarga',
+    run: fakePublishRun({
+      prMergeError: 'Pull request is not mergeable: 1 approving review required'
+    })
+  })
+
+  assert.equal(result.completed, true)
+  assert.equal(result.pushed, true)
+  assert.equal(result.merged, false)
+})
+
+test('gh reporting a merge that the ref does not have is not merged', async () => {
+  const repositoryPath = createCheckout()
+
+  const result = await publishTests({
+    repositoryPath,
+    repositoryUrl,
+    branch: 'feat/recarga-creditos-tests',
+    commitMessage: 'test: cenários de recarga',
+    run: fakePublishRun({ ancestorOfDefault: false })
+  })
+
+  assert.equal(result.merged, false)
 })
 
 test('refuses to publish directly to the default branch', async () => {
@@ -119,7 +195,6 @@ test('reuses the existing pull request when creation reports a duplicate', async
     repositoryUrl,
     branch: 'feat/recarga-creditos-tests',
     commitMessage: 'test: cenários de recarga',
-    createPullRequest: true,
     run: fakePublishRun({
       calls,
       prCreateError:
@@ -164,28 +239,30 @@ test('rejects a checkout whose origin does not match the linked repository', asy
   )
 })
 
-test('a finished publish never reads as a blocked one', async () => {
+test('an unmerged publish never reads as a delivered one', async () => {
   const repositoryPath = createCheckout()
 
-  const withPr = await publishTests({
+  const merged = await publishTests({
     repositoryPath,
     repositoryUrl,
     branch: 'feat/recarga-creditos-tests',
     commitMessage: 'test: cenários de recarga de créditos',
-    createPullRequest: true,
-    run: fakePublishRun({ calls: [] })
+    run: fakePublishRun({})
   })
-  const withoutPr = await publishTests({
+  const unmerged = await publishTests({
     repositoryPath,
     repositoryUrl,
     branch: 'feat/recarga-creditos-tests',
     commitMessage: 'test: cenários de recarga de créditos',
-    run: fakePublishRun({ calls: [] })
+    run: fakePublishRun({ prMergeError: '1 approving review required' })
   })
 
-  for (const result of [withPr, withoutPr]) {
-    assert.equal(result.completed, true)
-    assert.doesNotMatch(result.next, /requires|required|merge the pull request/i)
-  }
-  assert.match(withoutPr.next, /ready to deploy/i)
+  assert.equal(merged.completed, true)
+  assert.match(merged.next, /Merged into main/i)
+
+  // The agent acts on this sentence, not on the boolean beside it, so it has to
+  // say that the default branch lacks the tests and name what is waiting.
+  assert.match(unmerged.next, /does NOT have the tests/i)
+  assert.match(unmerged.next, /pull\/7/)
+  assert.doesNotMatch(unmerged.next, /ready to deploy/i)
 })

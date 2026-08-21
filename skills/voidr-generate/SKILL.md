@@ -403,6 +403,26 @@ When the diagnosis points at a selector, take the replacement from the recorded
 evidence (step 3), not from a guess about the markup. A selector the recording
 never proves is a second guess stacked on the first.
 
+### Three validation runs, and then stop
+
+Count validation runs for the case, not failure signatures: the third run is the
+last one. A cycle that produces a different cause each time looks like progress
+and is the one that runs longest — the per-signature limit in `/voidr-execute`
+never fires, because no signature repeats.
+
+Say the count out loud from the second run on ("segunda de três"), so the budget
+is visible before it is spent rather than after.
+
+At the third failure, stop and report: what each run failed on, what changed
+between them, and what the evidence supports as the next step. Do not start a
+fourth. A fourth run is a guess with a deploy attached, and the cost is real —
+a validation run is a candidate deploy plus a real execution, and a case like a
+full purchase flow can take fifteen minutes on its own.
+
+The user can ask for another round. That is their call to make with the three
+results in front of them, and it is a different thing from the flow deciding on
+its own to keep going.
+
 ## 7. AAA × product divergence — the update gate
 
 When evidence from steps 3–6 PROVES the approved AAA describes behavior the

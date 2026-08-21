@@ -37,3 +37,19 @@ test('the probe step defers to that choice instead of picking a path', () => {
   assert.match(probes, /the way 0b settled/)
   assert.match(probes, /npx playwright test/)
 })
+
+test('validation stops at three runs, whatever the failures look like', () => {
+  const section = skill.slice(skill.indexOf('### Three validation runs'))
+
+  // The per-signature limit in /voidr-execute never fires when each run fails
+  // differently, which is exactly the cycle that runs longest.
+  assert.match(section, /not failure signatures/)
+  assert.match(section, /third run is the\s+last one/)
+  assert.match(section, /Do not start a\s+fourth/)
+
+  // The count is announced before the budget is spent, not after.
+  assert.match(section, /segunda de três/)
+
+  // A fourth round stays available — as the user's decision, not the flow's.
+  assert.match(section, /can ask for another round/)
+})

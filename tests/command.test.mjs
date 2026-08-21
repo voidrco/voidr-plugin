@@ -4,7 +4,8 @@ import {
   describeCommandFailure,
   isNetworkFailure,
   nodeExecutableForToolchain,
-  resolveNodeToolchainCommand
+  resolveNodeToolchainCommand,
+  resolveWindowsGhCommand
 } from '../scripts/lib/command.mjs'
 
 const NVS_DIRECTORY = 'C:\\Users\\dev\\AppData\\Local\\nvs\\node\\22.23.2\\x64'
@@ -39,6 +40,85 @@ test('reports a missing executable instead of guessing', () => {
   const error = Object.assign(new Error('spawn gh ENOENT'), { code: 'ENOENT' })
   const message = describeCommandFailure('gh', ['pr'], error)
   assert.match(message, /gh executable is not available/i)
+})
+
+test('resolves gh from the Windows PATH before known install locations', () => {
+  const pathGh = 'C:\\tools\\github-cli\\gh.exe'
+  const programFilesGh = 'C:\\Program Files\\GitHub CLI\\gh.exe'
+  const resolved = resolveWindowsGhCommand(['pr', 'view'], {
+    env: {
+      Path: 'C:\\tools\\github-cli;C:\\Windows\\system32',
+      ProgramFiles: 'C:\\Program Files'
+    },
+    exists: path => path === pathGh || path === programFilesGh
+  })
+
+  assert.deepEqual(resolved, { file: pathGh, args: ['pr', 'view'] })
+})
+
+test('resolves gh from the standard Windows machine installation', () => {
+  const expected = 'C:\\Program Files\\GitHub CLI\\gh.exe'
+  const resolved = resolveNodeToolchainCommand('gh', ['auth', 'status'], {
+    platform: 'win32',
+    env: {
+      PATH: 'C:\\Windows\\system32',
+      PROGRAMFILES: 'C:\\Program Files'
+    },
+    exists: path => path === expected
+  })
+
+  assert.deepEqual(resolved, { file: expected, args: ['auth', 'status'] })
+})
+
+test('resolves gh from a standard Windows per-user installation', () => {
+  const expected =
+    'C:\\Users\\dev\\AppData\\Local\\Programs\\GitHub CLI\\gh.exe'
+  const resolved = resolveWindowsGhCommand(['repo', 'view'], {
+    env: {
+      PATH: 'C:\\Windows\\system32',
+      LOCALAPPDATA: 'C:\\Users\\dev\\AppData\\Local'
+    },
+    exists: path => path === expected
+  })
+
+  assert.deepEqual(resolved, { file: expected, args: ['repo', 'view'] })
+})
+
+test('honors VOIDR_GH_PATH and preserves gh arguments', () => {
+  const expected = 'D:\\portable tools\\gh.exe'
+  const args = ['pr', 'create', '--title', 'QA & release']
+  const resolved = resolveWindowsGhCommand(args, {
+    env: { voidr_gh_path: expected },
+    exists: path => path === expected
+  })
+
+  assert.deepEqual(resolved, { file: expected, args })
+})
+
+test('explains how to install or configure gh when Windows cannot find it', () => {
+  assert.throws(
+    () =>
+      resolveWindowsGhCommand(['pr', 'view'], {
+        env: {
+          PATH: 'C:\\Windows\\system32',
+          ProgramFiles: 'C:\\Program Files',
+          LOCALAPPDATA: 'C:\\Users\\dev\\AppData\\Local'
+        },
+        exists: () => false
+      }),
+    /winget install --id GitHub\.cli[\s\S]*gh auth login[\s\S]*VOIDR_GH_PATH[\s\S]*Get-Command gh/i
+  )
+})
+
+test('reports a stale VOIDR_GH_PATH instead of silently ignoring it', () => {
+  assert.throws(
+    () =>
+      resolveWindowsGhCommand([], {
+        env: { VOIDR_GH_PATH: 'C:\\missing\\gh.exe' },
+        exists: () => false
+      }),
+    /VOIDR_GH_PATH points to C:\\missing\\gh\.exe[\s\S]*Correct or remove/i
+  )
 })
 
 test('runs the npm of the active Windows toolchain without a shell', () => {

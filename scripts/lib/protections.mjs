@@ -1,5 +1,8 @@
-// The one act that stays forbidden through any channel: starting a worker job
-// from here. Automation runs and healing runs are requested from the platform,
+// Two rules. The first is about consequence: a worker job is not started from
+// here. The second is about mechanism: an MCP tool is called by calling it, not
+// through the shell and not through a subagent.
+//
+// Starting a worker job from here is forbidden because Automation runs and healing runs are requested from the platform,
 // which owns their scheduling, their credentials, and their audit trail — a job
 // started from a developer session has none of that.
 //
@@ -100,7 +103,50 @@ function workerDispatch({ rawToolName, toolName, toolArgs, policy }) {
   return null
 }
 
-const PROTECTIONS = [workerDispatch]
+
+// Observed with a smaller model, three minutes into its first request: it
+// loaded voidr_context_bootstrap through ToolSearch, then ran `mcp call
+// voidr_context_bootstrap` in the shell, then wrapped that same missing binary
+// in `node -e`, then concluded "MCP tools have to be reached through an agent"
+// and delegated. Seven tool calls, zero MCP calls, and it reported the
+// subagent's answer as if it had read the result itself.
+//
+// `command not found: mcp` was true and precise and taught it nothing, because
+// the model was not disobeying an instruction — it had the wrong theory of how
+// invocation works and read each failure as needing another wrapper. No skill
+// text covers this: none of them imagine having to say that a tool is called by
+// calling it. So the correction has to arrive at the moment of the attempt.
+// Any MCP tool, not only this plugin's. The mistake is about how invocation
+// works, and the answer is the same whichever server owns the tool.
+const MCP_TOOL = /\bmcp__[a-z0-9_]+__[a-z0-9_]+|\bmcp\s+call\b/i
+const INVOCATION_INTENT =
+  /\b(?:use|using|call|calling|invoke|invoking|run|running|execute|chame|chamar|usar|use a|invoque|invocar|execute|executar|rode|rodar)\b/i
+
+function isDelegationTool(name) {
+  return /(^|[-_/])(agent|task|subagent)$/i.test(String(name))
+}
+
+function invocationPath({ rawToolName, toolArgs }) {
+  const text = collectStringValues(toolArgs).join('\n')
+
+  if (isDelegationTool(rawToolName)) {
+    if (!MCP_TOOL.test(text) || !INVOCATION_INTENT.test(text)) return null
+    return 'Blocked by Voidr policy: call the Voidr tool yourself instead of asking a subagent to call it. A subagent has the same tools and no more, so delegating adds a step and hides the result behind a report. Emit the tool call directly.'
+  }
+
+  if (!isShellTool(rawToolName)) return null
+  // Same stage test the job rule uses: naming a tool in a grep or a note is
+  // not an attempt to call it.
+  const attempts = commandStages(text).filter(
+    stage =>
+      MCP_TOOL.test(stage) &&
+      !INSPECTION_COMMANDS.has(leadingCommand(stage))
+  )
+  if (!attempts.length) return null
+  return 'Blocked by Voidr policy: there is no `mcp` command and no shell path to a Voidr tool. These are MCP tools: emit the tool call directly, with its arguments as JSON. If the tool is not in your list, load it with ToolSearch first — but ToolSearch only makes it available, it does not call it.'
+}
+
+const PROTECTIONS = [workerDispatch, invocationPath]
 
 export function findProtectionDenial(request) {
   for (const protection of PROTECTIONS) {

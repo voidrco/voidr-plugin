@@ -85,3 +85,38 @@ test('the machine belongs to the developer', () => {
 test('the rule does not wait for a workflow to be active', () => {
   assert.equal(ask('agent_jobs_trigger_automation', {}).denied, true)
 })
+
+test('an MCP tool is called by calling it', () => {
+  // Observed with a smaller model: ToolSearch loaded the tool, then the shell
+  // was asked for a binary that does not exist, then the same binary through
+  // node, then a subagent. Seven tool calls, zero MCP calls.
+  assert.match(shell(`mcp call mcp__plugin_voidr_voidr__voidr_context_bootstrap --planId abc`).reason, /directly/i)
+  assert.match(
+    shell(`node -e "spawnSync('mcp', ['call', 'mcp__plugin_voidr_voidr__voidr_context_bootstrap'])"`).reason,
+    /directly/i
+  )
+  assert.match(
+    ask('Agent', { prompt: 'Use a ferramenta MCP `mcp__plugin_voidr_voidr__voidr_context_bootstrap` para fazer bootstrap' }).reason,
+    /yourself|directly/i
+  )
+  assert.equal(ask('Task', { prompt: 'chame mcp__voidr__test_plans_get_case e devolva o caso' }).denied, true)
+})
+
+test('the rule is about invocation, not about this plugin', () => {
+  // Any MCP server: the mistake is how invocation works, and the answer does
+  // not change with the owner of the tool.
+  assert.equal(shell(`curl -s localhost/mcp__voidr__test_plans_get_case`).denied, true)
+})
+
+test('naming a tool is not calling it, and delegation stays available', () => {
+  assert.equal(shell(`grep -rn "mcp__plugin_voidr_voidr__voidr_context_bootstrap" scripts/`).denied, false)
+  assert.equal(shell(`echo "doc sobre mcp__plugin_voidr_voidr__voidr_context_bootstrap" >> notas.md`).denied, false)
+  assert.equal(
+    ask('Agent', { prompt: 'Leia os arquivos em docs/ e resuma a arquitetura' }).denied,
+    false
+  )
+})
+
+test('the tool call itself is never the thing refused', () => {
+  assert.equal(ask('mcp__plugin_voidr_voidr__voidr_context_bootstrap', { planId: 'abc' }).denied, false)
+})

@@ -97,9 +97,86 @@ test('promotes the exercised build without rebuilding or checking remote Git sta
     codebaseVersion
   })
   assert.equal(result.release.latestCodebaseVersion, codebaseVersion)
+  assert.equal(result.gitSync.status, 'FAILED')
   assert.deepEqual(calls, [
     ['npx', '--no-install', 'voidr', 'deploy-latest']
   ])
+})
+
+test('submits the validation-time patch after LIVE is published', async () => {
+  const { repositoryPath, repositoryUrl } = makeCheckout('sync')
+  const baseCommitSha = 'a'.repeat(40)
+  const patch = 'diff --git a/modules/a.js b/modules/a.js\n'
+  writeFileSync(
+    join(repositoryPath, '.voidr', '.output', 'repository-sync.json'),
+    JSON.stringify({
+      version: 1,
+      codebaseVersion,
+      needed: true,
+      baseCommitSha,
+      patch
+    })
+  )
+  const submitted = []
+
+  const result = await deployRelease({
+    repositoryPath,
+    repositoryUrl,
+    testPlanId,
+    codebaseVersion,
+    run: async () => ({ stdout: '', stderr: '', exitCode: 0 }),
+    restClient: {
+      get: async () => ({ data: { manifestData: { codebaseVersion } } })
+    },
+    syncRepository: async args => {
+      submitted.push(args)
+      return {
+        status: 'QUEUED',
+        liveValid: true,
+        codebaseVersion,
+        message: 'waiting for merge'
+      }
+    }
+  })
+
+  assert.deepEqual(submitted, [
+    { testPlanId, codebaseVersion, baseCommitSha, patch }
+  ])
+  assert.equal(result.completed, true)
+  assert.equal(result.gitSync.status, 'QUEUED')
+})
+
+test('keeps LIVE successful when repository synchronization fails', async () => {
+  const { repositoryPath, repositoryUrl } = makeCheckout('sync-failure')
+  writeFileSync(
+    join(repositoryPath, '.voidr', '.output', 'repository-sync.json'),
+    JSON.stringify({
+      version: 1,
+      codebaseVersion,
+      needed: true,
+      baseCommitSha: 'a'.repeat(40),
+      patch: 'diff --git a/modules/a.js b/modules/a.js\n'
+    })
+  )
+
+  const result = await deployRelease({
+    repositoryPath,
+    repositoryUrl,
+    testPlanId,
+    codebaseVersion,
+    run: async () => ({ stdout: '', stderr: '', exitCode: 0 }),
+    restClient: {
+      get: async () => ({ data: { manifestData: { codebaseVersion } } })
+    },
+    syncRepository: async () => {
+      throw new Error('preview unavailable')
+    }
+  })
+
+  assert.equal(result.completed, true)
+  assert.equal(result.release.latestCodebaseVersion, codebaseVersion)
+  assert.equal(result.gitSync.status, 'FAILED')
+  assert.equal(result.gitSync.liveValid, true)
 })
 
 test('refuses a local build that differs from the exercised candidate', async () => {

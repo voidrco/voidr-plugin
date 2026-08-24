@@ -189,7 +189,11 @@ push, open a pull request, and merge the tests into the repository's default
 branch. That Git delivery is best effort: any failure is reported but does not
 block LIVE. The plugin promotes the exact candidate that produced the completed
 validation verdict, without rebuilding, and reports success only when the
-platform read-back proves `latest` points to the same `codebaseVersion`.
+platform read-back proves `latest` points to the same `codebaseVersion`. Once
+LIVE is confirmed, the Voidr Bot receives the exact source patch captured for
+that validated candidate and tries to synchronize it through a branch and pull
+request. Git may finish, wait for merge, conflict, or lack permission; none of
+those outcomes rolls back or invalidates LIVE.
 Legacy `voidr deploy-latest` and `npm run voidr:deploy` shell paths are denied.
 
 ## Authentication prerequisite

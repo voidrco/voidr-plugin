@@ -386,7 +386,7 @@ const localTools = [
   {
     name: 'voidr_release_deploy_live',
     description:
-      'Publish and verify the exact immutable candidate exercised by a completed platform validation whose test verdict was PASSED or diagnosed FAILED. Pass the codebaseVersion returned by voidr_release_deploy_validation; the local manifest must still match it. This does not rebuild and does not require a clean worktree, a Git commit, a push, a pull request, or a merge. The tool reports completion only after latest points to that same codebaseVersion.',
+      'Publish and verify the exact immutable candidate exercised by a completed platform validation whose test verdict was PASSED or diagnosed FAILED. Pass the codebaseVersion returned by voidr_release_deploy_validation; the local manifest must still match it. This does not rebuild and does not require a clean worktree, a Git commit, a push, a pull request, or a merge. After latest points to that same codebaseVersion, the tool asks the Voidr Bot to synchronize the exact source patch captured during validation and reports that separate Git status without invalidating LIVE.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1787,7 +1787,20 @@ async function callLocal(name, args) {
         repositoryPath: String(args.repositoryPath || ''),
         repositoryUrl: String(args.repositoryUrl || ''),
         testPlanId: String(args.testPlanId || ''),
-        codebaseVersion: String(args.codebaseVersion || '')
+        codebaseVersion: String(args.codebaseVersion || ''),
+        syncRepository: async syncArgs => {
+          const result = await remote.callTool(
+            'test_plans_sync_repository_diff',
+            syncArgs
+          )
+          const data = remoteResultData(result)
+          if (result?.isError || !data) {
+            throw new Error(
+              'Voidr did not accept the repository synchronization patch.'
+            )
+          }
+          return data
+        }
       })
       if (deployed?.completed) executionNeedsDeploy = false
       return textResult(deployed)

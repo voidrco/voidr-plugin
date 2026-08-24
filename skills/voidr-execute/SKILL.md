@@ -88,8 +88,11 @@ Ask (or infer from the request) which mode applies:
    `voidr_release_deploy_validation` and exercised by the completed validation
    run, whether its tests PASSED or FAILED.
    Do not rebuild. Do not call `voidr_release_inspect`. No Git commit, push,
-   pull request, or merge is a deploy prerequisite. If code delivery failed,
-   report both truths: LIVE advanced, and the default branch did not.
+   pull request, or merge is a deploy prerequisite. After LIVE is verified,
+   the tool asks the Voidr Bot to deliver the exact validated source patch when
+   the earlier Git delivery did not reach the default branch. Report the two
+   results independently: LIVE is valid even when the bot reports queued,
+   conflict, missing permission, or failure.
 
 ## Writing the confirmation gates
 
@@ -336,6 +339,8 @@ anyway and say the cause is unknown.
 - `voidr_release_deploy_live` — publishes the exact `codebaseVersion` that
   produced a PASSED or diagnosed FAILED validation verdict, only after an
   explicit user decision. It never rebuilds and never depends on Git state.
+  After confirming LIVE, it also asks the Voidr Bot to synchronize the source
+  patch captured during validation and returns that separate Git status.
 - `voidr_workspace_publish_tests` — best-effort delivery to the default branch
   before LIVE. Its failure is reported but never blocks
   `voidr_release_deploy_live`.

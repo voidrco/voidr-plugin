@@ -17,6 +17,7 @@ export async function deployRelease({
   codebaseVersion,
   restClient = new VoidrRestClient(),
   cliEnvironment,
+  syncRepository,
   run = runCommand
 }) {
   if (!/^[a-f0-9]{24}$/i.test(String(testPlanId || ''))) {
@@ -49,6 +50,10 @@ export async function deployRelease({
     exercisedCodebaseVersion: codebaseVersion,
     manifestCodebaseVersion: manifest.codebaseVersion
   })
+  const repositorySync = await readRepositorySyncSnapshot(
+    selected.path,
+    candidate.codebaseVersion
+  )
 
   const published = await run('npx', ['--no-install', 'voidr', 'deploy-latest'], {
     cwd: selected.path,
@@ -81,6 +86,12 @@ export async function deployRelease({
     latestVerified: currentVersion === candidate.codebaseVersion,
     latestCodebaseVersion: currentVersion
   })
+  const gitSync = await synchronizePublishedSource({
+    repositorySync,
+    testPlanId: String(testPlanId),
+    codebaseVersion: candidate.codebaseVersion,
+    syncRepository
+  })
 
   return {
     completed: true,
@@ -91,6 +102,72 @@ export async function deployRelease({
     },
     release: {
       ...completed
+    },
+    gitSync
+  }
+}
+
+async function readRepositorySyncSnapshot(repositoryPath, codebaseVersion) {
+  try {
+    const snapshot = JSON.parse(
+      await readFile(
+        join(repositoryPath, '.voidr', '.output', 'repository-sync.json'),
+        'utf8'
+      )
+    )
+    if (snapshot.codebaseVersion !== codebaseVersion) {
+      throw new Error('Repository sync snapshot belongs to a different candidate.')
+    }
+    return snapshot
+  } catch (error) {
+    return {
+      needed: null,
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Repository sync snapshot is unavailable.'
+    }
+  }
+}
+
+async function synchronizePublishedSource({
+  repositorySync,
+  testPlanId,
+  codebaseVersion,
+  syncRepository
+}) {
+  if (repositorySync?.needed === false) {
+    return {
+      status: 'SYNCED',
+      liveValid: true,
+      codebaseVersion,
+      message: 'The remote default branch already contains the published source.'
+    }
+  }
+  if (!repositorySync?.needed || typeof syncRepository !== 'function') {
+    return {
+      status: 'FAILED',
+      liveValid: true,
+      codebaseVersion,
+      message:
+        'LIVE is published, but the repository synchronization patch was not available.',
+      detail: repositorySync?.error || null
+    }
+  }
+  try {
+    return await syncRepository({
+      testPlanId,
+      codebaseVersion,
+      baseCommitSha: repositorySync.baseCommitSha,
+      patch: repositorySync.patch
+    })
+  } catch (error) {
+    return {
+      status: 'FAILED',
+      liveValid: true,
+      codebaseVersion,
+      message: 'LIVE is published, but repository synchronization could not be started.',
+      detail: error instanceof Error ? error.message : String(error)
     }
   }
 }

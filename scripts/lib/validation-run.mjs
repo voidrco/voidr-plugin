@@ -1,10 +1,11 @@
 import { createHash } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { runCommand } from './command.mjs'
 import { validateProvisionedRepositorySelection } from './workspace.mjs'
 import { VoidrRestClient } from './voidr-rest.mjs'
 import { voidrCliEnvironment } from './credentials.mjs'
+import { createRepositorySyncPatch } from './repository-sync.mjs'
 
 // A validation run never touches the main pipeline: the candidate is uploaded
 // under its own content-addressed codebaseVersion and is NOT promoted, so
@@ -15,6 +16,7 @@ export async function deployValidationCandidate({
   repositoryUrl,
   testPlanId,
   cliEnvironment,
+  patchBuilder = createRepositorySyncPatch,
   run = runCommand
 }) {
   if (!/^[a-f0-9]{24}$/i.test(String(testPlanId || ''))) {
@@ -85,6 +87,30 @@ export async function deployValidationCandidate({
     throw new Error('Candidate output does not match the built immutable manifest.')
   }
 
+  let repositorySyncPrepared = false
+  let repositorySyncPreparationError = null
+  try {
+    const repositorySync = await patchBuilder({
+      repositoryPath: selected.path,
+      run
+    })
+    await writeFile(
+      join(selected.path, '.voidr', '.output', 'repository-sync.json'),
+      JSON.stringify({
+        version: 1,
+        codebaseVersion: candidate.codebaseVersion,
+        ...repositorySync
+      }),
+      'utf8'
+    )
+    repositorySyncPrepared = true
+  } catch (error) {
+    repositorySyncPreparationError =
+      error instanceof Error
+        ? error.message
+        : 'Repository sync patch preparation failed.'
+  }
+
   return {
     completed: true,
     validationDeploy: true,
@@ -93,6 +119,8 @@ export async function deployValidationCandidate({
     repositoryPath: selected.path,
     codebaseVersion: candidate.codebaseVersion,
     storagePrefix: candidate.prefix || null,
+    repositorySyncPrepared,
+    repositorySyncPreparationError,
     preflightEnabled: (await candidateDeclaresPreflight(selected.path)) === true,
     // The candidate's own manifest is the only honest scope for a validation
     // run: the platform resolves an execution without targets as "the whole

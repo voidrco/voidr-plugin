@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { runCommand } from './command.mjs'
 import { prepareTestRepository, locateLinkedCheckout } from './prepare.mjs'
-import { resolveWorkspaceRoot } from './workspace.mjs'
+import { findCheckoutByOrigin, resolveWorkspaceRoot } from './workspace.mjs'
 
 export const CONTEXT_MANIFEST_FILENAME = 'manifest-context.json'
 export const CONTEXT_MANIFEST_VERSION = 1
@@ -173,7 +173,9 @@ export async function contextBootstrap({
   workspaceRoot,
   callRemote,
   run = runCommand,
-  prepare = prepareTestRepository
+  prepare = prepareTestRepository,
+  locate = locateLinkedCheckout,
+  refreshOnly = false
 }) {
   const normalizedPlanId = String(planId || '').trim()
   if (!/^[a-fA-F0-9]{24}$/.test(normalizedPlanId)) {
@@ -231,7 +233,7 @@ export async function contextBootstrap({
       planId: planContext.planId,
       applicationId: planContext.applicationId,
       message:
-        'This application has more than one environment. Ask the user to choose one (render the listing with ask_user) and call voidr_context_bootstrap again with environmentSlug.'
+        `This application has more than one environment. Ask the user to choose one (render the listing with ask_user) and call ${refreshOnly ? 'voidr_context_refresh' : 'voidr_context_bootstrap'} again with environmentSlug.`
     }
   }
 
@@ -262,7 +264,7 @@ export async function contextBootstrap({
   //
   // Shared with voidr_workspace_prepare_test_repository on purpose: the same
   // fix was once applied to that path alone, and this one kept asking.
-  const located = await locateLinkedCheckout({
+  const located = await locate({
     workspaceRoot: resolvedRoot,
     repositoryUrl: planContext.repository.url,
     run
@@ -271,9 +273,31 @@ export async function contextBootstrap({
 
   // 5. Manifest first: the anchor exists even if preparation fails midway,
   // and the retry updates it in place.
+  const existingManifest = readContextManifest(checkout)
+  if (refreshOnly && !existingManifest) {
+    throw new Error(
+      'This checkout has no initialized Test Plan context. Run /voidr-context once before generating tests.'
+    )
+  }
+  const sameContext =
+    existingManifest?.planId === planContext.planId &&
+    existingManifest?.applicationId === planContext.applicationId &&
+    existingManifest?.organizationId === planContext.organizationId &&
+    existingManifest?.environmentSlug === selectedEnvironment.slug &&
+    existingManifest?.repository?.url === planContext.repository.url
+  const now = new Date().toISOString()
+  const emptyBootstrap = {
+    npmInstall: false,
+    linked: false,
+    scaffolded: false,
+    envPulled: false
+  }
   const manifest = {
     version: CONTEXT_MANIFEST_VERSION,
-    createdAt: new Date().toISOString(),
+    createdAt: sameContext && existingManifest.createdAt
+      ? existingManifest.createdAt
+      : now,
+    updatedAt: now,
     organizationId: planContext.organizationId,
     applicationId: planContext.applicationId,
     planId: planContext.planId,
@@ -285,14 +309,22 @@ export async function contextBootstrap({
     },
     modules: planContext.modules,
     sessions: sessionIds,
-    bootstrap: {
-      npmInstall: false,
-      linked: false,
-      scaffolded: false,
-      envPulled: false
-    }
+    bootstrap:
+      refreshOnly && sameContext
+        ? existingManifest.bootstrap || emptyBootstrap
+        : emptyBootstrap
   }
   const manifestPath = writeContextManifest(checkout, manifest)
+
+  if (refreshOnly) {
+    return {
+      manifestPath,
+      manifest,
+      environment: selectedEnvironment,
+      refreshed: true,
+      prepared: null
+    }
+  }
 
   // 6. Framework preparation (install + SA auth + link + scaffold + env pull).
   const prepared = await prepare({
@@ -323,4 +355,17 @@ export async function contextBootstrap({
     environment: selectedEnvironment,
     prepared
   }
+}
+
+export async function contextRefresh(options) {
+  const locate = options?.locate || (async ({ workspaceRoot, repositoryUrl }) => {
+    const path = findCheckoutByOrigin(workspaceRoot, repositoryUrl)
+    if (!path) {
+      throw new Error(
+        'The initialized Test Plan checkout is not present in this workspace. Run /voidr-context to prepare it before generating tests.'
+      )
+    }
+    return { path, how: 'existing-checkout' }
+  })
+  return contextBootstrap({ ...options, locate, refreshOnly: true })
 }

@@ -58,7 +58,9 @@ exposed, recommend rotating it.
 Every platform fact — application, environment, Test Plan, module/suite/case
 slug, session ID, URL, execution status — exists only when a Voidr tool
 returned it in this session (the `manifest-context.json` written by
-`/voidr-context` counts: the bridge produced it from platform reads). Never
+`voidr_context_refresh` or `/voidr-context` in this session counts: the bridge
+produced it from platform reads). A manifest left by an earlier session is a
+locator, not current platform evidence. Never
 infer platform data from folder names, file contents, chat history, memory,
 or previous conversations. When a value is unknown, call the corresponding
 read tool first.

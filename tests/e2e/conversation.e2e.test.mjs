@@ -161,7 +161,11 @@ test('natural-language greenfield journey reaches deploy and execution through e
   assert.equal(workflow.state, States.RELEASE_LATEST_VERIFIED)
   assert.deepEqual(
     workflow.actions.map(action => action.tool),
-    ['test_plans_get_test_plan', 'test_plans_get_test_counts']
+    [
+      'voidr_repository_sync_github',
+      'test_plans_get_test_plan',
+      'test_plans_get_test_counts'
+    ]
   )
   workflow = transition(workflow, {
     type: 'DEPLOY_SYNC_VERIFIED',

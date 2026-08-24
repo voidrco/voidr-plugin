@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -51,6 +51,47 @@ test('an old CLI without deploy-candidate is explained, not dumped raw', async (
       return true
     }
   )
+})
+
+test('captures the repository patch beside the exact validation candidate', async () => {
+  const repositoryPath = provisionedRepository()
+  const codebaseVersion = 'd'.repeat(64)
+  mkdirSync(join(repositoryPath, '.voidr', '.output'), { recursive: true })
+  writeFileSync(
+    join(repositoryPath, '.voidr', '.output', 'manifest.json'),
+    JSON.stringify({ testPlanId, codebaseVersion, tests: [] })
+  )
+
+  const result = await deployValidationCandidate({
+    repositoryPath,
+    repositoryUrl,
+    testPlanId,
+    run: async (_file, args) =>
+      args.includes('deploy-candidate')
+        ? {
+            stdout: JSON.stringify({ codebaseVersion, prefix: 'candidate/path' }),
+            stderr: '',
+            exitCode: 0
+          }
+        : { stdout: '', stderr: '', exitCode: 0 },
+    patchBuilder: async () => ({
+      needed: true,
+      defaultBranch: 'main',
+      baseCommitSha: 'a'.repeat(40),
+      changedFiles: ['modules/checkout/new.spec.js'],
+      patch: 'diff --git a/modules/checkout/new.spec.js b/modules/checkout/new.spec.js\n'
+    })
+  })
+
+  const snapshot = JSON.parse(
+    readFileSync(
+      join(repositoryPath, '.voidr', '.output', 'repository-sync.json'),
+      'utf8'
+    )
+  )
+  assert.equal(result.repositorySyncPrepared, true)
+  assert.equal(snapshot.codebaseVersion, codebaseVersion)
+  assert.equal(snapshot.baseCommitSha, 'a'.repeat(40))
 })
 
 test('a validation execution declares the preflight its candidate ships', async () => {

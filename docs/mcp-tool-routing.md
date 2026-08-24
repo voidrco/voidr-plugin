@@ -46,6 +46,7 @@ Routing invariants:
 | `test_plans_get_case` | `voidr-failure-analysis` | Expected behavior of one case; read-back after a tag change. |
 | `test_plans_get_tag_history` | `voidr-failure-analysis` | Governance tag history. |
 | `test_plans_update_test_case_tag` | `voidr-failure-analysis` | Confirmed governance tag change only. |
+| `test_plans_sync_repository_diff` | `voidr-execute` through `voidr_repository_sync_github` | After LIVE is verified and the `PreToolUse` permission is approved, let the Voidr Bot deliver the exact source patch captured during validation. Its Git result never changes LIVE validity. |
 
 ## Workspace and repository
 
@@ -56,17 +57,19 @@ Routing invariants:
 | `voidr_workspace_bootstrap_test_repository` | `voidr-context` | Initialize the test-project skeleton in a confirmed empty destination, or in an origin-matching checkout that lacks test-project files. Never clones, and no tool does: a plan whose repository Voidr already provisioned is refused here, because that checkout is created by the user cloning it — the clone proves their access to a repository living in Voidr's organization. Detects an existing checkout by origin and returns `reusedExistingCheckout`. |
 | `voidr_workspace_select_test_repository` | `voidr-context` | Register a user-selected existing repository when the plan has no linked repository. |
 | `voidr_workspace_prepare_test_repository` | `voidr-context`, `voidr-generate` | The single mandatory setup gate: install, CLI auth, link, scaffold, env pull. Locates the linked checkout by Git origin inside the workspace and never clones it: when it is absent, the response carries the HTTPS and SSH commands for the user to clone it themselves, and the gate is called again afterwards. |
+| `voidr_context_refresh` | `voidr-generate` | Refresh the manifest from current platform reads once before case selection. Preserves completed setup and never installs, scaffolds, builds, deploys, or mutates the Test Plan. |
 | `voidr_workspace_scaffold_test_cases` | `voidr-generate` | Scaffold a case added after the preparation gate completed. |
 | `voidr_build` | `voidr-generate`, `voidr-execute` | The local syntax/packaging gate (`voidr build`), outside the agent shell. Never runs tests locally. |
 | `voidr_explore` | `voidr-generate` | Throwaway inspection probes against the deployed app; tolerates failures, never builds, never counts as validation. |
-| `voidr_workspace_publish_tests` | `voidr-execute` | Best-effort Git delivery: commit and push a feature branch, then by default open a pull request and try to merge it into the default branch. Failure is reported but never blocks LIVE. |
+| `voidr_workspace_publish_tests` | `voidr-execute` | Save the validated source in a local feature-branch commit with `pushToRemote: false` before LIVE. A remote variant is also guarded by the GitHub `PreToolUse` permission; failure never blocks LIVE. |
 
 ## Release and executions
 
 | Tool | Owner skills | Purpose |
 | --- | --- | --- |
 | `voidr_release_inspect` | `voidr-execute` | Optional read-only Git delivery inspection. It never gates LIVE. |
-| `voidr_release_deploy_live` | `voidr-execute` | Publish the exact immutable candidate whose completed validation verdict was PASSED or diagnosed FAILED, without rebuilding or requiring Git delivery. |
+| `voidr_release_deploy_live` | `voidr-execute` | Publish the exact immutable candidate whose completed validation verdict was PASSED or diagnosed FAILED, without rebuilding or writing to GitHub. |
+| `voidr_repository_sync_github` | `voidr-execute` | After LIVE succeeds, ask through `PreToolUse` whether to synchronize the validation-time source patch with GitHub. Denial preserves LIVE and the local commit; approval invokes the Voidr Bot. |
 | `voidr_release_deploy_validation` | `voidr-execute` | Upload the content-addressed validation candidate WITHOUT promoting it; `latest` stays untouched and no PR/merge is required. Returns the immutable `codebaseVersion`. |
 | `voidr_create_validation_execution` | `voidr-execute` | The only tool that starts a validation execution: SHADOW, pinned to the candidate `codebaseVersion`, outside LIVE governance. |
 | `executions_create_execution` | `voidr-execute` | The only tool that starts a LIVE platform execution, always behind a typed confirmation. |

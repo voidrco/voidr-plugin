@@ -22,7 +22,6 @@ export async function deployRelease({
   if (!/^[a-f0-9]{24}$/i.test(String(testPlanId || ''))) {
     throw new Error('A valid Test Plan ID is required.')
   }
-
   const selected = validateProvisionedRepositorySelection(
     repositoryPath,
     repositoryUrl
@@ -49,7 +48,6 @@ export async function deployRelease({
     exercisedCodebaseVersion: codebaseVersion,
     manifestCodebaseVersion: manifest.codebaseVersion
   })
-
   const published = await run('npx', ['--no-install', 'voidr', 'deploy-latest'], {
     cwd: selected.path,
     timeout: 300_000,
@@ -81,7 +79,6 @@ export async function deployRelease({
     latestVerified: currentVersion === candidate.codebaseVersion,
     latestCodebaseVersion: currentVersion
   })
-
   return {
     completed: true,
     source: {

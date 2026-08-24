@@ -350,6 +350,13 @@ test('deployment requires a completed test verdict and diagnosis for failures', 
       }),
     /immutable codebaseVersion|PASSED verdict/
   )
+
+  workflow = transition(workflow, {
+    type: 'VALIDATION_CANDIDATE_VERIFIED',
+    validationOutcome: 'PASSED',
+    codebaseVersion: 'b'.repeat(64)
+  })
+  assert.doesNotThrow(() => transition(workflow, { type: 'DEPLOY_APPROVED' }))
 })
 
 test('execution requires the exercised candidate in latest and independent sync', () => {
@@ -394,7 +401,11 @@ test('execution requires the exercised candidate in latest and independent sync'
   assert.equal(workflow.state, States.RELEASE_LATEST_VERIFIED)
   assert.deepEqual(
     workflow.actions.map(action => action.tool),
-    ['test_plans_get_test_plan', 'test_plans_get_test_counts']
+    [
+      'voidr_repository_sync_github',
+      'test_plans_get_test_plan',
+      'test_plans_get_test_counts'
+    ]
   )
 
   workflow = transition(workflow, {
@@ -429,6 +440,7 @@ test('a diagnosed failed validation can still be offered for LIVE', () => {
   assert.match(workflow.prompt, /LIVE mesmo vermelha/i)
   workflow = transition(workflow, { type: 'DEPLOY_APPROVED' })
   assert.equal(workflow.actions[0].codebaseVersion, 'b'.repeat(64))
+  assert.equal(workflow.actions[0].tool, 'voidr_release_deploy_live')
 })
 
 function existingPlanThroughRepositorySelection() {

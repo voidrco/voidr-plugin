@@ -40,6 +40,7 @@ test('execute skill routes only its execution, release, and sync tools', () => {
     'voidr_release_deploy_live',
     'voidr_release_deploy_validation',
     'voidr_release_inspect',
+    'voidr_repository_sync_github',
     'voidr_workspace_publish_tests'
   ])
   assert.equal(
@@ -93,19 +94,28 @@ test('validation runs are SHADOW executions pinned to the candidate version', ()
   assert.match(skill, /never a tight loop/i)
 })
 
-test('Git delivery is attempted but never gates the validated LIVE candidate', () => {
+test('LIVE uses a local checkpoint and PreToolUse owns the GitHub choice', () => {
   const promotion = skill.slice(
-    skill.indexOf('**Best-effort code delivery**'),
+    skill.indexOf('**Local checkpoint**'),
     skill.indexOf('## Writing the confirmation gates')
   )
 
-  assert.match(promotion, /mergeToDefaultBranch: true/)
-  assert.match(promotion, /Git failure NEVER blocks/)
+  assert.match(promotion, /pushToRemote: false/)
+  assert.match(promotion.replace(/\n/g, ' '), /local feature-branch\s+commit/i)
+  assert.match(promotion, /PreToolUse/)
+  assert.match(promotion, /voidr_repository_sync_github/)
+  assert.match(promotion, /Never answer on the user's/i)
+  assert.match(promotion, /If denied/i)
   assert.match(promotion, /SAME `codebaseVersion`/)
   assert.match(promotion, /Do not rebuild/)
-  assert.match(promotion, /default branch did not/)
+  assert.match(promotion, /Voidr Bot/)
+  assert.match(promotion, /local Git and GitHub CLI session/)
+  assert.match(
+    promotion.replace(/\n/g, ' '),
+    /LIVE is\s+valid for every Git result/
+  )
   assert.match(promotion, /PASSED or FAILED/)
-  assert.match(promotion, /FAILED\s+verdict has been diagnosed/)
+  assert.match(promotion, /FAILED verdict.*diagnosed/s)
 })
 
 test('a validation run pilots the shared preconditions before the whole plan', () => {

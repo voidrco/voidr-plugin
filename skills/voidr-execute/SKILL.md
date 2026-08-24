@@ -76,20 +76,28 @@ Ask (or infer from the request) which mode applies:
 5. **Follow each execution to completion** (see "Monitoring"). A PASSED verdict
    can continue directly. A FAILED verdict must be read with "Reading a failed
    run" below before continuing. Both verdicts remain eligible for LIVE.
-6. **Best-effort code delivery**: after a PASSED verdict, or after a FAILED
-   verdict has been diagnosed, offer to deliver the source through
-   `voidr_workspace_publish_tests` with its normal
-   `mergeToDefaultBranch: true` behavior. Record whether commit, push, pull
-   request, and merge succeeded. A refusal, failed check, missing review,
-   conflict, authentication error, or any other Git failure NEVER blocks the
-   LIVE deploy and must not trigger a retry loop.
+6. **Local checkpoint**: use `voidr_workspace_publish_tests` with
+   `pushToRemote: false` to save the validated source in a local feature-branch
+   commit. Do not push, open a pull request, or merge here. A local Git failure
+   is reported but never blocks LIVE and must not trigger a retry loop.
 7. **LIVE deploy is a separate decision**: after its own confirmation, call
    `voidr_release_deploy_live` with the SAME `codebaseVersion` returned by
    `voidr_release_deploy_validation` and exercised by the completed validation
-   run, whether its tests PASSED or FAILED.
+   run, whether its tests PASSED or FAILED. A FAILED verdict is eligible only
+   after it has been diagnosed.
    Do not rebuild. Do not call `voidr_release_inspect`. No Git commit, push,
-   pull request, or merge is a deploy prerequisite. If code delivery failed,
-   report both truths: LIVE advanced, and the default branch did not.
+   pull request, or merge is a deploy prerequisite.
+8. **GitHub choice through PreToolUse**: only after LIVE is verified, call
+   `voidr_repository_sync_github`. Its `PreToolUse` hook asks the user whether
+   to synchronize the local commit with GitHub. Never answer on the user's
+   behalf and never replace this with an `ask_user` question. If denied, stop:
+   LIVE stays valid and the commit stays local. If approved, the tool first
+   tries the user's local Git and GitHub CLI session. A merged pull request is
+   synchronized; an open pull request is queued. Only when local delivery
+   cannot reach a pull request does the Voidr Bot receive the exact
+   validation-time patch. Report which path ran and its separate result:
+   synchronized, queued, conflict, missing permission, or failure. LIVE is
+   valid for every Git result.
 
 ## Writing the confirmation gates
 
@@ -335,10 +343,15 @@ anyway and say the cause is unknown.
   the user's call: never cancel on your own initiative.
 - `voidr_release_deploy_live` — publishes the exact `codebaseVersion` that
   produced a PASSED or diagnosed FAILED validation verdict, only after an
-  explicit user decision. It never rebuilds and never depends on Git state.
+  explicit user decision. It never rebuilds or writes to GitHub.
+- `voidr_repository_sync_github` — after LIVE, asks through `PreToolUse` whether
+  the user wants to synchronize the exact validated source patch with GitHub.
+  Denial leaves the local commit and LIVE untouched. Approval first uses the
+  user's local GitHub session and falls back to the Voidr Bot only when local
+  delivery cannot reach a pull request.
 - `voidr_workspace_publish_tests` — best-effort delivery to the default branch
-  before LIVE. Its failure is reported but never blocks
-  `voidr_release_deploy_live`.
+  when `pushToRemote` is true; this flow uses false for its pre-LIVE local
+  checkpoint. Its failure is reported but never blocks LIVE.
 - `voidr_release_inspect` — optional Git delivery inspection; never a LIVE
   deploy gate.
 - `executions_get_execution` / `playwright_get_execution_analytics` —

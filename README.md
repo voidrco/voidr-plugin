@@ -184,12 +184,16 @@ phrases must be typed by the user in the normal chat input; `ask_user`
 selections do not satisfy these runtime gates.
 
 After platform validation finishes, a passing run can proceed directly; a
-failing run is diagnosed and can proceed too. The plugin then tries to commit,
-push, open a pull request, and merge the tests into the repository's default
-branch. That Git delivery is best effort: any failure is reported but does not
-block LIVE. The plugin promotes the exact candidate that produced the completed
-validation verdict, without rebuilding, and reports success only when the
-platform read-back proves `latest` points to the same `codebaseVersion`.
+failing run is diagnosed and can proceed too. The plugin may save the work in a
+local feature-branch commit, then promotes the exact candidate that produced
+the completed validation verdict without rebuilding. It reports LIVE success
+only when the platform read-back proves `latest` points to the same
+`codebaseVersion`. Once LIVE is confirmed, a separate GitHub synchronization
+tool is attempted. Its `PreToolUse` hook asks the user for permission: denial
+keeps the commit local, while approval sends the exact validation-time source
+patch to the Voidr Bot for branch, pull-request, and merge delivery. Git may
+finish, wait for merge, conflict, or lack permission; none of those outcomes
+rolls back or invalidates LIVE.
 Legacy `voidr deploy-latest` and `npm run voidr:deploy` shell paths are denied.
 
 ## Authentication prerequisite

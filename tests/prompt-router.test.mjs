@@ -20,6 +20,7 @@ test('routes natural Portuguese Voidr testing intents to the entry skill', () =>
     })
     assert.match(routed.modifiedTransformedPrompt, /\/voidr-context/)
     assert.match(routed.modifiedTransformedPrompt, /\/voidr-generate/)
+    assert.match(routed.modifiedTransformedPrompt, /voidr_context_refresh/)
     assert.match(
       routed.modifiedTransformedPrompt,
       /before inspecting[\s\S]*files or calling any tool/i
@@ -241,6 +242,7 @@ test('a Test Plan named with its id routes to the pipeline', () => {
   })
   assert.match(routed.modifiedTransformedPrompt, /Voidr platform testing request/)
   assert.match(routed.modifiedTransformedPrompt, /\/voidr-context/)
+  assert.match(routed.modifiedTransformedPrompt, /voidr_context_refresh/)
 
   // Without the id it is still ambiguous, so it gets the conservative triage
   // note rather than the pipeline route.

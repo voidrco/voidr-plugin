@@ -71,6 +71,11 @@ Handle its three non-success answers:
 The call is idempotent: repeating it continues from the current state and
 updates the manifest in place.
 
+This is the heavy, initial preparation path. On later implementation sessions,
+`/voidr-generate` calls `voidr_context_refresh` before case selection so the
+manifest receives new modules, suites, cases, and session IDs without repeating
+install, link, scaffold, or environment pull.
+
 ## 3. Report the context
 
 Read `manifest-context.json` from the repository root and summarize: plan
@@ -91,3 +96,6 @@ automated).
 - `voidr_context_bootstrap` — the atomic context + preparation gate. It is
   the ONLY setup path: never call prepare/scaffold tools separately from this
   skill.
+- `voidr_context_refresh` — the lightweight freshness gate used by
+  `/voidr-generate` after setup; it rewrites the manifest but performs no
+  framework preparation.

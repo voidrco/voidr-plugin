@@ -110,7 +110,9 @@ export function voidrPromptGuidance(input) {
 matching skill before inspecting files or calling any tool. /voidr-context
 selects the Test Plan, materializes the checkout, and writes
 manifest-context.json; /voidr-generate implements the selected cases from that
-manifest. Infer repository state with the voidr_workspace_git_context tool
+manifest after calling voidr_context_refresh once, before case selection, even
+when the file already exists. Infer repository state with the
+voidr_workspace_git_context tool
 (never cd or run git in the terminal — workspace paths with spaces break shell
 quoting). Render every workflow choice with the native ask_user selectable
 options when available; free text is only a fallback.`
@@ -161,23 +163,24 @@ unrelated to Voidr, ignore this note.`
     namesATestPlanId(prompt)
   ) {
     return `This is a Voidr platform testing request. Route it through the restructured
-skills: /voidr-context first when there is no manifest-context.json in the
-test repository (it selects the Test Plan, materializes the checkout, and
-writes the manifest), /voidr-generate to implement existing cases from that
-manifest, and /voidr-execute to run on the platform. Load the matching skill
-before inspecting files or calling any tool. Render every workflow choice with
-the native ask_user selectable options when available; free text is only a
-fallback.`
+skills: /voidr-context for initial checkout and setup, /voidr-generate to
+implement existing cases, and /voidr-execute to run on the platform.
+/voidr-generate must call voidr_context_refresh once before selecting cases,
+even when manifest-context.json already exists; the file's existence is not
+freshness evidence. Load the matching skill before inspecting files or calling any tool.
+Render every workflow choice with the native ask_user selectable
+options when available; free text is only a fallback.`
   }
 
   if (isGenericTestCreationPrompt(prompt)) {
     return `If this request is about tests managed on the Voidr platform (Test Plans and
 Playwright suites run by Voidr): implementing cases that already exist
-belongs to /voidr-context (when no manifest-context.json exists yet), followed
-by /voidr-generate. Load the matching skill before asking anything or calling
-any tool. Never invent your own triage options and never ask the user to type
-IDs or repository paths. If the request is clearly about plain local tests
-unrelated to Voidr, ignore this note.`
+belongs to /voidr-context for initial setup, followed by /voidr-generate.
+/voidr-generate refreshes manifest-context.json from the platform before case
+selection even when the file already exists. Load the matching skill before
+asking anything or calling any tool. Never invent your own triage options and
+never ask the user to type IDs or repository paths.
+If the request is clearly about plain local tests unrelated to Voidr, ignore this note.`
   }
 
   // Checked after the testing intents so prompts like "cria testes de login

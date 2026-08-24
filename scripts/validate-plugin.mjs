@@ -121,10 +121,7 @@ assert(
   `Local tools are registered but have no dispatch case: ${undispatchedLocalTools.join(', ')}.`
 )
 
-// BRANCH SEM GATES: os hooks que BLOQUEIAM (preToolUse/PreToolUse e stop/Stop)
-// foram desconectados de proposito, para testar o plugin sem fricao. Os scripts
-// seguem no repositorio e cobertos por testes -- so nao sao acionados. Os hooks
-// que ORIENTAM (rota de prompt) e ENRIQUECEM (links de execucao) permanecem.
+// PreToolUse owns the GitHub synchronization choice and the worker-job guard.
 assert(hooks.version === 1, 'hooks.json version must be 1.')
 const promptHooks = hooks.hooks?.userPromptTransformed
 assert(
@@ -145,6 +142,16 @@ assert(
       )
     ),
   'Execution evidence must be propagated after tool use.'
+)
+const preToolHooks = hooks.hooks?.preToolUse
+assert(
+  Array.isArray(preToolHooks) &&
+    preToolHooks.some(item =>
+      String(item.bash || item.command || '').includes(
+        'guard-protections.mjs'
+      )
+    ),
+  'GitHub synchronization permission must run through PreToolUse.'
 )
 // --- Claude Code host -------------------------------------------------------
 // The same skills, bridge, and policy serve both hosts. Only the manifest, the
@@ -192,6 +199,7 @@ assert(
 )
 
 const claudeHookEvents = {
+  PreToolUse: 'guard-protections.mjs',
   UserPromptSubmit: 'route-voidr-prompt.mjs',
   PostToolUse: 'post-tool-execution-links.mjs'
 }
@@ -410,8 +418,11 @@ assert(
 // Generate: manifest-anchored, evidence-driven implementation.
 assert(
   /manifest-context\.json/.test(generateSkill) &&
-    /\/voidr-context/.test(generateSkill),
-  'Generate skill must require the context manifest before any work.'
+    /\/voidr-context/.test(generateSkill) &&
+    /voidr_context_refresh/.test(generateSkill) &&
+    /before selecting a module, suite, or case/i.test(generateSkill) &&
+    /even when `manifest-context\.json` already exists/i.test(generateSkill),
+  'Generate skill must refresh the context manifest before case selection.'
 )
 assert(
   /test_plans_get_case/.test(generateSkill) &&
@@ -471,12 +482,18 @@ assert(
   /voidr_workspace_publish_tests/.test(executeSkill) &&
     /voidr_release_inspect/.test(executeSkill) &&
     /voidr_release_deploy_live/.test(executeSkill) &&
+    /voidr_repository_sync_github/.test(executeSkill) &&
+    /pushToRemote: false/.test(executeSkill) &&
+    /PreToolUse/.test(executeSkill) &&
     /SAME `codebaseVersion`/.test(executeSkill) &&
-    /Git failure NEVER blocks/.test(executeSkill) &&
     /PASSED or FAILED/.test(executeSkill) &&
     /Both verdicts remain eligible for LIVE/.test(executeSkill) &&
+    /local Git and GitHub CLI session/.test(executeSkill) &&
+    /LIVE is\s+valid for every Git result/.test(
+      executeSkill.replace(/\n/g, ' ')
+    ) &&
     /never a LIVE\s+deploy gate/.test(executeSkill),
-  'Execute skill must keep PASSED and diagnosed FAILED candidates eligible even when Git delivery fails.'
+  'Execute skill must keep GitHub synchronization optional after LIVE.'
 )
 assert(
   /Never deploy a\s+repository that did not build/i.test(executeSkill),

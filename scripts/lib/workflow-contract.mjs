@@ -340,8 +340,8 @@ export function transition(workflow, event) {
       next.state = States.VALIDATION_CANDIDATE_VERIFIED
       next.prompt =
         event.validationOutcome === 'PASSED'
-          ? 'A execução de validação terminou e os testes passaram. Posso publicar exatamente esta versão em LIVE? A entrega do código na principal será tentada separadamente e não bloqueia o deploy.'
-          : 'A execução de validação terminou com falhas, e o diagnóstico foi concluído. Posso publicar exatamente esta versão em LIVE mesmo vermelha? A entrega do código na principal será tentada separadamente e não bloqueia o deploy.'
+          ? 'A execução de validação terminou e os testes passaram. Posso publicar exatamente esta versão em LIVE?'
+          : 'A execução de validação terminou com falhas, e o diagnóstico foi concluído. Posso publicar exatamente esta versão em LIVE mesmo vermelha?'
       return next
 
     case 'DEPLOY_APPROVED':
@@ -371,6 +371,7 @@ export function transition(workflow, event) {
       next.context.latestCodebaseVersion = event.latestCodebaseVersion
       next.state = States.RELEASE_LATEST_VERIFIED
       next.actions.push(
+        { tool: 'voidr_repository_sync_github', mutation: true },
         { tool: 'test_plans_get_test_plan', mutation: false },
         { tool: 'test_plans_get_test_counts', mutation: false }
       )

@@ -18,6 +18,7 @@ import {
   validateRepositorySelection
 } from './lib/workspace.mjs'
 import { deployRelease } from './lib/release-deploy.mjs'
+import { synchronizePublishedRepository } from './lib/repository-sync-release.mjs'
 import {
   createValidationExecution,
   deployValidationCandidate
@@ -31,7 +32,7 @@ import {
   scaffoldTestCases
 } from './lib/scaffold.mjs'
 import { prepareTestRepository } from './lib/prepare.mjs'
-import { contextBootstrap } from './lib/context.mjs'
+import { contextBootstrap, contextRefresh } from './lib/context.mjs'
 import { publishTests } from './lib/publish.mjs'
 import { inspectReleaseReadiness } from './lib/release-inspect.mjs'
 import { collectGitContext } from './lib/git-context.mjs'
@@ -238,6 +239,23 @@ const localTools = [
     }
   },
   {
+    name: 'voidr_context_refresh',
+    description:
+      'Refresh the local manifest-context.json from the current Test Plan before selecting cases: read the latest module, suite, and case tree plus recent session IDs, preserve the completed bootstrap state, and rewrite the gitignored manifest. Lightweight: it does not install dependencies, link, scaffold, pull environment values, build, deploy, or mutate the Test Plan. Call once at the start of each generation session, even when the manifest already exists.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        planId: {
+          type: 'string',
+          pattern: '^[a-fA-F0-9]{24}$'
+        },
+        environmentSlug: { type: 'string' },
+        workspaceRoot: { type: 'string' }
+      },
+      required: ['planId']
+    }
+  },
+  {
     name: 'voidr_context_bootstrap',
     description:
       'Build the whole working context of a Test Plan in one atomic call: read the plan from the platform (IDs and linked repository), resolve the platform environment, list the recorded session IDs of the application, locate the checkout by Git origin (the clone itself is always done by the user — a missing checkout returns the clone handover message), write the gitignored manifest-context.json at the repository root, and run the framework preparation (npm install, Service Account auth in child processes only, link when project.json is absent, scaffold, env pull without exposing values). Idempotent: call it again after the user clones or after a failure and it continues from the manifest. Pass environmentSlug when the application has more than one environment; without it the tool returns the environment listing to render with ask_user.',
@@ -365,7 +383,7 @@ const localTools = [
   {
     name: 'voidr_workspace_publish_tests',
     description:
-      'Best-effort Git delivery after the user explicitly authorized it in chat. It commits and pushes a feature branch. With mergeToDefaultBranch true (the default), it also opens or reuses a pull request and tries to merge it into the default branch. Any Git failure must be reported but never blocks a separately approved LIVE deploy of the exact candidate exercised by a completed validation. Runs with the user Git credentials; direct pushes to the default branch are refused.',
+      'Save the validated test source in a local feature-branch commit. With pushToRemote false, it uses local Git only and stops after the commit. With pushToRemote true, it also pushes and, by default, opens or reuses a pull request and tries to merge it into the default branch. Any Git failure must be reported but never blocks LIVE. Direct pushes to the default branch are refused.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -378,6 +396,7 @@ const localTools = [
         commitMessage: { type: 'string' },
         pullRequestTitle: { type: 'string' },
         pullRequestBody: { type: 'string' },
+        pushToRemote: { type: 'boolean', default: true },
         mergeToDefaultBranch: { type: 'boolean', default: true }
       },
       required: ['repositoryPath', 'repositoryUrl', 'branch', 'commitMessage']
@@ -386,7 +405,25 @@ const localTools = [
   {
     name: 'voidr_release_deploy_live',
     description:
-      'Publish and verify the exact immutable candidate exercised by a completed platform validation whose test verdict was PASSED or diagnosed FAILED. Pass the codebaseVersion returned by voidr_release_deploy_validation; the local manifest must still match it. This does not rebuild and does not require a clean worktree, a Git commit, a push, a pull request, or a merge. The tool reports completion only after latest points to that same codebaseVersion.',
+      'Publish and verify the exact immutable candidate exercised by a completed platform validation whose test verdict was PASSED or diagnosed FAILED. This does not rebuild and does not synchronize GitHub; repository synchronization is a separate action guarded by PreToolUse after LIVE succeeds.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        repositoryPath: { type: 'string' },
+        repositoryUrl: {
+          type: 'string',
+          pattern: '^https://github\\.com/[^/]+/[^/]+(?:\\.git)?$'
+        },
+        testPlanId: { type: 'string', pattern: '^[a-fA-F0-9]{24}$' },
+        codebaseVersion: { type: 'string', pattern: '^[a-f0-9]{64}$' }
+      },
+      required: ['repositoryPath', 'repositoryUrl', 'testPlanId', 'codebaseVersion']
+    }
+  },
+  {
+    name: 'voidr_repository_sync_github',
+    description:
+      'Synchronize the exact source already published in LIVE to the linked GitHub repository. After PreToolUse approval, it first uses the user local Git and GitHub CLI session; if that cannot deliver the source, it falls back to the Voidr Bot. Denying it leaves LIVE valid and the local commit untouched.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1599,6 +1636,38 @@ function remoteResultData(result) {
   return null
 }
 
+function remoteResultError(result) {
+  for (const item of result?.content || []) {
+    if (item?.type !== 'text') continue
+    const message = String(item.text || '').trim()
+    if (message) return message.replace(/^Error:\s*/i, '')
+  }
+  return null
+}
+
+async function runContextOperation(args, operation) {
+  const callRemote = async (remoteName, remoteArgs) => {
+    const result = await remote.callTool(remoteName, remoteArgs)
+    recordProvenance(remoteName, remoteArgs, result)
+    recordPlanSlugs(bridgeTestPlanId(remoteArgs), remoteResultData(result))
+    return result
+  }
+  const context = await operation({
+    planId: String(args.planId || ''),
+    environmentSlug: args.environmentSlug
+      ? String(args.environmentSlug)
+      : undefined,
+    workspaceRoot: args.workspaceRoot
+      ? String(args.workspaceRoot)
+      : undefined,
+    callRemote
+  })
+  if (context?.prepared?.repositoryPath) {
+    preparedRepositoryPath = context.prepared.repositoryPath
+  }
+  return textResult(context)
+}
+
 async function callLocal(name, args) {
   switch (name) {
     case 'voidr_environment_doctor':
@@ -1690,33 +1759,10 @@ async function callLocal(name, args) {
       preparedRepositoryPath = prepared.repositoryPath
       return textResult(prepared)
     }
-    case 'voidr_context_bootstrap': {
-      // The internal platform reads feed the same provenance state as if the
-      // model had called them, so downstream tools see a consistent session.
-      const callRemote = async (remoteName, remoteArgs) => {
-        const result = await remote.callTool(remoteName, remoteArgs)
-        recordProvenance(remoteName, remoteArgs, result)
-        recordPlanSlugs(
-          bridgeTestPlanId(remoteArgs),
-          remoteResultData(result)
-        )
-        return result
-      }
-      const bootstrapped = await contextBootstrap({
-        planId: String(args.planId || ''),
-        environmentSlug: args.environmentSlug
-          ? String(args.environmentSlug)
-          : undefined,
-        workspaceRoot: args.workspaceRoot
-          ? String(args.workspaceRoot)
-          : undefined,
-        callRemote
-      })
-      if (bootstrapped?.prepared?.repositoryPath) {
-        preparedRepositoryPath = bootstrapped.prepared.repositoryPath
-      }
-      return textResult(bootstrapped)
-    }
+    case 'voidr_context_refresh':
+      return runContextOperation(args, contextRefresh)
+    case 'voidr_context_bootstrap':
+      return runContextOperation(args, contextBootstrap)
     case 'voidr_workspace_scaffold_test_cases':
       return textResult(
         await scaffoldTestCases({
@@ -1779,6 +1825,7 @@ async function callLocal(name, args) {
           pullRequestBody: args.pullRequestBody
             ? String(args.pullRequestBody)
             : undefined,
+          pushToRemote: args.pushToRemote !== false,
           mergeToDefaultBranch: args.mergeToDefaultBranch !== false
         })
       )
@@ -1792,6 +1839,29 @@ async function callLocal(name, args) {
       if (deployed?.completed) executionNeedsDeploy = false
       return textResult(deployed)
     }
+    case 'voidr_repository_sync_github':
+      return textResult(
+        await synchronizePublishedRepository({
+          repositoryPath: String(args.repositoryPath || ''),
+          repositoryUrl: String(args.repositoryUrl || ''),
+          testPlanId: String(args.testPlanId || ''),
+          codebaseVersion: String(args.codebaseVersion || ''),
+          syncRepository: async syncArgs => {
+            const result = await remote.callTool(
+              'test_plans_sync_repository_diff',
+              syncArgs
+            )
+            const data = remoteResultData(result)
+            if (result?.isError || !data) {
+              throw new Error(
+                remoteResultError(result) ||
+                  'Voidr did not accept the repository synchronization patch.'
+              )
+            }
+            return data
+          }
+        })
+      )
     case 'voidr_release_deploy_validation':
       enforcePreparedRepository(String(args.repositoryPath || ''))
       return textResult(

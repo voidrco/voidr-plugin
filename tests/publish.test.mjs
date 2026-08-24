@@ -110,7 +110,7 @@ test('publishes a feature branch and merges it into the default branch', async (
   ])
 })
 
-test('opens the pull request even when the merge is not wanted', async () => {
+test('pushes a deployable feature branch without opening a pull request', async () => {
   const repositoryPath = createCheckout()
   const calls = []
 
@@ -123,13 +123,13 @@ test('opens the pull request even when the merge is not wanted', async () => {
     run: fakePublishRun({ calls })
   })
 
-  assert.equal(
-    result.pullRequestUrl,
-    'https://github.com/voidrco/voidr-tp-publish/pull/7'
-  )
+  assert.equal(result.pullRequestUrl, null)
   assert.equal(result.merged, false)
+  assert.equal(result.readyToDeploy, true)
+  assert.match(result.next, /default branch \(main\) was not changed/i)
+  assert.match(result.next, /deploy this commit to latest/i)
   assert.equal(
-    calls.some(call => call.file === 'gh' && call.args[1] === 'merge'),
+    calls.some(call => call.file === 'gh' && call.args[0] === 'pr'),
     false
   )
 })
@@ -150,6 +150,7 @@ test('a refused merge is reported as unmerged, not as a failure', async () => {
   assert.equal(result.completed, true)
   assert.equal(result.pushed, true)
   assert.equal(result.merged, false)
+  assert.equal(result.readyToDeploy, true)
 })
 
 test('gh reporting a merge that the ref does not have is not merged', async () => {
@@ -260,9 +261,8 @@ test('an unmerged publish never reads as a delivered one', async () => {
   assert.equal(merged.completed, true)
   assert.match(merged.next, /Merged into main/i)
 
-  // The agent acts on this sentence, not on the boolean beside it, so it has to
-  // say that the default branch lacks the tests and name what is waiting.
   assert.match(unmerged.next, /does NOT have the tests/i)
   assert.match(unmerged.next, /pull\/7/)
-  assert.doesNotMatch(unmerged.next, /ready to deploy/i)
+  assert.match(unmerged.next, /ready for a separately approved latest deploy/i)
+  assert.equal(unmerged.readyToDeploy, true)
 })

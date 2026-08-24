@@ -352,7 +352,7 @@ const localTools = [
   {
     name: 'voidr_release_inspect',
     description:
-      'Read-only release readiness inspection of the selected test repository: reads project.json (Test Plan/organization/application IDs), the Git origin URL, the default branch, HEAD and worktree state, and whether the current commit is present on the remote. Call this instead of asking the user for a Test Plan ID or repository URL. Pass workspaceRoot with the absolute path of the open VS Code workspace folder.',
+      'Read-only release readiness inspection of the selected test repository: reads project.json (Test Plan/organization/application IDs), the Git origin URL, HEAD and worktree state, and whether the current commit is present on any remote branch. A clean remote commit is deployable without merging it into the default branch. Call this instead of asking the user for a Test Plan ID or repository URL. Pass workspaceRoot with the absolute path of the open VS Code workspace folder.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -365,7 +365,7 @@ const localTools = [
   {
     name: 'voidr_workspace_publish_tests',
     description:
-      'Publish the implemented tests from the linked checkout after the user explicitly authorized it in chat: create or reuse a feature branch, commit, push with an explicit refspec, open (or reuse) a pull request, and merge it into the default branch. The merge is the point — a pushed branch nobody merges is not a delivered test, because the next clone of the default branch will not contain it. Read `merged` in the result: when it is false the default branch does NOT have the tests, and the pull request named in `next` is waiting on a review, a check, or a conflict. Runs outside the Copilot shell sandbox with the user Git credentials. Pushing to the default branch is refused; pass a feature branch and this tool merges it for you.',
+      'Commit and push the implemented tests from the linked checkout after the user explicitly authorized it in chat. With mergeToDefaultBranch false, it only pushes the feature branch: no pull request is opened and the commit is ready for a latest deploy after voidr_release_inspect. With mergeToDefaultBranch true (the default), it also opens or reuses a pull request and tries to merge it into the default branch as a separate code-delivery action. Runs outside the Copilot shell sandbox with the user Git credentials. Pushing directly to the default branch is refused.',
     inputSchema: {
       type: 'object',
       properties: {

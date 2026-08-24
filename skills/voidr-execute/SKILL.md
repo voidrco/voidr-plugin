@@ -68,10 +68,15 @@ Ask (or infer from the request) which mode applies:
    startup again for the same answer.
 5. **Follow to completion** (see "Monitoring") and read the outcome with
    "Reading a failed run" below.
-6. **Promotion is a separate decision**: when the validation passes and the
-   user wants the version in the main pipeline, publish with
-   `voidr_workspace_publish_tests`, then `voidr_release_inspect` +
-   `voidr_release_deploy_live`.
+6. **Promotion is a separate decision**: when validation passes and the user
+   wants this version in the LIVE monitoring pipeline, call
+   `voidr_release_inspect` first.
+   A clean commit present on ANY remote branch is ready for
+   `voidr_release_deploy_live`; merging into the default branch is not a deploy
+   prerequisite. If the checkout is dirty or its commit exists only locally,
+   call `voidr_workspace_publish_tests` with `mergeToDefaultBranch: false`,
+   inspect again, then deploy. Opening or merging a pull request is a separate
+   delivery decision.
 
 ## Writing the confirmation gates
 
@@ -315,9 +320,12 @@ anyway and say the cause is unknown.
 - `executions_create_execution` — the ONLY LIVE execution write.
 - `executions_cancel_execution` — stops a run still in progress. A write, and
   the user's call: never cancel on your own initiative.
-- `voidr_workspace_publish_tests` / `voidr_release_inspect` /
-  `voidr_release_deploy_live` — the promotion path, only after a passing
-  validation and an explicit user decision.
+- `voidr_release_inspect` / `voidr_release_deploy_live` — the promotion path,
+  only after a passing validation and an explicit user decision. A commit on
+  any remote branch is deployable.
+- `voidr_workspace_publish_tests` — needed before deploy only for a dirty or
+  local-only checkout; pass `mergeToDefaultBranch: false`. PR delivery and
+  merge into the default branch are independent of deployment.
 - `executions_get_execution` / `playwright_get_execution_analytics` —
   monitoring and result reporting.
 - `playwright_list_execution_failures` — the per-case failures with their

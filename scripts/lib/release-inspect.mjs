@@ -94,7 +94,7 @@ export async function inspectReleaseReadiness({
       : !project?.testPlanId
         ? 'project.json is missing or has no testPlanId; prepare the repository through the linked Test Plan before deploying.'
         : !worktreeClean
-          ? 'The worktree has uncommitted changes; publish them through voidr_workspace_publish_tests before deploying, so the release matches a commit.'
-          : 'The commit at HEAD is not on the remote. Push it through voidr_workspace_publish_tests and inspect again, so the release stays traceable to a commit others can fetch.'
+          ? 'The worktree has uncommitted changes. Call voidr_workspace_publish_tests with mergeToDefaultBranch false to commit and push a feature branch without changing the default branch, then inspect again.'
+          : 'The commit at HEAD is not on the remote. Call voidr_workspace_publish_tests with mergeToDefaultBranch false to push it without changing the default branch, then inspect again.'
   }
 }

@@ -93,6 +93,18 @@ test('validation runs are SHADOW executions pinned to the candidate version', ()
   assert.match(skill, /never a tight loop/i)
 })
 
+test('latest deploy accepts a commit from any remote branch', () => {
+  const promotion = skill.slice(
+    skill.indexOf('**Promotion is a separate decision**'),
+    skill.indexOf('## Writing the confirmation gates')
+  )
+
+  assert.match(promotion, /ANY remote branch/)
+  assert.match(promotion, /not a deploy\s+prerequisite/)
+  assert.match(promotion, /mergeToDefaultBranch: false/)
+  assert.match(promotion, /pull request is a separate\s+delivery decision/)
+})
+
 test('a validation run pilots the shared preconditions before the whole plan', () => {
   // Every case repeats login/environment: a broken precondition fails all of
   // them, so the plan's runtime buys no information the pilot did not.

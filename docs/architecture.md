@@ -56,7 +56,7 @@ Human gates are mandatory before:
 
 - persisting a new or changed Test Plan;
 - relinking or creating `project.json`;
-- publishing the merged commit as an immutable release;
+- promoting a remote commit as an immutable release;
 - deploying artifacts;
 - creating a platform execution.
 
@@ -111,9 +111,9 @@ permission prompts still apply.
 
 Deployment is fail-closed and has four proofs:
 
-1. The selected PR is `MERGED` into GitHub's current default branch. Its merge
-   commit is reachable from `origin/<default-branch>`, the worktree is clean,
-   and local `HEAD` is exactly that commit.
+1. The worktree is clean, local `HEAD` is the exact commit being released, and
+   that commit is reachable from at least one remote branch. A pull request and
+   a merge into the default branch are not deployment prerequisites.
 2. A fresh build from that commit is uploaded only to the content-addressed
    `versions/<codebaseVersion>` namespace and registered with matching
    checksums.
@@ -133,15 +133,14 @@ rewrites mutable storage under `latest`. There is no fallback. Environments
 that do not yet expose `deploy-candidate`, immutable version promotion, and
 latest read-back remain blocked until those capabilities are released.
 
-The local release tool uses GitHub CLI only for read-only PR/default-branch
-evidence. It never creates or merges a PR. It reruns the evidence checks inside
-the same operation that builds, publishes, promotes, and verifies the release.
+The local release tool reads the repository identity and remote refs. It never
+creates or merges a pull request. It reruns the evidence checks inside the same
+operation that builds, publishes, promotes, and verifies the release.
 
 The current platform manifest identifies immutable content with
-`codebaseVersion`; the plugin response also records the merged commit that
-produced it. Persisting that Git SHA inside the platform deploy record is a
-recommended audit enhancement, but is not used as a substitute for the live
-merge check.
+`codebaseVersion`; the plugin response also records the source commit that
+produced it. Persisting that Git SHA inside the platform deploy record remains
+a recommended audit enhancement.
 
 ## Greenfield repository compatibility
 

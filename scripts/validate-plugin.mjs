@@ -470,8 +470,10 @@ assert(
 assert(
   /voidr_workspace_publish_tests/.test(executeSkill) &&
     /voidr_release_inspect/.test(executeSkill) &&
-    /voidr_release_deploy_live/.test(executeSkill),
-  'Execute skill must keep the promotion path through the release gates.'
+    /voidr_release_deploy_live/.test(executeSkill) &&
+    /ANY remote branch/.test(executeSkill) &&
+    /mergeToDefaultBranch:\s*false/.test(executeSkill),
+  'Execute skill must deploy remote branch commits without requiring a merge.'
 )
 assert(
   /Never deploy a\s+repository that did not build/i.test(executeSkill),

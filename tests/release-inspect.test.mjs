@@ -102,8 +102,9 @@ test('reports an unpushed commit with actionable guidance', async () => {
 
   assert.equal(result.ready, false)
   assert.equal(result.commitOnRemote, false)
-  assert.match(result.next, /not on the remote/)
   assert.match(result.next, /voidr_workspace_publish_tests/)
+  assert.match(result.next, /mergeToDefaultBranch false/)
+  assert.match(result.next, /without changing the default branch/)
 })
 
 test('reports a dirty worktree instead of proceeding', async () => {
@@ -118,4 +119,5 @@ test('reports a dirty worktree instead of proceeding', async () => {
 
   assert.equal(result.ready, false)
   assert.match(result.next, /uncommitted changes/)
+  assert.match(result.next, /mergeToDefaultBranch false/)
 })

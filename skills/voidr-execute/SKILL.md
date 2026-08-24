@@ -62,21 +62,31 @@ Ask (or infer from the request) which mode applies:
    instead of the whole plan's. Confirm the scope first — "rodar o CASO na
    Voidr agora? Roda em paralelo, sem contar como resultado oficial" — and
    share the execution link. Say how long it takes when the case is long.
-4. **Full run**: only after the pilot passes, execute the remaining targets in
-   ONE execution. Never split a plan into one execution per case: results are
-   already reported per case, and separate executions pay queue and pod
-   startup again for the same answer.
-5. **Follow to completion** (see "Monitoring") and read the outcome with
-   "Reading a failed run" below.
-6. **Best-effort code delivery**: after validation passes, offer to deliver the
-   source through `voidr_workspace_publish_tests` with its normal
+4. **Branch on the pilot verdict**:
+   - If its tests PASSED, execute the remaining targets in ONE full execution.
+     Never split a plan into one execution per case: results are already
+     reported per case, and separate executions pay queue and pod startup again
+     for the same answer.
+   - If its tests FAILED, diagnose the failure. Correct and retry only within
+     the three-run budget owned by `/voidr-generate`. When that budget ends, do
+     not run the remaining targets: continue to the delivery and LIVE offer
+     with the final candidate that actually ran.
+   - If the execution was cancelled or produced no test verdict, it does not
+     count as an exercised candidate. Do not offer LIVE from it.
+5. **Follow each execution to completion** (see "Monitoring"). A PASSED verdict
+   can continue directly. A FAILED verdict must be read with "Reading a failed
+   run" below before continuing. Both verdicts remain eligible for LIVE.
+6. **Best-effort code delivery**: after a PASSED verdict, or after a FAILED
+   verdict has been diagnosed, offer to deliver the source through
+   `voidr_workspace_publish_tests` with its normal
    `mergeToDefaultBranch: true` behavior. Record whether commit, push, pull
    request, and merge succeeded. A refusal, failed check, missing review,
    conflict, authentication error, or any other Git failure NEVER blocks the
    LIVE deploy and must not trigger a retry loop.
 7. **LIVE deploy is a separate decision**: after its own confirmation, call
    `voidr_release_deploy_live` with the SAME `codebaseVersion` returned by
-   `voidr_release_deploy_validation` and used by the passing validation run.
+   `voidr_release_deploy_validation` and exercised by the completed validation
+   run, whether its tests PASSED or FAILED.
    Do not rebuild. Do not call `voidr_release_inspect`. No Git commit, push,
    pull request, or merge is a deploy prerequisite. If code delivery failed,
    report both truths: LIVE advanced, and the default branch did not.
@@ -324,8 +334,8 @@ anyway and say the cause is unknown.
 - `executions_cancel_execution` — stops a run still in progress. A write, and
   the user's call: never cancel on your own initiative.
 - `voidr_release_deploy_live` — publishes the exact `codebaseVersion` that
-  passed validation, only after an explicit user decision. It never rebuilds
-  and never depends on Git state.
+  produced a PASSED or diagnosed FAILED validation verdict, only after an
+  explicit user decision. It never rebuilds and never depends on Git state.
 - `voidr_workspace_publish_tests` — best-effort delivery to the default branch
   before LIVE. Its failure is reported but never blocks
   `voidr_release_deploy_live`.

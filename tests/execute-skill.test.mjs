@@ -104,6 +104,8 @@ test('Git delivery is attempted but never gates the validated LIVE candidate', (
   assert.match(promotion, /SAME `codebaseVersion`/)
   assert.match(promotion, /Do not rebuild/)
   assert.match(promotion, /default branch did not/)
+  assert.match(promotion, /PASSED or FAILED/)
+  assert.match(promotion, /FAILED\s+verdict has been diagnosed/)
 })
 
 test('a validation run pilots the shared preconditions before the whole plan', () => {
@@ -111,7 +113,10 @@ test('a validation run pilots the shared preconditions before the whole plan', (
   // them, so the plan's runtime buys no information the pilot did not.
   assert.match(skill, /Pilot execution/)
   assert.match(skill, /SINGLE representative target/)
-  assert.match(skill, /only after the pilot passes/i)
+  assert.match(skill, /If its tests PASSED/)
+  assert.match(skill, /If its tests FAILED/)
+  assert.match(skill, /continue to the delivery and LIVE offer/)
+  assert.match(skill, /cancelled or produced no test verdict.*Do not offer LIVE/is)
   // One execution per case pays queue and pod startup again for results the
   // platform already reports per case.
   assert.match(skill, /Never split a plan into one execution per case/i)

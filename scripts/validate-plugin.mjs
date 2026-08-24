@@ -473,8 +473,10 @@ assert(
     /voidr_release_deploy_live/.test(executeSkill) &&
     /SAME `codebaseVersion`/.test(executeSkill) &&
     /Git failure NEVER blocks/.test(executeSkill) &&
+    /PASSED or FAILED/.test(executeSkill) &&
+    /Both verdicts remain eligible for LIVE/.test(executeSkill) &&
     /never a LIVE\s+deploy gate/.test(executeSkill),
-  'Execute skill must deploy the validated candidate even when Git delivery fails.'
+  'Execute skill must keep PASSED and diagnosed FAILED candidates eligible even when Git delivery fails.'
 )
 assert(
   /Never deploy a\s+repository that did not build/i.test(executeSkill),

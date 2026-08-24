@@ -14,10 +14,10 @@ import { deployRelease } from '../scripts/lib/release-deploy.mjs'
 const codebaseVersion = 'b'.repeat(64)
 const testPlanId = '0123456789abcdef01234567'
 
-test('accepts only the exact candidate that passed platform validation', () => {
+test('accepts the exact candidate exercised by a completed validation', () => {
   assert.deepEqual(
     assertPromotableCandidate({
-      validatedCodebaseVersion: codebaseVersion,
+      exercisedCodebaseVersion: codebaseVersion,
       manifestCodebaseVersion: codebaseVersion
     }),
     { codebaseVersion }
@@ -25,22 +25,22 @@ test('accepts only the exact candidate that passed platform validation', () => {
   assert.throws(
     () =>
       assertPromotableCandidate({
-        validatedCodebaseVersion: 'not-a-version',
+        exercisedCodebaseVersion: 'not-a-version',
         manifestCodebaseVersion: 'not-a-version'
       }),
-    /passing validation/
+    /completed validation/
   )
   assert.throws(
     () =>
       assertPromotableCandidate({
-        validatedCodebaseVersion: codebaseVersion,
+        exercisedCodebaseVersion: codebaseVersion,
         manifestCodebaseVersion: 'c'.repeat(64)
       }),
-    /not the version that passed validation/
+    /not the version exercised/
   )
 })
 
-test('deployment completes only when latest equals the validated candidate', () => {
+test('deployment completes only when latest equals the exercised candidate', () => {
   const base = completedEvidence()
   assert.equal(
     assertCompletedImmutableDeployment(base).latestCodebaseVersion,
@@ -66,7 +66,7 @@ test('extracts latest codebaseVersion from platform deploy read-back', () => {
   assert.equal(latestCodebaseVersion({ data: null }), null)
 })
 
-test('promotes the validated build without rebuilding or consulting Git', async () => {
+test('promotes the exercised build without rebuilding or checking remote Git state', async () => {
   const { repositoryPath, repositoryUrl } = makeCheckout('release')
   const calls = []
   const result = await deployRelease({
@@ -102,7 +102,7 @@ test('promotes the validated build without rebuilding or consulting Git', async 
   ])
 })
 
-test('refuses a local build that differs from the validated candidate', async () => {
+test('refuses a local build that differs from the exercised candidate', async () => {
   const { repositoryPath, repositoryUrl } = makeCheckout('mismatch')
 
   await assert.rejects(
@@ -116,7 +116,7 @@ test('refuses a local build that differs from the validated candidate', async ()
       },
       restClient: { get: async () => ({}) }
     }),
-    /not the version that passed validation/
+    /not the version exercised/
   )
 })
 

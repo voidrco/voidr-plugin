@@ -56,7 +56,7 @@ Human gates are mandatory before:
 
 - persisting a new or changed Test Plan;
 - relinking or creating `project.json`;
-- promoting the immutable candidate that passed platform validation;
+- promoting the immutable candidate that produced a completed validation verdict;
 - deploying artifacts;
 - creating a platform execution.
 
@@ -112,8 +112,8 @@ permission prompts still apply.
 Deployment is fail-closed and has three proofs:
 
 1. The candidate was built, uploaded to the content-addressed
-   `versions/<codebaseVersion>` namespace, and passed a platform validation
-   pinned to that exact version.
+   `versions/<codebaseVersion>` namespace, and produced a PASSED or diagnosed
+   FAILED verdict in a platform validation pinned to that exact version.
 2. That exact immutable version is promoted without rebuilding it. A platform read-back must prove
    the latest deploy contains the same `codebaseVersion`.
 3. The Test Plan and counts independently confirm that every selected case is

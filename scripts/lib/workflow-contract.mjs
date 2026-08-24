@@ -54,6 +54,7 @@ export function createWorkflow() {
       testRepository: null,
       projectLink: null,
       codebaseVersion: null,
+      validationOutcome: null,
       latestCodebaseVersion: null,
       deployConfirmed: false,
       syncVerified: false,
@@ -335,9 +336,12 @@ export function transition(workflow, event) {
       requireState(next, States.LOCAL_VALIDATION_PASSED)
       requireValidatedCandidate(event)
       next.context.codebaseVersion = event.codebaseVersion
+      next.context.validationOutcome = event.validationOutcome
       next.state = States.VALIDATION_CANDIDATE_VERIFIED
       next.prompt =
-        'A validação na plataforma passou. Posso publicar exatamente esta versão em LIVE? A entrega do código na principal será tentada separadamente e não bloqueia o deploy.'
+        event.validationOutcome === 'PASSED'
+          ? 'A execução de validação terminou e os testes passaram. Posso publicar exatamente esta versão em LIVE? A entrega do código na principal será tentada separadamente e não bloqueia o deploy.'
+          : 'A execução de validação terminou com falhas, e o diagnóstico foi concluído. Posso publicar exatamente esta versão em LIVE mesmo vermelha? A entrega do código na principal será tentada separadamente e não bloqueia o deploy.'
       return next
 
     case 'DEPLOY_APPROVED':
@@ -417,12 +421,15 @@ function requireState(workflow, expected) {
 }
 
 function requireValidatedCandidate(event) {
-  if (
-    event.validationPassed !== true ||
-    !/^[a-f0-9]{64}$/.test(String(event.codebaseVersion || ''))
-  ) {
+  const completedVerdict = ['PASSED', 'FAILED'].includes(event.validationOutcome)
+  const diagnosedFailure =
+    event.validationOutcome !== 'FAILED' || event.diagnosisCompleted === true
+  const validVersion = /^[a-f0-9]{64}$/.test(
+    String(event.codebaseVersion || '')
+  )
+  if (!completedVerdict || !diagnosedFailure || !validVersion) {
     throw new Error(
-      'Deploy requires the immutable codebaseVersion from a passing platform validation.'
+      'Deploy requires a PASSED verdict or a diagnosed FAILED verdict for this immutable codebaseVersion.'
     )
   }
 }

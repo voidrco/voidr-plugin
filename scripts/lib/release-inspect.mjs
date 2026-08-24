@@ -5,7 +5,7 @@ import {
   validateRepositorySelection
 } from './workspace.mjs'
 
-// This inspection describes Git delivery only; LIVE uses the validated candidate.
+// This inspection describes Git delivery only; LIVE uses the exercised candidate.
 export async function inspectReleaseReadiness({
   repositoryPath,
   workspaceRoot,
@@ -84,11 +84,11 @@ export async function inspectReleaseReadiness({
     commitOnRemote,
     ready,
     next: ready
-      ? `Git delivery is traceable at ${headSha}. This is not a LIVE deploy gate: LIVE must promote the exact codebaseVersion that passed platform validation.`
+      ? `Git delivery is traceable at ${headSha}. This is not a LIVE deploy gate: LIVE must promote the exact codebaseVersion exercised by a completed validation.`
       : !project?.testPlanId
         ? 'project.json is missing or has no testPlanId; prepare the repository through the linked Test Plan before validation.'
         : !worktreeClean
-          ? 'The worktree has uncommitted changes. Try voidr_workspace_publish_tests with mergeToDefaultBranch true. Report any Git failure, but do not block promotion of the validated candidate.'
-          : 'The commit at HEAD is not on the remote. Try voidr_workspace_publish_tests with mergeToDefaultBranch true. Report any Git failure, but do not block promotion of the validated candidate.'
+          ? 'The worktree has uncommitted changes. Try voidr_workspace_publish_tests with mergeToDefaultBranch true. Report any Git failure, but do not block promotion of the exercised candidate.'
+          : 'The commit at HEAD is not on the remote. Try voidr_workspace_publish_tests with mergeToDefaultBranch true. Report any Git failure, but do not block promotion of the exercised candidate.'
   }
 }

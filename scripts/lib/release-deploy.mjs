@@ -46,7 +46,7 @@ export async function deployRelease({
     throw new Error('Built manifest does not match the explicitly selected Test Plan.')
   }
   const candidate = assertPromotableCandidate({
-    validatedCodebaseVersion: codebaseVersion,
+    exercisedCodebaseVersion: codebaseVersion,
     manifestCodebaseVersion: manifest.codebaseVersion
   })
 

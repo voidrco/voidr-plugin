@@ -352,7 +352,7 @@ const localTools = [
   {
     name: 'voidr_release_inspect',
     description:
-      'Read-only Git delivery inspection of the selected test repository: reads project.json, the Git origin URL, HEAD and worktree state, and whether the current commit is present on a remote branch. This can guide commit/push/PR delivery, but it never gates LIVE; LIVE promotes the exact candidate that passed platform validation. Pass workspaceRoot with the absolute path of the open VS Code workspace folder.',
+      'Read-only Git delivery inspection of the selected test repository: reads project.json, the Git origin URL, HEAD and worktree state, and whether the current commit is present on a remote branch. This can guide commit/push/PR delivery, but it never gates LIVE; LIVE may promote a candidate whose completed validation verdict was PASSED or diagnosed FAILED. Pass workspaceRoot with the absolute path of the open VS Code workspace folder.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -365,7 +365,7 @@ const localTools = [
   {
     name: 'voidr_workspace_publish_tests',
     description:
-      'Best-effort Git delivery after the user explicitly authorized it in chat. It commits and pushes a feature branch. With mergeToDefaultBranch true (the default), it also opens or reuses a pull request and tries to merge it into the default branch. Any Git failure must be reported but never blocks a separately approved LIVE deploy of the exact validated candidate. Runs with the user Git credentials; direct pushes to the default branch are refused.',
+      'Best-effort Git delivery after the user explicitly authorized it in chat. It commits and pushes a feature branch. With mergeToDefaultBranch true (the default), it also opens or reuses a pull request and tries to merge it into the default branch. Any Git failure must be reported but never blocks a separately approved LIVE deploy of the exact candidate exercised by a completed validation. Runs with the user Git credentials; direct pushes to the default branch are refused.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -386,7 +386,7 @@ const localTools = [
   {
     name: 'voidr_release_deploy_live',
     description:
-      'Publish and verify the exact immutable candidate that already passed platform validation. Pass the codebaseVersion returned by voidr_release_deploy_validation; the local manifest must still match it. This does not rebuild and does not require a clean worktree, a Git commit, a push, a pull request, or a merge. The tool reports completion only after latest points to that same codebaseVersion.',
+      'Publish and verify the exact immutable candidate exercised by a completed platform validation whose test verdict was PASSED or diagnosed FAILED. Pass the codebaseVersion returned by voidr_release_deploy_validation; the local manifest must still match it. This does not rebuild and does not require a clean worktree, a Git commit, a push, a pull request, or a merge. The tool reports completion only after latest points to that same codebaseVersion.',
     inputSchema: {
       type: 'object',
       properties: {

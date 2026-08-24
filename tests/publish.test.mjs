@@ -127,7 +127,7 @@ test('pushes a deployable feature branch without opening a pull request', async 
   assert.equal(result.merged, false)
   assert.equal(result.readyToDeploy, true)
   assert.match(result.next, /default branch \(main\) was not changed/i)
-  assert.match(result.next, /exact candidate that passed validation/i)
+  assert.match(result.next, /completed validation PASSED or was diagnosed FAILED/i)
   assert.equal(
     calls.some(call => call.file === 'gh' && call.args[0] === 'pr'),
     false

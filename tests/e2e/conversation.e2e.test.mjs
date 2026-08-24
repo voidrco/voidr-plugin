@@ -138,10 +138,10 @@ test('natural-language greenfield journey reaches deploy and execution through e
 
   workflow = transition(workflow, {
     type: 'VALIDATION_CANDIDATE_VERIFIED',
-    validationPassed: true,
+    validationOutcome: 'PASSED',
     codebaseVersion: 'b'.repeat(64)
   })
-  assert.match(workflow.prompt, /validação na plataforma passou/i)
+  assert.match(workflow.prompt, /testes passaram/i)
 
   workflow = transition(workflow, { type: 'DEPLOY_APPROVED' })
   assert.deepEqual(workflow.actions, [

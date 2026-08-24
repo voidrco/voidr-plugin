@@ -66,7 +66,7 @@ Routing invariants:
 | Tool | Owner skills | Purpose |
 | --- | --- | --- |
 | `voidr_release_inspect` | `voidr-execute` | Optional read-only Git delivery inspection. It never gates LIVE. |
-| `voidr_release_deploy_live` | `voidr-execute` | Publish the exact immutable candidate that passed platform validation, without rebuilding or requiring Git delivery. |
+| `voidr_release_deploy_live` | `voidr-execute` | Publish the exact immutable candidate whose completed validation verdict was PASSED or diagnosed FAILED, without rebuilding or requiring Git delivery. |
 | `voidr_release_deploy_validation` | `voidr-execute` | Upload the content-addressed validation candidate WITHOUT promoting it; `latest` stays untouched and no PR/merge is required. Returns the immutable `codebaseVersion`. |
 | `voidr_create_validation_execution` | `voidr-execute` | The only tool that starts a validation execution: SHADOW, pinned to the candidate `codebaseVersion`, outside LIVE governance. |
 | `executions_create_execution` | `voidr-execute` | The only tool that starts a LIVE platform execution, always behind a typed confirmation. |

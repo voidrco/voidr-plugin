@@ -1,18 +1,18 @@
 const SHA256 = /^[a-f0-9]{64}$/
 
 export function assertPromotableCandidate(evidence) {
-  const validated = String(evidence?.validatedCodebaseVersion || '')
+  const exercised = String(evidence?.exercisedCodebaseVersion || '')
   const manifest = String(evidence?.manifestCodebaseVersion || '')
-  if (!SHA256.test(validated)) {
-    throw new Error('A valid codebaseVersion from a passing validation is required.')
+  if (!SHA256.test(exercised)) {
+    throw new Error('A valid codebaseVersion from a completed validation is required.')
   }
-  if (manifest !== validated) {
+  if (manifest !== exercised) {
     throw new Error(
-      'The local build is not the version that passed validation. Validate this build before deploying it to LIVE.'
+      'The local build is not the version exercised by the completed validation. Run this build before deploying it to LIVE.'
     )
   }
   return {
-    codebaseVersion: validated
+    codebaseVersion: exercised
   }
 }
 

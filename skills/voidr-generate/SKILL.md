@@ -419,6 +419,11 @@ fourth. A fourth run is a guess with a deploy attached, and the cost is real —
 a validation run is a candidate deploy plus a real execution, and a case like a
 full purchase flow can take fifteen minutes on its own.
 
+Exhausting the run budget is not a LIVE block. Return the final candidate that
+actually ran to `/voidr-execute`; after its failure is diagnosed, that flow
+still offers the exact version for LIVE. Red changes the explanation, not
+eligibility.
+
 The user can ask for another round. That is their call to make with the three
 results in front of them, and it is a different thing from the flow deciding on
 its own to keep going.

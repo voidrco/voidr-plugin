@@ -5,10 +5,7 @@ import {
   validateRepositorySelection
 } from './workspace.mjs'
 
-// Read-only release readiness inspection. Everything the deploy needs — Test
-// Plan ID, repository URL, default branch, and the commit being released — is
-// discovered from the checkout itself (project.json, Git origin, gh) so the
-// model never has to ask the user for identifiers.
+// This inspection describes Git delivery only; LIVE uses the exercised candidate.
 export async function inspectReleaseReadiness({
   repositoryPath,
   workspaceRoot,
@@ -56,9 +53,6 @@ export async function inspectReleaseReadiness({
       )
     ).stdout.trim() === ''
 
-  // A release is traceable when the commit it was built from is on the remote,
-  // so someone else can fetch it later. That is what a merged pull request used
-  // to prove, and it is all that is required now.
   let commitOnRemote = false
   if (headSha) {
     try {
@@ -90,11 +84,11 @@ export async function inspectReleaseReadiness({
     commitOnRemote,
     ready,
     next: ready
-      ? `Show this summary to the user and, after confirmation, call voidr_release_deploy_live with testPlanId ${project.testPlanId} and repositoryUrl ${repositoryUrl}. Do not ask the user for these values.`
+      ? `Git delivery is traceable at ${headSha}. This is not a LIVE deploy gate: LIVE must promote the exact codebaseVersion exercised by a completed validation.`
       : !project?.testPlanId
-        ? 'project.json is missing or has no testPlanId; prepare the repository through the linked Test Plan before deploying.'
+        ? 'project.json is missing or has no testPlanId; prepare the repository through the linked Test Plan before validation.'
         : !worktreeClean
-          ? 'The worktree has uncommitted changes; publish them through voidr_workspace_publish_tests before deploying, so the release matches a commit.'
-          : 'The commit at HEAD is not on the remote. Push it through voidr_workspace_publish_tests and inspect again, so the release stays traceable to a commit others can fetch.'
+          ? 'The worktree has uncommitted changes. Try voidr_workspace_publish_tests with mergeToDefaultBranch true. Report any Git failure, but do not block promotion of the exercised candidate.'
+          : 'The commit at HEAD is not on the remote. Try voidr_workspace_publish_tests with mergeToDefaultBranch true. Report any Git failure, but do not block promotion of the exercised candidate.'
   }
 }

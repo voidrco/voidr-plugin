@@ -52,7 +52,7 @@ function fakeInspectRun({ pushed = true, dirty = false } = {}) {
   }
 }
 
-test('discovers plan, repository URL, and the commit to release without asking the user', async () => {
+test('discovers plan, repository URL, and Git delivery state', async () => {
   const workspace = mkdtempSync(join(tmpdir(), 'voidr-inspect-'))
   const repositoryPath = createCheckout(workspace)
 
@@ -70,13 +70,13 @@ test('discovers plan, repository URL, and the commit to release without asking t
   )
   assert.equal(result.headSha, headSha)
   assert.equal(result.commitOnRemote, true)
-  assert.match(result.next, /voidr_release_deploy_live/)
-  assert.match(result.next, /Do not ask the user/)
+  assert.match(result.next, /not a LIVE deploy gate/)
+  assert.match(result.next, /codebaseVersion/)
 })
 
 // A commit on any remote branch is releasable: readiness never looks for a
 // pull request, merged or otherwise.
-test('a commit on a feature branch is ready to release', async () => {
+test('a commit on a feature branch is traceable for Git delivery', async () => {
   const workspace = mkdtempSync(join(tmpdir(), 'voidr-inspect-branch-'))
   const repositoryPath = createCheckout(workspace)
 
@@ -87,7 +87,7 @@ test('a commit on a feature branch is ready to release', async () => {
   })
 
   assert.equal(result.ready, true)
-  assert.doesNotMatch(result.next, /pull request/i)
+  assert.match(result.next, /Git delivery is traceable/)
 })
 
 test('reports an unpushed commit with actionable guidance', async () => {
@@ -102,8 +102,9 @@ test('reports an unpushed commit with actionable guidance', async () => {
 
   assert.equal(result.ready, false)
   assert.equal(result.commitOnRemote, false)
-  assert.match(result.next, /not on the remote/)
   assert.match(result.next, /voidr_workspace_publish_tests/)
+  assert.match(result.next, /mergeToDefaultBranch true/)
+  assert.match(result.next, /do not block promotion/)
 })
 
 test('reports a dirty worktree instead of proceeding', async () => {
@@ -118,4 +119,6 @@ test('reports a dirty worktree instead of proceeding', async () => {
 
   assert.equal(result.ready, false)
   assert.match(result.next, /uncommitted changes/)
+  assert.match(result.next, /mergeToDefaultBranch true/)
+  assert.match(result.next, /do not block promotion/)
 })

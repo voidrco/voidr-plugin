@@ -52,4 +52,9 @@ test('validation stops at three runs, whatever the failures look like', () => {
 
   // A fourth round stays available — as the user's decision, not the flow's.
   assert.match(section, /can ask for another round/)
+
+  // Three red runs end retries, not LIVE eligibility.
+  assert.match(section, /not a LIVE block/)
+  assert.match(section, /still offers the exact version for LIVE/)
+  assert.match(section, /Red changes the explanation, not\s+eligibility/)
 })

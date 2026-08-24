@@ -59,14 +59,14 @@ Routing invariants:
 | `voidr_workspace_scaffold_test_cases` | `voidr-generate` | Scaffold a case added after the preparation gate completed. |
 | `voidr_build` | `voidr-generate`, `voidr-execute` | The local syntax/packaging gate (`voidr build`), outside the agent shell. Never runs tests locally. |
 | `voidr_explore` | `voidr-generate` | Throwaway inspection probes against the deployed app; tolerates failures, never builds, never counts as validation. |
-| `voidr_workspace_publish_tests` | `voidr-execute` | Branch, commit, and pull request through user credentials. |
+| `voidr_workspace_publish_tests` | `voidr-execute` | Best-effort Git delivery: commit and push a feature branch, then by default open a pull request and try to merge it into the default branch. Failure is reported but never blocks LIVE. |
 
 ## Release and executions
 
 | Tool | Owner skills | Purpose |
 | --- | --- | --- |
-| `voidr_release_inspect` | `voidr-execute` | Rediscover repository, plan, and the commit to release from the checkout. Never ask the user for these IDs. |
-| `voidr_release_deploy_live` | `voidr-execute` | Publish the immutable LIVE release from the commit the clean checkout is on. |
+| `voidr_release_inspect` | `voidr-execute` | Optional read-only Git delivery inspection. It never gates LIVE. |
+| `voidr_release_deploy_live` | `voidr-execute` | Publish the exact immutable candidate whose completed validation verdict was PASSED or diagnosed FAILED, without rebuilding or requiring Git delivery. |
 | `voidr_release_deploy_validation` | `voidr-execute` | Upload the content-addressed validation candidate WITHOUT promoting it; `latest` stays untouched and no PR/merge is required. Returns the immutable `codebaseVersion`. |
 | `voidr_create_validation_execution` | `voidr-execute` | The only tool that starts a validation execution: SHADOW, pinned to the candidate `codebaseVersion`, outside LIVE governance. |
 | `executions_create_execution` | `voidr-execute` | The only tool that starts a LIVE platform execution, always behind a typed confirmation. |

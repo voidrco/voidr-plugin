@@ -93,16 +93,17 @@ test('validation runs are SHADOW executions pinned to the candidate version', ()
   assert.match(skill, /never a tight loop/i)
 })
 
-test('latest deploy accepts a commit from any remote branch', () => {
+test('Git delivery is attempted but never gates the validated LIVE candidate', () => {
   const promotion = skill.slice(
-    skill.indexOf('**Promotion is a separate decision**'),
+    skill.indexOf('**Best-effort code delivery**'),
     skill.indexOf('## Writing the confirmation gates')
   )
 
-  assert.match(promotion, /ANY remote branch/)
-  assert.match(promotion, /not a deploy\s+prerequisite/)
-  assert.match(promotion, /mergeToDefaultBranch: false/)
-  assert.match(promotion, /pull request is a separate\s+delivery decision/)
+  assert.match(promotion, /mergeToDefaultBranch: true/)
+  assert.match(promotion, /Git failure NEVER blocks/)
+  assert.match(promotion, /SAME `codebaseVersion`/)
+  assert.match(promotion, /Do not rebuild/)
+  assert.match(promotion, /default branch did not/)
 })
 
 test('a validation run pilots the shared preconditions before the whole plan', () => {

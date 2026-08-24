@@ -127,7 +127,7 @@ test('pushes a deployable feature branch without opening a pull request', async 
   assert.equal(result.merged, false)
   assert.equal(result.readyToDeploy, true)
   assert.match(result.next, /default branch \(main\) was not changed/i)
-  assert.match(result.next, /deploy this commit to latest/i)
+  assert.match(result.next, /exact candidate that passed validation/i)
   assert.equal(
     calls.some(call => call.file === 'gh' && call.args[0] === 'pr'),
     false
@@ -263,6 +263,6 @@ test('an unmerged publish never reads as a delivered one', async () => {
 
   assert.match(unmerged.next, /does NOT have the tests/i)
   assert.match(unmerged.next, /pull\/7/)
-  assert.match(unmerged.next, /ready for a separately approved latest deploy/i)
+  assert.match(unmerged.next, /Do not block a separately approved LIVE deploy/i)
   assert.equal(unmerged.readyToDeploy, true)
 })

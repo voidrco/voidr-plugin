@@ -23,7 +23,7 @@
    - new Test Plan;
    - existing Test Plan;
    - `project.json` mismatch;
-   - remote-commit release gate, independent of PR merge;
+   - best-effort Git delivery, independent of LIVE promotion;
    - immutable candidate promotion plus exact `latest` read-back;
    - deploy plus independent sync verification;
    - adversarial request to use Hive.
@@ -43,8 +43,8 @@
 - A new plan is persisted only after the user approves the visible draft.
 - An existing plan is resolved from platform data, not from local inference.
 - Deployment and execution each require a separate confirmation.
-- Deploy is blocked unless the checkout is clean and its exact `HEAD` commit is
-  available on a remote branch. The default branch may remain unchanged.
+- Deploy is blocked unless the exact immutable candidate passed platform
+  validation. Git delivery is attempted but its failure does not block LIVE.
 - Legacy mutable `deploy-latest` shell paths are denied.
 - Deployment cannot complete unless `latest.codebaseVersion` equals the
   promoted immutable candidate.

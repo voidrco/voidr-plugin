@@ -1024,8 +1024,9 @@ test('bridge blocks writes for an account without write scope before network', a
     name: 'voidr_release_deploy_live',
     arguments: {
       repositoryPath: temp,
-      pullRequestNumber: 1,
-      testPlanId: '0123456789abcdef01234567'
+      repositoryUrl: 'https://github.com/acme/tests.git',
+      testPlanId: '0123456789abcdef01234567',
+      codebaseVersion: 'b'.repeat(64)
     }
   })
   assert.match(localRelease.error.message, /does not declare the write scope/i)

@@ -471,9 +471,10 @@ assert(
   /voidr_workspace_publish_tests/.test(executeSkill) &&
     /voidr_release_inspect/.test(executeSkill) &&
     /voidr_release_deploy_live/.test(executeSkill) &&
-    /ANY remote branch/.test(executeSkill) &&
-    /mergeToDefaultBranch:\s*false/.test(executeSkill),
-  'Execute skill must deploy remote branch commits without requiring a merge.'
+    /SAME `codebaseVersion`/.test(executeSkill) &&
+    /Git failure NEVER blocks/.test(executeSkill) &&
+    /never a LIVE\s+deploy gate/.test(executeSkill),
+  'Execute skill must deploy the validated candidate even when Git delivery fails.'
 )
 assert(
   /Never deploy a\s+repository that did not build/i.test(executeSkill),

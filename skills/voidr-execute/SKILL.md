@@ -68,15 +68,18 @@ Ask (or infer from the request) which mode applies:
    startup again for the same answer.
 5. **Follow to completion** (see "Monitoring") and read the outcome with
    "Reading a failed run" below.
-6. **Promotion is a separate decision**: when validation passes and the user
-   wants this version in the LIVE monitoring pipeline, call
-   `voidr_release_inspect` first.
-   A clean commit present on ANY remote branch is ready for
-   `voidr_release_deploy_live`; merging into the default branch is not a deploy
-   prerequisite. If the checkout is dirty or its commit exists only locally,
-   call `voidr_workspace_publish_tests` with `mergeToDefaultBranch: false`,
-   inspect again, then deploy. Opening or merging a pull request is a separate
-   delivery decision.
+6. **Best-effort code delivery**: after validation passes, offer to deliver the
+   source through `voidr_workspace_publish_tests` with its normal
+   `mergeToDefaultBranch: true` behavior. Record whether commit, push, pull
+   request, and merge succeeded. A refusal, failed check, missing review,
+   conflict, authentication error, or any other Git failure NEVER blocks the
+   LIVE deploy and must not trigger a retry loop.
+7. **LIVE deploy is a separate decision**: after its own confirmation, call
+   `voidr_release_deploy_live` with the SAME `codebaseVersion` returned by
+   `voidr_release_deploy_validation` and used by the passing validation run.
+   Do not rebuild. Do not call `voidr_release_inspect`. No Git commit, push,
+   pull request, or merge is a deploy prerequisite. If code delivery failed,
+   report both truths: LIVE advanced, and the default branch did not.
 
 ## Writing the confirmation gates
 
@@ -320,12 +323,14 @@ anyway and say the cause is unknown.
 - `executions_create_execution` — the ONLY LIVE execution write.
 - `executions_cancel_execution` — stops a run still in progress. A write, and
   the user's call: never cancel on your own initiative.
-- `voidr_release_inspect` / `voidr_release_deploy_live` — the promotion path,
-  only after a passing validation and an explicit user decision. A commit on
-  any remote branch is deployable.
-- `voidr_workspace_publish_tests` — needed before deploy only for a dirty or
-  local-only checkout; pass `mergeToDefaultBranch: false`. PR delivery and
-  merge into the default branch are independent of deployment.
+- `voidr_release_deploy_live` — publishes the exact `codebaseVersion` that
+  passed validation, only after an explicit user decision. It never rebuilds
+  and never depends on Git state.
+- `voidr_workspace_publish_tests` — best-effort delivery to the default branch
+  before LIVE. Its failure is reported but never blocks
+  `voidr_release_deploy_live`.
+- `voidr_release_inspect` — optional Git delivery inspection; never a LIVE
+  deploy gate.
 - `executions_get_execution` / `playwright_get_execution_analytics` —
   monitoring and result reporting.
 - `playwright_list_execution_failures` — the per-case failures with their

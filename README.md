@@ -183,11 +183,12 @@ the draft still requires the separate approval `Aprovo este Test Plan`. Both
 phrases must be typed by the user in the normal chat input; `ask_user`
 selections do not satisfy these runtime gates.
 
-Before deploy, the selected test repository must be clean and its commit must
-exist on the remote — no pull request is required. The plugin rebuilds from
-that exact commit, uploads a content-addressed candidate, promotes it, and
-reports success only when the platform read-back proves `latest` points to the
-same `codebaseVersion`.
+After platform validation passes, the plugin tries to commit, push, open a pull
+request, and merge the tests into the repository's default branch. That Git
+delivery is best effort: any failure is reported but does not block LIVE. The
+plugin promotes the exact candidate that passed validation, without rebuilding,
+and reports success only when the platform read-back proves `latest` points to
+the same `codebaseVersion`.
 Legacy `voidr deploy-latest` and `npm run voidr:deploy` shell paths are denied.
 
 ## Authentication prerequisite

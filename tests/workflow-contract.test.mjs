@@ -316,56 +316,54 @@ test('project.json mismatch cannot silently change the selected plan', () => {
   assert.equal(workflow.context.planId, 'abcdef0123456789abcdef01')
 })
 
-test('deployment is impossible until a clean pushed commit is verified', () => {
+test('deployment is impossible until a platform validation passes', () => {
   let workflow = readyToDeploy()
   assert.throws(
     () => transition(workflow, { type: 'DEPLOY_APPROVED' }),
-    /Expected DEPLOY_SOURCE_VERIFIED/
+    /Expected VALIDATION_CANDIDATE_VERIFIED/
   )
-  // A commit that never left the machine is not a deployable source.
   assert.throws(
     () =>
       transition(workflow, {
-        type: 'DEPLOY_SOURCE_VERIFIED',
-        ...deployableSource(),
-        commitOnRemote: false
+        type: 'VALIDATION_CANDIDATE_VERIFIED',
+        validationPassed: false,
+        codebaseVersion: 'b'.repeat(64)
       }),
-    /Deploy requires/
+    /passing platform validation/
   )
-  // Neither is a dirty worktree.
   assert.throws(
     () =>
       transition(workflow, {
-        type: 'DEPLOY_SOURCE_VERIFIED',
-        ...deployableSource(),
-        worktreeClean: false
+        type: 'VALIDATION_CANDIDATE_VERIFIED',
+        validationPassed: true,
+        codebaseVersion: 'not-a-version'
       }),
-    /Deploy requires/
+    /immutable codebaseVersion/
   )
 })
 
-test('execution requires the deployed commit, immutable latest, and independent sync', () => {
+test('execution requires the validated candidate in latest and independent sync', () => {
   let workflow = readyToDeploy()
   workflow = transition(workflow, {
-    type: 'DEPLOY_SOURCE_VERIFIED',
-    ...deployableSource()
+    type: 'VALIDATION_CANDIDATE_VERIFIED',
+    validationPassed: true,
+    codebaseVersion: 'b'.repeat(64)
   })
-  assert.equal(workflow.state, States.DEPLOY_SOURCE_VERIFIED)
-  assert.match(workflow.prompt, /release imutável.*latest/i)
+  assert.equal(workflow.state, States.VALIDATION_CANDIDATE_VERIFIED)
+  assert.match(workflow.prompt, /validação na plataforma passou/i)
 
   workflow = transition(workflow, { type: 'DEPLOY_APPROVED' })
   assert.deepEqual(workflow.actions, [
     {
       tool: 'voidr_release_deploy_live',
       mutation: true,
-      commitSha: 'a'.repeat(40)
+      codebaseVersion: 'b'.repeat(64)
     }
   ])
   workflow = transition(workflow, {
     type: 'RELEASE_DEPLOYED',
-    commitSha: 'a'.repeat(40),
     immutableCandidateVerified: true,
-    codebaseVersion: 'b'.repeat(64),
+    codebaseVersion: 'c'.repeat(64),
     latestVerified: true,
     latestCodebaseVersion: 'c'.repeat(64)
   })
@@ -378,7 +376,6 @@ test('execution requires the deployed commit, immutable latest, and independent 
 
   workflow = transition(workflow, {
     type: 'RELEASE_DEPLOYED',
-    commitSha: 'a'.repeat(40),
     immutableCandidateVerified: true,
     codebaseVersion: 'b'.repeat(64),
     latestVerified: true,
@@ -506,15 +503,4 @@ function readyToDeploy() {
     status: 'match'
   })
   return transition(workflow, { type: 'LOCAL_VALIDATION_PASSED' })
-}
-
-function deployableSource() {
-  return {
-    repository: 'acme/tests',
-    defaultBranch: 'main',
-    commitSha: 'a'.repeat(40),
-    localHeadSha: 'a'.repeat(40),
-    commitOnRemote: true,
-    worktreeClean: true
-  }
 }

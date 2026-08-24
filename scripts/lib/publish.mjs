@@ -100,10 +100,10 @@ export async function publishTests({
     merged,
     readyToDeploy: true,
     next: !mergeToDefaultBranch
-      ? `Pushed commit ${commitSha} to ${branchName}. The default branch (${defaultBranch}) was not changed. Inspect this checkout again, then deploy this commit to latest if the user approved the deploy.`
+      ? `Pushed commit ${commitSha} to ${branchName}. The default branch (${defaultBranch}) was not changed. Git delivery does not decide LIVE: a separately approved deploy must promote the exact candidate that passed validation.`
       : merged
-        ? `Merged into ${defaultBranch}. The tests are on the default branch, so the next clone finds them and this commit is ready to deploy.`
-        : `Pushed, and the pull request is open, but ${defaultBranch} does NOT have the tests yet. Do not report this work as delivered: say the pull request is waiting and name it — ${pullRequestUrl || branchName}. This commit is still ready for a separately approved latest deploy; merging is not a deploy prerequisite.`
+        ? `Merged into ${defaultBranch}. The tests are on the default branch, so the next clone finds them. LIVE still promotes the separately validated candidate.`
+        : `Pushed, and the pull request is open, but ${defaultBranch} does NOT have the tests yet. Report that truth and name the waiting pull request — ${pullRequestUrl || branchName}. Do not block a separately approved LIVE deploy of the validated candidate.`
   }
 }
 
@@ -123,8 +123,7 @@ async function mergePullRequest({
   } catch (error) {
     return false
   }
-  // gh reports success before the merge is visible on the ref often enough that
-  // trusting it produces a "merged" that a later clone contradicts.
+  // Verify the remote ref because gh can report success before the merge is visible.
   await run('git', ['fetch', 'origin', defaultBranch], {
     cwd: repositoryPath,
     timeout: 120_000

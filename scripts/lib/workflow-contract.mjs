@@ -17,7 +17,7 @@ export const States = Object.freeze({
   TEST_REPOSITORY_SELECTED: 'TEST_REPOSITORY_SELECTED',
   REPOSITORY_LINK_VALIDATED: 'REPOSITORY_LINK_VALIDATED',
   LOCAL_VALIDATION_PASSED: 'LOCAL_VALIDATION_PASSED',
-  DEPLOY_SOURCE_VERIFIED: 'DEPLOY_SOURCE_VERIFIED',
+  VALIDATION_CANDIDATE_VERIFIED: 'VALIDATION_CANDIDATE_VERIFIED',
   DEPLOY_APPROVED: 'DEPLOY_APPROVED',
   RELEASE_LATEST_VERIFIED: 'RELEASE_LATEST_VERIFIED',
   DEPLOY_SYNC_VERIFIED: 'DEPLOY_SYNC_VERIFIED',
@@ -53,8 +53,6 @@ export function createWorkflow() {
       selectedCases: [],
       testRepository: null,
       projectLink: null,
-      pullRequest: null,
-      mergeCommitSha: null,
       codebaseVersion: null,
       latestCodebaseVersion: null,
       deployConfirmed: false,
@@ -330,26 +328,26 @@ export function transition(workflow, event) {
       requireState(next, States.REPOSITORY_LINK_VALIDATED)
       next.state = States.LOCAL_VALIDATION_PASSED
       next.prompt =
-        'Os testes estão validados localmente. Posso verificar o commit que será publicado?'
+        'Os testes passaram na checagem local. Valide este candidato na plataforma antes de publicá-lo em LIVE.'
       return next
 
-    case 'DEPLOY_SOURCE_VERIFIED':
+    case 'VALIDATION_CANDIDATE_VERIFIED':
       requireState(next, States.LOCAL_VALIDATION_PASSED)
-      requireDeployableSource(event)
-      next.context.commitSha = event.commitSha
-      next.state = States.DEPLOY_SOURCE_VERIFIED
+      requireValidatedCandidate(event)
+      next.context.codebaseVersion = event.codebaseVersion
+      next.state = States.VALIDATION_CANDIDATE_VERIFIED
       next.prompt =
-        'Posso publicar a release imutável deste commit e promovê-la para latest na Voidr?'
+        'A validação na plataforma passou. Posso publicar exatamente esta versão em LIVE? A entrega do código na principal será tentada separadamente e não bloqueia o deploy.'
       return next
 
     case 'DEPLOY_APPROVED':
-      requireState(next, States.DEPLOY_SOURCE_VERIFIED)
+      requireState(next, States.VALIDATION_CANDIDATE_VERIFIED)
       next.context.deployConfirmed = true
       next.state = States.DEPLOY_APPROVED
       next.actions.push({
         tool: 'voidr_release_deploy_live',
         mutation: true,
-        commitSha: next.context.commitSha
+        codebaseVersion: next.context.codebaseVersion
       })
       return next
 
@@ -358,12 +356,11 @@ export function transition(workflow, event) {
       const releaseVerified =
         event.immutableCandidateVerified === true &&
         event.latestVerified === true &&
-        event.commitSha === next.context.commitSha &&
-        /^[a-f0-9]{64}$/.test(String(event.codebaseVersion || '')) &&
+        event.codebaseVersion === next.context.codebaseVersion &&
         event.latestCodebaseVersion === event.codebaseVersion
       if (!releaseVerified) {
         next.prompt =
-          'O deploy não terminou: a release imutável e o latest precisam apontar para o mesmo commit. A execução permanece bloqueada.'
+          'O deploy não terminou: LIVE precisa apontar para a mesma versão que passou na validação. A execução permanece bloqueada.'
         return next
       }
       next.context.codebaseVersion = event.codebaseVersion
@@ -419,15 +416,13 @@ function requireState(workflow, expected) {
   }
 }
 
-function requireDeployableSource(event) {
+function requireValidatedCandidate(event) {
   if (
-    event.localHeadSha !== event.commitSha ||
-    event.commitOnRemote !== true ||
-    event.worktreeClean !== true ||
-    !/^[a-f0-9]{40}$/i.test(String(event.commitSha || ''))
+    event.validationPassed !== true ||
+    !/^[a-f0-9]{64}$/.test(String(event.codebaseVersion || ''))
   ) {
     throw new Error(
-      'Deploy requires a clean repository at a commit that is present on the remote.'
+      'Deploy requires the immutable codebaseVersion from a passing platform validation.'
     )
   }
 }

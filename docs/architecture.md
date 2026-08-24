@@ -43,7 +43,7 @@ INTAKE
   -> REPOSITORY_LINK_VALIDATED
   -> TESTS_IMPLEMENTED
   -> LOCAL_VALIDATION_PASSED
-  -> DEPLOY_SOURCE_VERIFIED
+  -> VALIDATION_CANDIDATE_VERIFIED
   -> DEPLOY_APPROVED
   -> RELEASE_LATEST_VERIFIED
   -> DEPLOY_SYNC_VERIFIED
@@ -56,7 +56,7 @@ Human gates are mandatory before:
 
 - persisting a new or changed Test Plan;
 - relinking or creating `project.json`;
-- promoting a remote commit as an immutable release;
+- promoting the immutable candidate that passed platform validation;
 - deploying artifacts;
 - creating a platform execution.
 
@@ -109,17 +109,14 @@ permission prompts still apply.
 
 ## Deployment contract
 
-Deployment is fail-closed and has four proofs:
+Deployment is fail-closed and has three proofs:
 
-1. The worktree is clean, local `HEAD` is the exact commit being released, and
-   that commit is reachable from at least one remote branch. A pull request and
-   a merge into the default branch are not deployment prerequisites.
-2. A fresh build from that commit is uploaded only to the content-addressed
-   `versions/<codebaseVersion>` namespace and registered with matching
-   checksums.
-3. That exact immutable version is promoted. A platform read-back must prove
+1. The candidate was built, uploaded to the content-addressed
+   `versions/<codebaseVersion>` namespace, and passed a platform validation
+   pinned to that exact version.
+2. That exact immutable version is promoted without rebuilding it. A platform read-back must prove
    the latest deploy contains the same `codebaseVersion`.
-4. The Test Plan and counts independently confirm that every selected case is
+3. The Test Plan and counts independently confirm that every selected case is
    synchronized and runnable.
 
 Only after all four proofs may the plugin describe deployment as complete or
@@ -133,14 +130,15 @@ rewrites mutable storage under `latest`. There is no fallback. Environments
 that do not yet expose `deploy-candidate`, immutable version promotion, and
 latest read-back remain blocked until those capabilities are released.
 
-The local release tool reads the repository identity and remote refs. It never
-creates or merges a pull request. It reruns the evidence checks inside the same
-operation that builds, publishes, promotes, and verifies the release.
+Git delivery is attempted separately through a feature branch, pull request,
+and merge into the default branch. A push, review, check, conflict, or merge
+failure is reported, but it never blocks LIVE. The local release tool reads the
+existing build manifest, requires its `codebaseVersion` to equal the passing
+validation candidate, publishes it, and verifies the platform pointer.
 
 The current platform manifest identifies immutable content with
-`codebaseVersion`; the plugin response also records the source commit that
-produced it. Persisting that Git SHA inside the platform deploy record remains
-a recommended audit enhancement.
+`codebaseVersion`. Persisting an optional Git SHA beside it remains a useful
+audit enhancement, but the SHA is not deployment evidence.
 
 ## Greenfield repository compatibility
 

@@ -66,7 +66,7 @@ test('natural-language greenfield journey reaches deploy and execution through e
   })
   assert.equal(workflow.state, States.FEATURE_SELECTED)
   assert.equal(workflow.context.feature, 'Monitoramento de indisponibilidade')
-  assert.match(workflow.prompt, /smoke local/i)
+  assert.match(workflow.prompt, /sondas locais de inspeção/i)
   workflow = transition(workflow, {
     type: 'LOCAL_SMOKE_TARGET_SELECTED',
     mode: 'platform'
@@ -137,27 +137,22 @@ test('natural-language greenfield journey reaches deploy and execution through e
   workflow = transition(workflow, { type: 'LOCAL_VALIDATION_PASSED' })
 
   workflow = transition(workflow, {
-    type: 'DEPLOY_SOURCE_VERIFIED',
-    repository: 'blip/monitor-tests',
-    defaultBranch: 'main',
-    commitSha: 'a'.repeat(40),
-    localHeadSha: 'a'.repeat(40),
-    commitOnRemote: true,
-    worktreeClean: true
+    type: 'VALIDATION_CANDIDATE_VERIFIED',
+    validationPassed: true,
+    codebaseVersion: 'b'.repeat(64)
   })
-  assert.match(workflow.prompt, /release imutável.*latest/i)
+  assert.match(workflow.prompt, /validação na plataforma passou/i)
 
   workflow = transition(workflow, { type: 'DEPLOY_APPROVED' })
   assert.deepEqual(workflow.actions, [
     {
       tool: 'voidr_release_deploy_live',
       mutation: true,
-      commitSha: 'a'.repeat(40)
+      codebaseVersion: 'b'.repeat(64)
     }
   ])
   workflow = transition(workflow, {
     type: 'RELEASE_DEPLOYED',
-    commitSha: 'a'.repeat(40),
     immutableCandidateVerified: true,
     codebaseVersion: 'b'.repeat(64),
     latestVerified: true,
@@ -195,7 +190,7 @@ test('natural-language greenfield journey reaches deploy and execution through e
   )
 })
 
-test('greenfield journey without credentials redirects to voidr-connect and stops', () => {
+test('greenfield journey without credentials redirects to voidr-setup and stops', () => {
   let workflow = createWorkflow()
   workflow = transition(workflow, {
     type: 'PLAN_MODE_CHOSEN',
@@ -209,7 +204,7 @@ test('greenfield journey without credentials redirects to voidr-connect and stop
   assert.deepEqual(workflow.actions, [])
   assert.equal(workflow.context.organizationId, null)
   assert.equal(workflow.context.applicationId, null)
-  assert.match(workflow.prompt, /\/copilot voidr-connect/)
+  assert.match(workflow.prompt, /\/copilot voidr-setup/)
 })
 
 test('existing-plan journey does not use project.json as a selector', () => {

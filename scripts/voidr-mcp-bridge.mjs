@@ -32,7 +32,7 @@ import {
   scaffoldTestCases
 } from './lib/scaffold.mjs'
 import { prepareTestRepository } from './lib/prepare.mjs'
-import { contextBootstrap } from './lib/context.mjs'
+import { contextBootstrap, contextRefresh } from './lib/context.mjs'
 import { publishTests } from './lib/publish.mjs'
 import { inspectReleaseReadiness } from './lib/release-inspect.mjs'
 import { collectGitContext } from './lib/git-context.mjs'
@@ -236,6 +236,23 @@ const localTools = [
         'repositoryUrl',
         'cases'
       ]
+    }
+  },
+  {
+    name: 'voidr_context_refresh',
+    description:
+      'Refresh the local manifest-context.json from the current Test Plan before selecting cases: read the latest module, suite, and case tree plus recent session IDs, preserve the completed bootstrap state, and rewrite the gitignored manifest. Lightweight: it does not install dependencies, link, scaffold, pull environment values, build, deploy, or mutate the Test Plan. Call once at the start of each generation session, even when the manifest already exists.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        planId: {
+          type: 'string',
+          pattern: '^[a-fA-F0-9]{24}$'
+        },
+        environmentSlug: { type: 'string' },
+        workspaceRoot: { type: 'string' }
+      },
+      required: ['planId']
     }
   },
   {
@@ -1628,6 +1645,29 @@ function remoteResultError(result) {
   return null
 }
 
+async function runContextOperation(args, operation) {
+  const callRemote = async (remoteName, remoteArgs) => {
+    const result = await remote.callTool(remoteName, remoteArgs)
+    recordProvenance(remoteName, remoteArgs, result)
+    recordPlanSlugs(bridgeTestPlanId(remoteArgs), remoteResultData(result))
+    return result
+  }
+  const context = await operation({
+    planId: String(args.planId || ''),
+    environmentSlug: args.environmentSlug
+      ? String(args.environmentSlug)
+      : undefined,
+    workspaceRoot: args.workspaceRoot
+      ? String(args.workspaceRoot)
+      : undefined,
+    callRemote
+  })
+  if (context?.prepared?.repositoryPath) {
+    preparedRepositoryPath = context.prepared.repositoryPath
+  }
+  return textResult(context)
+}
+
 async function callLocal(name, args) {
   switch (name) {
     case 'voidr_environment_doctor':
@@ -1719,33 +1759,10 @@ async function callLocal(name, args) {
       preparedRepositoryPath = prepared.repositoryPath
       return textResult(prepared)
     }
-    case 'voidr_context_bootstrap': {
-      // The internal platform reads feed the same provenance state as if the
-      // model had called them, so downstream tools see a consistent session.
-      const callRemote = async (remoteName, remoteArgs) => {
-        const result = await remote.callTool(remoteName, remoteArgs)
-        recordProvenance(remoteName, remoteArgs, result)
-        recordPlanSlugs(
-          bridgeTestPlanId(remoteArgs),
-          remoteResultData(result)
-        )
-        return result
-      }
-      const bootstrapped = await contextBootstrap({
-        planId: String(args.planId || ''),
-        environmentSlug: args.environmentSlug
-          ? String(args.environmentSlug)
-          : undefined,
-        workspaceRoot: args.workspaceRoot
-          ? String(args.workspaceRoot)
-          : undefined,
-        callRemote
-      })
-      if (bootstrapped?.prepared?.repositoryPath) {
-        preparedRepositoryPath = bootstrapped.prepared.repositoryPath
-      }
-      return textResult(bootstrapped)
-    }
+    case 'voidr_context_refresh':
+      return runContextOperation(args, contextRefresh)
+    case 'voidr_context_bootstrap':
+      return runContextOperation(args, contextBootstrap)
     case 'voidr_workspace_scaffold_test_cases':
       return textResult(
         await scaffoldTestCases({

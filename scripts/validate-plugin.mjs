@@ -418,8 +418,11 @@ assert(
 // Generate: manifest-anchored, evidence-driven implementation.
 assert(
   /manifest-context\.json/.test(generateSkill) &&
-    /\/voidr-context/.test(generateSkill),
-  'Generate skill must require the context manifest before any work.'
+    /\/voidr-context/.test(generateSkill) &&
+    /voidr_context_refresh/.test(generateSkill) &&
+    /before selecting a module, suite, or case/i.test(generateSkill) &&
+    /even when `manifest-context\.json` already exists/i.test(generateSkill),
+  'Generate skill must refresh the context manifest before case selection.'
 )
 assert(
   /test_plans_get_case/.test(generateSkill) &&

@@ -14,14 +14,32 @@ Never call a tool that starts a Hive process. Obey the shared contracts in `../C
 cases that already exist in the plan; it never invents a case and never
 expands into unselected ones.
 
-## 0. Preconditions — the manifest
+## 0. Preconditions — refresh, then read the manifest
 
-Read `manifest-context.json` at the root of the test repository. It is the
-context anchor: plan/application/organization IDs, environment slug,
-repository path, the module → suite → case-slug tree, and the recorded
-session IDs. If it is absent or unreadable, stop and route the user to
-`/voidr-context`. Never reconstruct these IDs from folder names, `.env`, or
-memory.
+Call `voidr_context_refresh` once for the selected Test Plan at the start of
+every generation session, even when `manifest-context.json` already exists.
+Do this before selecting a module, suite, or case and before inspecting or
+editing test files. An existing manifest proves that setup happened once; it
+does not prove that its case tree is current.
+
+Take `planId` verbatim from the user's current request. When the request omits
+it, an existing manifest may supply only that `planId` so the refresh can run;
+do not use its module, suite, case, session, environment, or repository data
+until the refresh succeeds. If neither source supplies the plan, or the
+manifest is absent or unreadable, stop and route the user to `/voidr-context`.
+Never reconstruct the ID from folder names, `.env`, or memory.
+
+When refresh returns `needsEnvironmentSelection`, render the returned
+environments with `ask_user` and call `voidr_context_refresh` again with the
+chosen `environmentSlug`. A successful refresh rewrites the manifest without
+repeating install, link, scaffold, environment pull, build, or deploy.
+
+Now read the refreshed `manifest-context.json` at the repository root. It is
+the context anchor: plan/application/organization IDs, environment slug,
+repository path, the current module → suite → case-slug tree, and recorded
+session IDs. Refresh only once in this generation session unless another
+workflow changes the plan's module, suite, or case structure; after such a
+change, refresh again before continuing.
 
 Every precondition must come from an explicit selection in the current
 workflow — the manifest records the selections `/voidr-context` gated. Never

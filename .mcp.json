@@ -25,6 +25,7 @@
         "voidr_workspace_bootstrap_test_repository",
         "voidr_workspace_select_test_repository",
         "voidr_workspace_prepare_test_repository",
+        "voidr_context_refresh",
         "voidr_context_bootstrap",
         "voidr_workspace_scaffold_test_cases",
         "voidr_build",

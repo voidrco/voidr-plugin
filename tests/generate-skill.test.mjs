@@ -5,6 +5,16 @@ import { join, resolve } from 'node:path'
 
 const root = resolve(import.meta.dirname, '..')
 const skill = readFileSync(join(root, 'skills/voidr-generate/SKILL.md'), 'utf8')
+
+test('generation refreshes platform context before selecting cases', () => {
+  const section = skill.slice(skill.indexOf('## 0.'), skill.indexOf('## 0b.'))
+
+  assert.match(section, /voidr_context_refresh/)
+  assert.match(section, /even when `manifest-context\.json` already exists/i)
+  assert.match(section, /before selecting a module, suite, or case/i)
+  assert.match(section, /without\s+repeating install, link, scaffold/i)
+})
+
 test('where the checking loop runs is the user\'s choice, asked once', () => {
   const section = skill.slice(
     skill.indexOf('## 0b.'),

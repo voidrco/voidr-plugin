@@ -26,6 +26,10 @@ test('builds a complete patch without staging or leaking operator files', async 
     'export const value = 1\n'
   )
   writeFileSync(join(repositoryPath, 'package.json'), '{}\n')
+  writeFileSync(
+    join(repositoryPath, '.gitignore'),
+    '.env\n.voidr/\nnode_modules/\n'
+  )
   execFileSync('git', ['add', '.'], { cwd: repositoryPath })
   execFileSync('git', ['commit', '--quiet', '-m', 'initial'], {
     cwd: repositoryPath
@@ -50,6 +54,14 @@ test('builds a complete patch without staging or leaking operator files', async 
   mkdirSync(join(repositoryPath, '.agents'), { recursive: true })
   writeFileSync(join(repositoryPath, '.agents', 'operator.md'), 'do not commit\n')
   writeFileSync(join(repositoryPath, 'AGENTS.md'), 'do not commit\n')
+  mkdirSync(join(repositoryPath, '.voidr', '.output'), { recursive: true })
+  writeFileSync(
+    join(repositoryPath, '.voidr', '.output', 'manifest.json'),
+    '{"candidate":"local-only"}\n'
+  )
+  mkdirSync(join(repositoryPath, 'node_modules', 'fixture'), { recursive: true })
+  writeFileSync(join(repositoryPath, 'node_modules', 'fixture', 'index.js'), 'ignored\n')
+  writeFileSync(join(repositoryPath, '.env'), 'SECRET=ignored\n')
 
   const result = await createRepositorySyncPatch({ repositoryPath })
 
@@ -60,7 +72,10 @@ test('builds a complete patch without staging or leaking operator files', async 
   ])
   assert.match(result.patch, /existing\.spec\.js/)
   assert.match(result.patch, /new\.spec\.js/)
-  assert.doesNotMatch(result.patch, /operator\.md|AGENTS\.md/)
+  assert.doesNotMatch(
+    result.patch,
+    /operator\.md|AGENTS\.md|manifest\.json|node_modules|SECRET=ignored/
+  )
   assert.equal(
     execFileSync('git', ['diff', '--cached', '--name-only'], {
       cwd: repositoryPath,

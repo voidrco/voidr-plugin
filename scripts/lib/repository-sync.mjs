@@ -5,17 +5,15 @@ import { runCommand } from './command.mjs'
 
 const MAX_PATCH_BYTES = 1024 * 1024
 const MAX_CHANGED_FILES = 200
-const PATCH_PATHS = [
-  '.',
-  ':(exclude).voidr/**',
-  ':(exclude).git/**',
-  ':(exclude)node_modules/**',
-  ':(exclude).agents/**',
-  ':(exclude).claude/**',
-  ':(exclude)AGENTS.md',
-  ':(exclude)CLAUDE.md',
-  ':(exclude).env',
-  ':(exclude).env.*'
+const EXCLUDED_PATCH_PATHS = [
+  '.voidr',
+  'node_modules',
+  '.agents',
+  '.claude',
+  'AGENTS.md',
+  'CLAUDE.md',
+  '.env',
+  '.env.*'
 ]
 
 export async function createRepositorySyncPatch({
@@ -40,14 +38,19 @@ export async function createRepositorySyncPatch({
       cwd: repositoryPath,
       env: gitEnvironment
     })
-    await run('git', ['add', '-A', '--', ...PATCH_PATHS], {
+    await run('git', ['add', '-A', '--', '.'], {
       cwd: repositoryPath,
       env: gitEnvironment,
       timeout: 120_000
     })
+    await run(
+      'git',
+      ['reset', '-q', baseCommitSha, '--', ...EXCLUDED_PATCH_PATHS],
+      { cwd: repositoryPath, env: gitEnvironment }
+    )
     const changed = await run(
       'git',
-      ['diff', '--cached', '--name-only', '-z', baseCommitSha, '--', ...PATCH_PATHS],
+      ['diff', '--cached', '--name-only', '-z', baseCommitSha],
       { cwd: repositoryPath, env: gitEnvironment }
     )
     const changedFiles = String(changed.stdout || '')
@@ -74,9 +77,7 @@ export async function createRepositorySyncPatch({
         '--no-color',
         '--no-ext-diff',
         '-M',
-        baseCommitSha,
-        '--',
-        ...PATCH_PATHS
+        baseCommitSha
       ],
       {
         cwd: repositoryPath,

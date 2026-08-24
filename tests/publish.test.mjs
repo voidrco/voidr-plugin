@@ -4,7 +4,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs'
 import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { publishTests } from '../scripts/lib/publish.mjs'
+import { publishCurrentCommit, publishTests } from '../scripts/lib/publish.mjs'
 
 const repositoryUrl = 'https://github.com/voidrco/voidr-tp-publish.git'
 
@@ -24,7 +24,9 @@ function fakePublishRun({
   calls = [],
   prCreateError = null,
   prMergeError = null,
-  ancestorOfDefault = true
+  ancestorOfDefault = true,
+  statusOutput = ' M modules/recarga/recarga-01.spec.js\n',
+  branchName = 'feat/recarga-creditos-tests'
 }) {
   return async (file, args, options) => {
     calls.push({ file, args, options })
@@ -32,7 +34,10 @@ function fakePublishRun({
       return { stdout: JSON.stringify({ defaultBranchRef: { name: 'main' } }) }
     }
     if (file === 'git' && args[0] === 'status') {
-      return { stdout: ' M modules/recarga/recarga-01.spec.js\n' }
+      return { stdout: statusOutput }
+    }
+    if (file === 'git' && args[0] === 'branch') {
+      return { stdout: `${branchName}\n` }
     }
     if (file === 'git' && args[0] === 'rev-parse') {
       return { stdout: `${'a'.repeat(40)}\n` }
@@ -61,6 +66,25 @@ function fakePublishRun({
     return { stdout: '' }
   }
 }
+
+test('publishes the existing clean checkpoint without creating another commit', async () => {
+  const repositoryPath = createCheckout()
+  const calls = []
+
+  const result = await publishCurrentCommit({
+    repositoryPath,
+    repositoryUrl,
+    run: fakePublishRun({ calls, statusOutput: '' })
+  })
+
+  assert.equal(result.branch, 'feat/recarga-creditos-tests')
+  assert.equal(result.pushed, true)
+  assert.equal(result.merged, true)
+  assert.equal(
+    calls.some(call => call.args[0] === 'checkout' || call.args[0] === 'commit'),
+    false
+  )
+})
 
 test('publishes a feature branch and merges it into the default branch', async () => {
   const repositoryPath = createCheckout()

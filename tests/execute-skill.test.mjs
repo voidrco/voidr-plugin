@@ -109,9 +109,10 @@ test('LIVE uses a local checkpoint and PreToolUse owns the GitHub choice', () =>
   assert.match(promotion, /SAME `codebaseVersion`/)
   assert.match(promotion, /Do not rebuild/)
   assert.match(promotion, /Voidr Bot/)
+  assert.match(promotion, /local Git and GitHub CLI session/)
   assert.match(
     promotion.replace(/\n/g, ' '),
-    /LIVE is\s+valid even when the bot reports queued/
+    /LIVE is\s+valid for every Git result/
   )
   assert.match(promotion, /PASSED or FAILED/)
   assert.match(promotion, /FAILED verdict.*diagnosed/s)

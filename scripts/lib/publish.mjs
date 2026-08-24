@@ -25,18 +25,7 @@ export async function publishTests({
 
   let defaultBranch = null
   if (pushToRemote) {
-    const repoInfo = JSON.parse(
-      (
-        await run('gh', ['repo', 'view', '--json', 'defaultBranchRef'], {
-          cwd: selected.path,
-          timeout: 60_000
-        })
-      ).stdout
-    )
-    defaultBranch = repoInfo.defaultBranchRef?.name
-    if (!defaultBranch) {
-      throw new Error('Could not resolve the repository default branch.')
-    }
+    defaultBranch = await resolveDefaultBranch(selected.path, run)
     if (branchName === defaultBranch) {
       throw new Error(
         `Never push directly to the default branch (${defaultBranch}). Pass a feature branch name instead: this call pushes that branch, opens the pull request, and merges it into ${defaultBranch} for you.`
@@ -124,6 +113,87 @@ export async function publishTests({
         ? `Merged into ${defaultBranch}. The tests are on the default branch, so the next clone finds them. LIVE still promotes the separately exercised candidate.`
         : `Pushed, and the pull request is open, but ${defaultBranch} does NOT have the tests yet. Report that truth and name the waiting pull request — ${pullRequestUrl || branchName}. Do not block a separately approved LIVE deploy of the exercised candidate.`
   }
+}
+
+export async function publishCurrentCommit({
+  repositoryPath,
+  repositoryUrl,
+  pullRequestTitle,
+  pullRequestBody,
+  run = runCommand
+}) {
+  const selected = validateProvisionedRepositorySelection(
+    repositoryPath,
+    repositoryUrl
+  )
+  const status = await run(
+    'git',
+    ['status', '--porcelain', '--untracked-files=all'],
+    { cwd: selected.path }
+  )
+  if (String(status.stdout || '').trim()) {
+    throw new Error('The local checkpoint has uncommitted changes.')
+  }
+
+  const defaultBranch = await resolveDefaultBranch(selected.path, run)
+  const branchName = (
+    await run('git', ['branch', '--show-current'], { cwd: selected.path })
+  ).stdout.trim()
+  if (!branchName || branchName === defaultBranch) {
+    throw new Error('The local checkpoint must be on a feature branch.')
+  }
+  const commitSha = (
+    await run('git', ['rev-parse', 'HEAD'], { cwd: selected.path })
+  ).stdout.trim()
+
+  await run('git', ['push', '-u', 'origin', `${branchName}:${branchName}`], {
+    cwd: selected.path,
+    timeout: 180_000
+  })
+  const pullRequestUrl = await createOrFindPullRequest({
+    repositoryPath: selected.path,
+    branchName,
+    defaultBranch,
+    title:
+      String(pullRequestTitle || '').trim() ||
+      `Sync LIVE tests ${commitSha.slice(0, 12)}`,
+    body:
+      String(pullRequestBody || '').trim() ||
+      'Sincroniza no GitHub os mesmos testes já publicados em Voidr LIVE.',
+    run
+  })
+  const merged = await mergePullRequest({
+    repositoryPath: selected.path,
+    branchName,
+    defaultBranch,
+    pullRequestUrl,
+    run
+  })
+
+  return {
+    branch: branchName,
+    defaultBranch,
+    commitSha,
+    pushed: true,
+    pullRequestUrl,
+    merged
+  }
+}
+
+async function resolveDefaultBranch(repositoryPath, run) {
+  const repoInfo = JSON.parse(
+    (
+      await run('gh', ['repo', 'view', '--json', 'defaultBranchRef'], {
+        cwd: repositoryPath,
+        timeout: 60_000
+      })
+    ).stdout
+  )
+  const defaultBranch = repoInfo.defaultBranchRef?.name
+  if (!defaultBranch) {
+    throw new Error('Could not resolve the repository default branch.')
+  }
+  return defaultBranch
 }
 
 async function mergePullRequest({

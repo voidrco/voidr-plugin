@@ -91,10 +91,13 @@ Ask (or infer from the request) which mode applies:
    `voidr_repository_sync_github`. Its `PreToolUse` hook asks the user whether
    to synchronize the local commit with GitHub. Never answer on the user's
    behalf and never replace this with an `ask_user` question. If denied, stop:
-   LIVE stays valid and the commit stays local. If approved, the Voidr Bot
-   receives the exact validation-time patch. Report its separate result:
+   LIVE stays valid and the commit stays local. If approved, the tool first
+   tries the user's local Git and GitHub CLI session. A merged pull request is
+   synchronized; an open pull request is queued. Only when local delivery
+   cannot reach a pull request does the Voidr Bot receive the exact
+   validation-time patch. Report which path ran and its separate result:
    synchronized, queued, conflict, missing permission, or failure. LIVE is
-   valid even when the bot reports queued, and no Git result invalidates it.
+   valid for every Git result.
 
 ## Writing the confirmation gates
 
@@ -343,8 +346,9 @@ anyway and say the cause is unknown.
   explicit user decision. It never rebuilds or writes to GitHub.
 - `voidr_repository_sync_github` — after LIVE, asks through `PreToolUse` whether
   the user wants to synchronize the exact validated source patch with GitHub.
-  Denial leaves the local commit and LIVE untouched; approval invokes the Voidr
-  Bot and returns its separate Git status.
+  Denial leaves the local commit and LIVE untouched. Approval first uses the
+  user's local GitHub session and falls back to the Voidr Bot only when local
+  delivery cannot reach a pull request.
 - `voidr_workspace_publish_tests` — best-effort delivery to the default branch
   when `pushToRemote` is true; this flow uses false for its pre-LIVE local
   checkpoint. Its failure is reported but never blocks LIVE.

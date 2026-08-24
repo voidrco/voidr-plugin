@@ -485,7 +485,8 @@ assert(
     /SAME `codebaseVersion`/.test(executeSkill) &&
     /PASSED or FAILED/.test(executeSkill) &&
     /Both verdicts remain eligible for LIVE/.test(executeSkill) &&
-    /LIVE is\s+valid even when the bot reports queued/.test(
+    /local Git and GitHub CLI session/.test(executeSkill) &&
+    /LIVE is\s+valid for every Git result/.test(
       executeSkill.replace(/\n/g, ' ')
     ) &&
     /never a LIVE\s+deploy gate/.test(executeSkill),

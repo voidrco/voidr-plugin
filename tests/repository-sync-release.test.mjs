@@ -11,10 +11,12 @@ const codebaseVersion = 'b'.repeat(64)
 const baseCommitSha = 'a'.repeat(40)
 
 test('submits the validation-time patch for the exact LIVE candidate', async () => {
+  const patch = 'diff --git a/tests/case.spec.js b/tests/case.spec.js\n'
   const checkout = makeCheckout({
     needed: true,
     baseCommitSha,
-    patch: 'diff --git a/tests/case.spec.js b/tests/case.spec.js\n'
+    changedFiles: ['tests/case.spec.js'],
+    patch
   })
   let submitted = null
 
@@ -22,6 +24,15 @@ test('submits the validation-time patch for the exact LIVE candidate', async () 
     ...checkout,
     testPlanId,
     codebaseVersion,
+    buildPatch: async () => ({
+      needed: true,
+      baseCommitSha,
+      changedFiles: ['tests/case.spec.js'],
+      patch
+    }),
+    publishLocal: async () => {
+      throw new Error('local GitHub is unavailable')
+    },
     syncRepository: async input => {
       submitted = input
       return { status: 'QUEUED', liveValid: true, operationId: 'sync-1' }
@@ -36,19 +47,103 @@ test('submits the validation-time patch for the exact LIVE candidate', async () 
   })
   assert.equal(result.status, 'QUEUED')
   assert.equal(result.liveValid, true)
+  assert.equal(result.delivery, 'VOIDR_BOT')
+  assert.match(result.localDeliveryError, /unavailable/)
 })
 
-test('reports a synchronization failure without invalidating LIVE', async () => {
+test('uses the user GitHub session before the Voidr Bot', async () => {
+  const patch = 'diff --git a/tests/case.spec.js b/tests/case.spec.js\n'
   const checkout = makeCheckout({
     needed: true,
     baseCommitSha,
-    patch: 'diff --git a/tests/case.spec.js b/tests/case.spec.js\n'
+    changedFiles: ['tests/case.spec.js'],
+    patch
   })
 
   const result = await synchronizePublishedRepository({
     ...checkout,
     testPlanId,
     codebaseVersion,
+    buildPatch: async () => ({
+      needed: true,
+      baseCommitSha,
+      changedFiles: ['tests/case.spec.js'],
+      patch
+    }),
+    publishLocal: async () => ({
+      branch: 'feat/case',
+      commitSha: 'c'.repeat(40),
+      pushed: true,
+      merged: true,
+      pullRequestUrl: 'https://github.com/acme/tests/pull/1'
+    }),
+    syncRepository: async () => {
+      throw new Error('Voidr Bot must not run')
+    }
+  })
+
+  assert.equal(result.status, 'SYNCED')
+  assert.equal(result.delivery, 'LOCAL_GITHUB')
+  assert.equal(result.pullRequestUrl, 'https://github.com/acme/tests/pull/1')
+})
+
+test('keeps an unmerged user pull request queued without invoking the bot', async () => {
+  const patch = 'diff --git a/tests/case.spec.js b/tests/case.spec.js\n'
+  const checkout = makeCheckout({
+    needed: true,
+    baseCommitSha,
+    changedFiles: ['tests/case.spec.js'],
+    patch
+  })
+
+  const result = await synchronizePublishedRepository({
+    ...checkout,
+    testPlanId,
+    codebaseVersion,
+    buildPatch: async () => ({
+      needed: true,
+      baseCommitSha,
+      changedFiles: ['tests/case.spec.js'],
+      patch
+    }),
+    publishLocal: async () => ({
+      branch: 'feat/case',
+      commitSha: 'c'.repeat(40),
+      pushed: true,
+      merged: false,
+      pullRequestUrl: 'https://github.com/acme/tests/pull/1'
+    }),
+    syncRepository: async () => {
+      throw new Error('Voidr Bot must not run')
+    }
+  })
+
+  assert.equal(result.status, 'QUEUED')
+  assert.equal(result.delivery, 'LOCAL_GITHUB')
+})
+
+test('reports a synchronization failure without invalidating LIVE', async () => {
+  const patch = 'diff --git a/tests/case.spec.js b/tests/case.spec.js\n'
+  const checkout = makeCheckout({
+    needed: true,
+    baseCommitSha,
+    changedFiles: ['tests/case.spec.js'],
+    patch
+  })
+
+  const result = await synchronizePublishedRepository({
+    ...checkout,
+    testPlanId,
+    codebaseVersion,
+    buildPatch: async () => ({
+      needed: true,
+      baseCommitSha,
+      changedFiles: ['tests/case.spec.js'],
+      patch
+    }),
+    publishLocal: async () => {
+      throw new Error('local GitHub permission denied')
+    },
     syncRepository: async () => {
       throw new Error('GitHub permission denied')
     }
@@ -57,6 +152,7 @@ test('reports a synchronization failure without invalidating LIVE', async () => 
   assert.equal(result.status, 'FAILED')
   assert.equal(result.liveValid, true)
   assert.match(result.detail, /permission denied/i)
+  assert.match(result.localDeliveryError, /permission denied/i)
 })
 
 test('does not submit evidence from a different candidate', async () => {

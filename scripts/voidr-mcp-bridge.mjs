@@ -406,7 +406,7 @@ const localTools = [
   {
     name: 'voidr_repository_sync_github',
     description:
-      'Synchronize the exact source already published in LIVE to the linked GitHub repository through the Voidr Bot. A PreToolUse hook asks the user before this tool may run. Denying it leaves LIVE valid and the local commit untouched.',
+      'Synchronize the exact source already published in LIVE to the linked GitHub repository. After PreToolUse approval, it first uses the user local Git and GitHub CLI session; if that cannot deliver the source, it falls back to the Voidr Bot. Denying it leaves LIVE valid and the local commit untouched.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -1619,6 +1619,15 @@ function remoteResultData(result) {
   return null
 }
 
+function remoteResultError(result) {
+  for (const item of result?.content || []) {
+    if (item?.type !== 'text') continue
+    const message = String(item.text || '').trim()
+    if (message) return message.replace(/^Error:\s*/i, '')
+  }
+  return null
+}
+
 async function callLocal(name, args) {
   switch (name) {
     case 'voidr_environment_doctor':
@@ -1828,7 +1837,8 @@ async function callLocal(name, args) {
             const data = remoteResultData(result)
             if (result?.isError || !data) {
               throw new Error(
-                'Voidr did not accept the repository synchronization patch.'
+                remoteResultError(result) ||
+                  'Voidr did not accept the repository synchronization patch.'
               )
             }
             return data

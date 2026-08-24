@@ -40,6 +40,7 @@ test('execute skill routes only its execution, release, and sync tools', () => {
     'voidr_release_deploy_live',
     'voidr_release_deploy_validation',
     'voidr_release_inspect',
+    'voidr_repository_sync_github',
     'voidr_workspace_publish_tests'
   ])
   assert.equal(
@@ -93,23 +94,27 @@ test('validation runs are SHADOW executions pinned to the candidate version', ()
   assert.match(skill, /never a tight loop/i)
 })
 
-test('the user chooses Git delivery and it never gates the validated LIVE candidate', () => {
+test('LIVE uses a local checkpoint and PreToolUse owns the GitHub choice', () => {
   const promotion = skill.slice(
-    skill.indexOf('**LIVE and Git choice**'),
+    skill.indexOf('**Local checkpoint**'),
     skill.indexOf('## Writing the confirmation gates')
   )
 
-  assert.match(promotion, /mergeToDefaultBranch: true/)
-  assert.match(promotion, /Git failure NEVER blocks/)
-  assert.match(promotion, /publicar em LIVE e também levar o código ao Git/)
-  assert.match(promotion, /publicar somente em\s+LIVE, sem alterar o Git/)
-  assert.match(promotion, /repositoryDelivery: SKIP/)
+  assert.match(promotion, /pushToRemote: false/)
+  assert.match(promotion.replace(/\n/g, ' '), /local feature-branch\s+commit/i)
+  assert.match(promotion, /PreToolUse/)
+  assert.match(promotion, /voidr_repository_sync_github/)
+  assert.match(promotion, /Never answer on the user's/i)
+  assert.match(promotion, /If denied/i)
   assert.match(promotion, /SAME `codebaseVersion`/)
   assert.match(promotion, /Do not rebuild/)
   assert.match(promotion, /Voidr Bot/)
-  assert.match(promotion, /LIVE is valid even when the bot reports queued/)
+  assert.match(
+    promotion.replace(/\n/g, ' '),
+    /LIVE is\s+valid even when the bot reports queued/
+  )
   assert.match(promotion, /PASSED or FAILED/)
-  assert.match(promotion, /FAILED verdict\s+has been diagnosed/)
+  assert.match(promotion, /FAILED verdict.*diagnosed/s)
 })
 
 test('a validation run pilots the shared preconditions before the whole plan', () => {

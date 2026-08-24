@@ -88,6 +88,7 @@
     "voidr_build",
     "voidr_workspace_publish_tests",
     "voidr_release_deploy_live",
+    "voidr_repository_sync_github",
     "voidr_release_deploy_validation",
     "voidr_create_validation_execution"
   ],
@@ -108,6 +109,7 @@
     "voidr_release_inspect",
     "voidr_workspace_publish_tests",
     "voidr_release_deploy_live",
+    "voidr_repository_sync_github",
     "voidr_release_deploy_validation",
     "voidr_create_validation_execution"
   ],

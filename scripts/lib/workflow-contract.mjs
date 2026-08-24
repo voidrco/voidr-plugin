@@ -56,7 +56,6 @@ export function createWorkflow() {
       codebaseVersion: null,
       validationOutcome: null,
       latestCodebaseVersion: null,
-      repositoryDelivery: null,
       deployConfirmed: false,
       syncVerified: false,
       executionConfirmed: false
@@ -341,23 +340,18 @@ export function transition(workflow, event) {
       next.state = States.VALIDATION_CANDIDATE_VERIFIED
       next.prompt =
         event.validationOutcome === 'PASSED'
-          ? 'A execução de validação terminou e os testes passaram. Você quer publicar esta versão em LIVE e também levar o código ao Git, ou publicar somente em LIVE sem alterar o Git?'
-          : 'A execução de validação terminou com falhas, e o diagnóstico foi concluído. Você quer publicar esta versão em LIVE mesmo vermelha e também levar o código ao Git, ou publicar somente em LIVE sem alterar o Git?'
+          ? 'A execução de validação terminou e os testes passaram. Posso publicar exatamente esta versão em LIVE?'
+          : 'A execução de validação terminou com falhas, e o diagnóstico foi concluído. Posso publicar exatamente esta versão em LIVE mesmo vermelha?'
       return next
 
     case 'DEPLOY_APPROVED':
       requireState(next, States.VALIDATION_CANDIDATE_VERIFIED)
-      if (!['SYNC', 'SKIP'].includes(event.repositoryDelivery)) {
-        throw new Error('The user must choose LIVE with Git synchronization or LIVE only.')
-      }
       next.context.deployConfirmed = true
-      next.context.repositoryDelivery = event.repositoryDelivery
       next.state = States.DEPLOY_APPROVED
       next.actions.push({
         tool: 'voidr_release_deploy_live',
         mutation: true,
-        codebaseVersion: next.context.codebaseVersion,
-        repositoryDelivery: event.repositoryDelivery
+        codebaseVersion: next.context.codebaseVersion
       })
       return next
 
@@ -377,6 +371,7 @@ export function transition(workflow, event) {
       next.context.latestCodebaseVersion = event.latestCodebaseVersion
       next.state = States.RELEASE_LATEST_VERIFIED
       next.actions.push(
+        { tool: 'voidr_repository_sync_github', mutation: true },
         { tool: 'test_plans_get_test_plan', mutation: false },
         { tool: 'test_plans_get_test_counts', mutation: false }
       )

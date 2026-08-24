@@ -15,16 +15,20 @@ import { CLAUDE, detectHost } from './lib/host.mjs'
 import { canonicalToolName, loadPolicy } from './lib/policy.mjs'
 import { findProtectionDenial } from './lib/protections.mjs'
 import { findRunModeDenial } from './lib/run-mode.mjs'
+import { repositorySyncPermissionPrompt } from './lib/repository-sync-permission.mjs'
 import { readSessionState } from './lib/session-state.mjs'
 
 const payload = await readPayload()
 const rawToolName = String(payload.toolName || payload.tool_name || '')
 
 const toolArgs = normalizeToolArgs(payload.toolArgs ?? payload.tool_input ?? {})
+const toolName = canonicalToolName(rawToolName)
+const repositorySyncPrompt = repositorySyncPermissionPrompt(toolName, toolArgs)
+if (repositorySyncPrompt) ask(repositorySyncPrompt)
 const reason =
   findProtectionDenial({
     rawToolName,
-    toolName: canonicalToolName(rawToolName),
+    toolName,
     toolArgs,
     policy: loadPolicy()
   }) ||
@@ -65,6 +69,18 @@ function deny(permissionDecisionReason) {
     hookSpecificOutput: {
       hookEventName: 'PreToolUse',
       permissionDecision: 'deny',
+      permissionDecisionReason
+    }
+  })
+}
+
+function ask(permissionDecisionReason) {
+  write({
+    permissionDecision: 'ask',
+    permissionDecisionReason,
+    hookSpecificOutput: {
+      hookEventName: 'PreToolUse',
+      permissionDecision: 'ask',
       permissionDecisionReason
     }
   })

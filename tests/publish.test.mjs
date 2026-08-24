@@ -110,6 +110,29 @@ test('publishes a feature branch and merges it into the default branch', async (
   ])
 })
 
+test('creates a local commit without requiring GitHub or changing the remote', async () => {
+  const repositoryPath = createCheckout()
+  const calls = []
+
+  const result = await publishTests({
+    repositoryPath,
+    repositoryUrl,
+    branch: 'feat/local-checkpoint',
+    commitMessage: 'test: checkpoint local',
+    pushToRemote: false,
+    run: fakePublishRun({ calls })
+  })
+
+  assert.equal(result.completed, true)
+  assert.equal(result.committed, true)
+  assert.equal(result.pushed, false)
+  assert.equal(result.pullRequestUrl, null)
+  assert.equal(result.merged, false)
+  assert.match(result.next, /saved locally/i)
+  assert.equal(calls.some(call => call.file === 'gh'), false)
+  assert.equal(calls.some(call => call.args[0] === 'push'), false)
+})
+
 test('pushes a deployable feature branch without opening a pull request', async () => {
   const repositoryPath = createCheckout()
   const calls = []

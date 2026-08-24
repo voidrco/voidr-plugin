@@ -18,6 +18,7 @@ import {
   validateRepositorySelection
 } from './lib/workspace.mjs'
 import { deployRelease } from './lib/release-deploy.mjs'
+import { synchronizePublishedRepository } from './lib/repository-sync-release.mjs'
 import {
   createValidationExecution,
   deployValidationCandidate
@@ -365,7 +366,7 @@ const localTools = [
   {
     name: 'voidr_workspace_publish_tests',
     description:
-      'Best-effort Git delivery after the user explicitly authorized it in chat. It commits and pushes a feature branch. With mergeToDefaultBranch true (the default), it also opens or reuses a pull request and tries to merge it into the default branch. Any Git failure must be reported but never blocks a separately approved LIVE deploy of the exact candidate exercised by a completed validation. Runs with the user Git credentials; direct pushes to the default branch are refused.',
+      'Save the validated test source in a local feature-branch commit. With pushToRemote false, it uses local Git only and stops after the commit. With pushToRemote true, it also pushes and, by default, opens or reuses a pull request and tries to merge it into the default branch. Any Git failure must be reported but never blocks LIVE. Direct pushes to the default branch are refused.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -378,6 +379,7 @@ const localTools = [
         commitMessage: { type: 'string' },
         pullRequestTitle: { type: 'string' },
         pullRequestBody: { type: 'string' },
+        pushToRemote: { type: 'boolean', default: true },
         mergeToDefaultBranch: { type: 'boolean', default: true }
       },
       required: ['repositoryPath', 'repositoryUrl', 'branch', 'commitMessage']
@@ -386,7 +388,7 @@ const localTools = [
   {
     name: 'voidr_release_deploy_live',
     description:
-      'Publish and verify the exact immutable candidate exercised by a completed platform validation whose test verdict was PASSED or diagnosed FAILED. The user must choose repositoryDelivery: SYNC publishes LIVE and also asks the Voidr Bot to synchronize the exact validated source; SKIP publishes LIVE without changing Git. Neither choice rebuilds, and a Git failure never invalidates LIVE.',
+      'Publish and verify the exact immutable candidate exercised by a completed platform validation whose test verdict was PASSED or diagnosed FAILED. This does not rebuild and does not synchronize GitHub; repository synchronization is a separate action guarded by PreToolUse after LIVE succeeds.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -396,21 +398,27 @@ const localTools = [
           pattern: '^https://github\\.com/[^/]+/[^/]+(?:\\.git)?$'
         },
         testPlanId: { type: 'string', pattern: '^[a-fA-F0-9]{24}$' },
-        codebaseVersion: { type: 'string', pattern: '^[a-f0-9]{64}$' },
-        repositoryDelivery: {
-          type: 'string',
-          enum: ['SYNC', 'SKIP'],
-          description:
-            'SYNC also delivers the validated source to Git; SKIP leaves Git unchanged.'
-        }
+        codebaseVersion: { type: 'string', pattern: '^[a-f0-9]{64}$' }
       },
-      required: [
-        'repositoryPath',
-        'repositoryUrl',
-        'testPlanId',
-        'codebaseVersion',
-        'repositoryDelivery'
-      ]
+      required: ['repositoryPath', 'repositoryUrl', 'testPlanId', 'codebaseVersion']
+    }
+  },
+  {
+    name: 'voidr_repository_sync_github',
+    description:
+      'Synchronize the exact source already published in LIVE to the linked GitHub repository through the Voidr Bot. A PreToolUse hook asks the user before this tool may run. Denying it leaves LIVE valid and the local commit untouched.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        repositoryPath: { type: 'string' },
+        repositoryUrl: {
+          type: 'string',
+          pattern: '^https://github\\.com/[^/]+/[^/]+(?:\\.git)?$'
+        },
+        testPlanId: { type: 'string', pattern: '^[a-fA-F0-9]{24}$' },
+        codebaseVersion: { type: 'string', pattern: '^[a-f0-9]{64}$' }
+      },
+      required: ['repositoryPath', 'repositoryUrl', 'testPlanId', 'codebaseVersion']
     }
   },
   {
@@ -1791,6 +1799,7 @@ async function callLocal(name, args) {
           pullRequestBody: args.pullRequestBody
             ? String(args.pullRequestBody)
             : undefined,
+          pushToRemote: args.pushToRemote !== false,
           mergeToDefaultBranch: args.mergeToDefaultBranch !== false
         })
       )
@@ -1799,25 +1808,33 @@ async function callLocal(name, args) {
         repositoryPath: String(args.repositoryPath || ''),
         repositoryUrl: String(args.repositoryUrl || ''),
         testPlanId: String(args.testPlanId || ''),
-        codebaseVersion: String(args.codebaseVersion || ''),
-        repositoryDelivery: String(args.repositoryDelivery || ''),
-        syncRepository: async syncArgs => {
-          const result = await remote.callTool(
-            'test_plans_sync_repository_diff',
-            syncArgs
-          )
-          const data = remoteResultData(result)
-          if (result?.isError || !data) {
-            throw new Error(
-              'Voidr did not accept the repository synchronization patch.'
-            )
-          }
-          return data
-        }
+        codebaseVersion: String(args.codebaseVersion || '')
       })
       if (deployed?.completed) executionNeedsDeploy = false
       return textResult(deployed)
     }
+    case 'voidr_repository_sync_github':
+      return textResult(
+        await synchronizePublishedRepository({
+          repositoryPath: String(args.repositoryPath || ''),
+          repositoryUrl: String(args.repositoryUrl || ''),
+          testPlanId: String(args.testPlanId || ''),
+          codebaseVersion: String(args.codebaseVersion || ''),
+          syncRepository: async syncArgs => {
+            const result = await remote.callTool(
+              'test_plans_sync_repository_diff',
+              syncArgs
+            )
+            const data = remoteResultData(result)
+            if (result?.isError || !data) {
+              throw new Error(
+                'Voidr did not accept the repository synchronization patch.'
+              )
+            }
+            return data
+          }
+        })
+      )
     case 'voidr_release_deploy_validation':
       enforcePreparedRepository(String(args.repositoryPath || ''))
       return textResult(

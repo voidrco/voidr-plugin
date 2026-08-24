@@ -16,6 +16,7 @@ function ask(tool_name, tool_input) {
   })
   const parsed = JSON.parse(out)
   return {
+    decision: parsed.hookSpecificOutput?.permissionDecision || null,
     denied: parsed.hookSpecificOutput?.permissionDecision === 'deny',
     reason: parsed.hookSpecificOutput?.permissionDecisionReason || ''
   }
@@ -84,4 +85,26 @@ test('the machine belongs to the developer', () => {
 
 test('the rule does not wait for a workflow to be active', () => {
   assert.equal(ask('agent_jobs_trigger_automation', {}).denied, true)
+})
+
+test('GitHub repository synchronization asks the user through PreToolUse', () => {
+  for (const tool of [
+    'voidr_repository_sync_github',
+    'test_plans_sync_repository_diff'
+  ]) {
+    const verdict = ask(tool, { testPlanId: '0123456789abcdef01234567' })
+    assert.equal(verdict.decision, 'ask')
+    assert.match(verdict.reason, /GitHub/i)
+    assert.match(verdict.reason, /LIVE continua publicado/i)
+    assert.match(verdict.reason, /commit permanece somente nesta máquina/i)
+  }
+  assert.equal(
+    ask('voidr_workspace_publish_tests', { pushToRemote: true }).decision,
+    'ask'
+  )
+  assert.notEqual(
+    ask('voidr_workspace_publish_tests', { pushToRemote: false }).decision,
+    'ask'
+  )
+  assert.notEqual(ask('voidr_release_deploy_live', {}).decision, 'ask')
 })

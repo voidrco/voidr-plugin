@@ -8,6 +8,7 @@ export async function publishTests({
   commitMessage,
   pullRequestTitle,
   pullRequestBody,
+  pushToRemote = true,
   mergeToDefaultBranch = true,
   run = runCommand
 }) {
@@ -22,22 +23,25 @@ export async function publishTests({
   const message = String(commitMessage || '').trim()
   if (!message) throw new Error('A commit message is required.')
 
-  const repoInfo = JSON.parse(
-    (
-      await run('gh', ['repo', 'view', '--json', 'defaultBranchRef'], {
-        cwd: selected.path,
-        timeout: 60_000
-      })
-    ).stdout
-  )
-  const defaultBranch = repoInfo.defaultBranchRef?.name
-  if (!defaultBranch) {
-    throw new Error('Could not resolve the repository default branch.')
-  }
-  if (branchName === defaultBranch) {
-    throw new Error(
-      `Never push directly to the default branch (${defaultBranch}). Pass a feature branch name instead: this call pushes that branch, opens the pull request, and merges it into ${defaultBranch} for you.`
+  let defaultBranch = null
+  if (pushToRemote) {
+    const repoInfo = JSON.parse(
+      (
+        await run('gh', ['repo', 'view', '--json', 'defaultBranchRef'], {
+          cwd: selected.path,
+          timeout: 60_000
+        })
+      ).stdout
     )
+    defaultBranch = repoInfo.defaultBranchRef?.name
+    if (!defaultBranch) {
+      throw new Error('Could not resolve the repository default branch.')
+    }
+    if (branchName === defaultBranch) {
+      throw new Error(
+        `Never push directly to the default branch (${defaultBranch}). Pass a feature branch name instead: this call pushes that branch, opens the pull request, and merges it into ${defaultBranch} for you.`
+      )
+    }
   }
 
   await run('git', ['checkout', '-B', branchName], {
@@ -61,6 +65,21 @@ export async function publishTests({
   const commitSha = (
     await run('git', ['rev-parse', 'HEAD'], { cwd: selected.path })
   ).stdout.trim()
+
+  if (!pushToRemote) {
+    return {
+      completed: true,
+      branch: branchName,
+      defaultBranch,
+      committed,
+      commitSha,
+      pushed: false,
+      pullRequestUrl: null,
+      merged: false,
+      readyToDeploy: true,
+      next: `Commit ${commitSha} is saved locally on ${branchName}. The remote repository was not changed.`
+    }
+  }
 
   await run('git', ['push', '-u', 'origin', `${branchName}:${branchName}`], {
     cwd: selected.path,

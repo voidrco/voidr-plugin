@@ -34,6 +34,7 @@
         "voidr_release_inspect",
         "voidr_workspace_publish_tests",
         "voidr_release_deploy_live",
+        "voidr_repository_sync_github",
         "applications_list_applications",
         "applications_get_application",
         "applications_list_environments",

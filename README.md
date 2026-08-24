@@ -184,16 +184,19 @@ phrases must be typed by the user in the normal chat input; `ask_user`
 selections do not satisfy these runtime gates.
 
 After platform validation finishes, a passing run can proceed directly; a
-failing run is diagnosed and can proceed too. The plugin then tries to commit,
-push, open a pull request, and merge the tests into the repository's default
-branch. That Git delivery is best effort: any failure is reported but does not
-block LIVE. The plugin promotes the exact candidate that produced the completed
-validation verdict, without rebuilding, and reports success only when the
-platform read-back proves `latest` points to the same `codebaseVersion`. Once
-LIVE is confirmed, the Voidr Bot receives the exact source patch captured for
-that validated candidate and tries to synchronize it through a branch and pull
-request. Git may finish, wait for merge, conflict, or lack permission; none of
-those outcomes rolls back or invalidates LIVE.
+failing run is diagnosed and can proceed too. The user then chooses between
+publishing LIVE with Git delivery or publishing LIVE without changing Git. In
+the first path, the plugin tries to commit, push, open a pull request, and merge
+the tests into the repository's default branch. That Git delivery is best
+effort: any failure is reported but does not block LIVE. In the second path, no
+Git write is attempted. The plugin promotes the exact candidate that produced
+the completed validation verdict, without rebuilding, and reports success only
+when the platform read-back proves `latest` points to the same
+`codebaseVersion`. Once
+LIVE is confirmed on the Git-enabled path, the Voidr Bot receives the exact
+source patch captured for that validated candidate and tries to synchronize it
+through a branch and pull request. Git may finish, wait for merge, conflict, or
+lack permission; none of those outcomes rolls back or invalidates LIVE.
 Legacy `voidr deploy-latest` and `npm run voidr:deploy` shell paths are denied.
 
 ## Authentication prerequisite

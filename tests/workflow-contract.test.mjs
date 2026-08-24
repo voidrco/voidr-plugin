@@ -350,6 +350,16 @@ test('deployment requires a completed test verdict and diagnosis for failures', 
       }),
     /immutable codebaseVersion|PASSED verdict/
   )
+
+  workflow = transition(workflow, {
+    type: 'VALIDATION_CANDIDATE_VERIFIED',
+    validationOutcome: 'PASSED',
+    codebaseVersion: 'b'.repeat(64)
+  })
+  assert.throws(
+    () => transition(workflow, { type: 'DEPLOY_APPROVED' }),
+    /choose LIVE with Git synchronization or LIVE only/
+  )
 })
 
 test('execution requires the exercised candidate in latest and independent sync', () => {
@@ -362,12 +372,16 @@ test('execution requires the exercised candidate in latest and independent sync'
   assert.equal(workflow.state, States.VALIDATION_CANDIDATE_VERIFIED)
   assert.match(workflow.prompt, /testes passaram/i)
 
-  workflow = transition(workflow, { type: 'DEPLOY_APPROVED' })
+  workflow = transition(workflow, {
+    type: 'DEPLOY_APPROVED',
+    repositoryDelivery: 'SYNC'
+  })
   assert.deepEqual(workflow.actions, [
     {
       tool: 'voidr_release_deploy_live',
       mutation: true,
-      codebaseVersion: 'b'.repeat(64)
+      codebaseVersion: 'b'.repeat(64),
+      repositoryDelivery: 'SYNC'
     }
   ])
   workflow = transition(workflow, {
@@ -427,8 +441,12 @@ test('a diagnosed failed validation can still be offered for LIVE', () => {
   assert.equal(workflow.context.validationOutcome, 'FAILED')
   assert.match(workflow.prompt, /falhas.*diagnóstico/i)
   assert.match(workflow.prompt, /LIVE mesmo vermelha/i)
-  workflow = transition(workflow, { type: 'DEPLOY_APPROVED' })
+  workflow = transition(workflow, {
+    type: 'DEPLOY_APPROVED',
+    repositoryDelivery: 'SKIP'
+  })
   assert.equal(workflow.actions[0].codebaseVersion, 'b'.repeat(64))
+  assert.equal(workflow.actions[0].repositoryDelivery, 'SKIP')
 })
 
 function existingPlanThroughRepositorySelection() {

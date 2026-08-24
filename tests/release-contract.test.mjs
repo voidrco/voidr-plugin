@@ -66,6 +66,27 @@ test('extracts latest codebaseVersion from platform deploy read-back', () => {
   assert.equal(latestCodebaseVersion({ data: null }), null)
 })
 
+test('requires the user Git choice before publishing LIVE', async () => {
+  const { repositoryPath, repositoryUrl } = makeCheckout('choice')
+  let deployCalled = false
+
+  await assert.rejects(
+    deployRelease({
+      repositoryPath,
+      repositoryUrl,
+      testPlanId,
+      codebaseVersion,
+      run: async () => {
+        deployCalled = true
+        return { stdout: '', stderr: '', exitCode: 0 }
+      },
+      restClient: { get: async () => ({}) }
+    }),
+    /Choose whether LIVE should also synchronize/
+  )
+  assert.equal(deployCalled, false)
+})
+
 test('promotes the exercised build without rebuilding or checking remote Git state', async () => {
   const { repositoryPath, repositoryUrl } = makeCheckout('release')
   const calls = []
@@ -74,6 +95,7 @@ test('promotes the exercised build without rebuilding or checking remote Git sta
     repositoryUrl,
     testPlanId,
     codebaseVersion,
+    repositoryDelivery: 'SKIP',
     cliEnvironment: {
       VOIDR_API_URL: 'https://preview.example.test/v1',
       VOIDR_CLIENT_ID: 'synthetic-client',
@@ -97,7 +119,7 @@ test('promotes the exercised build without rebuilding or checking remote Git sta
     codebaseVersion
   })
   assert.equal(result.release.latestCodebaseVersion, codebaseVersion)
-  assert.equal(result.gitSync.status, 'FAILED')
+  assert.equal(result.gitSync.status, 'SKIPPED')
   assert.deepEqual(calls, [
     ['npx', '--no-install', 'voidr', 'deploy-latest']
   ])
@@ -124,6 +146,7 @@ test('submits the validation-time patch after LIVE is published', async () => {
     repositoryUrl,
     testPlanId,
     codebaseVersion,
+    repositoryDelivery: 'SYNC',
     run: async () => ({ stdout: '', stderr: '', exitCode: 0 }),
     restClient: {
       get: async () => ({ data: { manifestData: { codebaseVersion } } })
@@ -164,6 +187,7 @@ test('keeps LIVE successful when repository synchronization fails', async () => 
     repositoryUrl,
     testPlanId,
     codebaseVersion,
+    repositoryDelivery: 'SYNC',
     run: async () => ({ stdout: '', stderr: '', exitCode: 0 }),
     restClient: {
       get: async () => ({ data: { manifestData: { codebaseVersion } } })
@@ -188,6 +212,7 @@ test('refuses a local build that differs from the exercised candidate', async ()
       repositoryUrl,
       testPlanId,
       codebaseVersion: 'c'.repeat(64),
+      repositoryDelivery: 'SKIP',
       run: async () => {
         throw new Error('deploy-latest must not run for an unvalidated build')
       },
@@ -206,6 +231,7 @@ test('reports what the CLI said when LIVE publication fails', async () => {
       repositoryUrl,
       testPlanId,
       codebaseVersion,
+      repositoryDelivery: 'SKIP',
       cliEnvironment: { VOIDR_API_URL: 'https://preview.example.test/v1' },
       run: async () => ({
         stdout: '',

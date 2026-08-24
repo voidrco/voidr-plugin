@@ -15,6 +15,7 @@ export async function deployRelease({
   repositoryUrl,
   testPlanId,
   codebaseVersion,
+  repositoryDelivery,
   restClient = new VoidrRestClient(),
   cliEnvironment,
   syncRepository,
@@ -22,6 +23,9 @@ export async function deployRelease({
 }) {
   if (!/^[a-f0-9]{24}$/i.test(String(testPlanId || ''))) {
     throw new Error('A valid Test Plan ID is required.')
+  }
+  if (!['SYNC', 'SKIP'].includes(repositoryDelivery)) {
+    throw new Error('Choose whether LIVE should also synchronize the Git repository.')
   }
 
   const selected = validateProvisionedRepositorySelection(
@@ -50,10 +54,10 @@ export async function deployRelease({
     exercisedCodebaseVersion: codebaseVersion,
     manifestCodebaseVersion: manifest.codebaseVersion
   })
-  const repositorySync = await readRepositorySyncSnapshot(
-    selected.path,
-    candidate.codebaseVersion
-  )
+  const repositorySync =
+    repositoryDelivery === 'SYNC'
+      ? await readRepositorySyncSnapshot(selected.path, candidate.codebaseVersion)
+      : null
 
   const published = await run('npx', ['--no-install', 'voidr', 'deploy-latest'], {
     cwd: selected.path,
@@ -87,6 +91,7 @@ export async function deployRelease({
     latestCodebaseVersion: currentVersion
   })
   const gitSync = await synchronizePublishedSource({
+    repositoryDelivery,
     repositorySync,
     testPlanId: String(testPlanId),
     codebaseVersion: candidate.codebaseVersion,
@@ -131,11 +136,20 @@ async function readRepositorySyncSnapshot(repositoryPath, codebaseVersion) {
 }
 
 async function synchronizePublishedSource({
+  repositoryDelivery,
   repositorySync,
   testPlanId,
   codebaseVersion,
   syncRepository
 }) {
+  if (repositoryDelivery === 'SKIP') {
+    return {
+      status: 'SKIPPED',
+      liveValid: true,
+      codebaseVersion,
+      message: 'LIVE is published and the user chose not to change the Git repository.'
+    }
+  }
   if (repositorySync?.needed === false) {
     return {
       status: 'SYNCED',

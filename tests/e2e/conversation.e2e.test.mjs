@@ -143,12 +143,16 @@ test('natural-language greenfield journey reaches deploy and execution through e
   })
   assert.match(workflow.prompt, /testes passaram/i)
 
-  workflow = transition(workflow, { type: 'DEPLOY_APPROVED' })
+  workflow = transition(workflow, {
+    type: 'DEPLOY_APPROVED',
+    repositoryDelivery: 'SYNC'
+  })
   assert.deepEqual(workflow.actions, [
     {
       tool: 'voidr_release_deploy_live',
       mutation: true,
-      codebaseVersion: 'b'.repeat(64)
+      codebaseVersion: 'b'.repeat(64),
+      repositoryDelivery: 'SYNC'
     }
   ])
   workflow = transition(workflow, {

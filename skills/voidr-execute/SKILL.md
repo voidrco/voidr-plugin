@@ -76,21 +76,28 @@ Ask (or infer from the request) which mode applies:
 5. **Follow each execution to completion** (see "Monitoring"). A PASSED verdict
    can continue directly. A FAILED verdict must be read with "Reading a failed
    run" below before continuing. Both verdicts remain eligible for LIVE.
-6. **Best-effort code delivery**: after a PASSED verdict, or after a FAILED
-   verdict has been diagnosed, offer to deliver the source through
-   `voidr_workspace_publish_tests` with its normal
-   `mergeToDefaultBranch: true` behavior. Record whether commit, push, pull
-   request, and merge succeeded. A refusal, failed check, missing review,
-   conflict, authentication error, or any other Git failure NEVER blocks the
-   LIVE deploy and must not trigger a retry loop.
-7. **LIVE deploy is a separate decision**: after its own confirmation, call
+6. **LIVE and Git choice**: after a PASSED verdict, or after a FAILED verdict
+   has been diagnosed, offer exactly two choices in the same confirmation:
+   "publicar em LIVE e também levar o código ao Git" or "publicar somente em
+   LIVE, sem alterar o Git". Never infer the Git choice from earlier work.
+   - With Git: first use `voidr_workspace_publish_tests` with its normal
+     `mergeToDefaultBranch: true` behavior. Record whether commit, push, pull
+     request, and merge succeeded. Pass `repositoryDelivery: SYNC` to LIVE so
+     the Voidr Bot can finish the delivery if the user's Git path did not.
+   - Without Git: do not call `voidr_workspace_publish_tests`; pass
+     `repositoryDelivery: SKIP`. No commit, push, pull request, merge, or bot
+     synchronization may occur.
+   A failed check, missing review, conflict, authentication error, or any other
+   Git failure NEVER blocks LIVE and must not trigger a retry loop.
+7. **LIVE deploy follows that explicit choice**: call
    `voidr_release_deploy_live` with the SAME `codebaseVersion` returned by
    `voidr_release_deploy_validation` and exercised by the completed validation
-   run, whether its tests PASSED or FAILED.
+   run, whether its tests PASSED or FAILED, plus the chosen repository delivery.
    Do not rebuild. Do not call `voidr_release_inspect`. No Git commit, push,
-   pull request, or merge is a deploy prerequisite. After LIVE is verified,
-   the tool asks the Voidr Bot to deliver the exact validated source patch when
-   the earlier Git delivery did not reach the default branch. Report the two
+   pull request, or merge is a deploy prerequisite. On the `SYNC` path, after
+   LIVE is verified, the tool asks the Voidr Bot to deliver the exact validated
+   source patch when the earlier Git delivery did not reach the default branch.
+   On the `SKIP` path, it returns `SKIPPED` without calling the bot. Report the
    results independently: LIVE is valid even when the bot reports queued,
    conflict, missing permission, or failure.
 
@@ -338,9 +345,10 @@ anyway and say the cause is unknown.
   the user's call: never cancel on your own initiative.
 - `voidr_release_deploy_live` — publishes the exact `codebaseVersion` that
   produced a PASSED or diagnosed FAILED validation verdict, only after an
-  explicit user decision. It never rebuilds and never depends on Git state.
-  After confirming LIVE, it also asks the Voidr Bot to synchronize the source
-  patch captured during validation and returns that separate Git status.
+  explicit user decision. `repositoryDelivery: SYNC` also asks the Voidr Bot to
+  synchronize the source patch captured during validation;
+  `repositoryDelivery: SKIP` guarantees that Git is left unchanged. It never
+  rebuilds and LIVE never depends on the Git result.
 - `voidr_workspace_publish_tests` — best-effort delivery to the default branch
   before LIVE. Its failure is reported but never blocks
   `voidr_release_deploy_live`.

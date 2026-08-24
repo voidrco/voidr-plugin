@@ -386,7 +386,7 @@ const localTools = [
   {
     name: 'voidr_release_deploy_live',
     description:
-      'Publish and verify the exact immutable candidate exercised by a completed platform validation whose test verdict was PASSED or diagnosed FAILED. Pass the codebaseVersion returned by voidr_release_deploy_validation; the local manifest must still match it. This does not rebuild and does not require a clean worktree, a Git commit, a push, a pull request, or a merge. After latest points to that same codebaseVersion, the tool asks the Voidr Bot to synchronize the exact source patch captured during validation and reports that separate Git status without invalidating LIVE.',
+      'Publish and verify the exact immutable candidate exercised by a completed platform validation whose test verdict was PASSED or diagnosed FAILED. The user must choose repositoryDelivery: SYNC publishes LIVE and also asks the Voidr Bot to synchronize the exact validated source; SKIP publishes LIVE without changing Git. Neither choice rebuilds, and a Git failure never invalidates LIVE.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -396,9 +396,21 @@ const localTools = [
           pattern: '^https://github\\.com/[^/]+/[^/]+(?:\\.git)?$'
         },
         testPlanId: { type: 'string', pattern: '^[a-fA-F0-9]{24}$' },
-        codebaseVersion: { type: 'string', pattern: '^[a-f0-9]{64}$' }
+        codebaseVersion: { type: 'string', pattern: '^[a-f0-9]{64}$' },
+        repositoryDelivery: {
+          type: 'string',
+          enum: ['SYNC', 'SKIP'],
+          description:
+            'SYNC also delivers the validated source to Git; SKIP leaves Git unchanged.'
+        }
       },
-      required: ['repositoryPath', 'repositoryUrl', 'testPlanId', 'codebaseVersion']
+      required: [
+        'repositoryPath',
+        'repositoryUrl',
+        'testPlanId',
+        'codebaseVersion',
+        'repositoryDelivery'
+      ]
     }
   },
   {
@@ -1788,6 +1800,7 @@ async function callLocal(name, args) {
         repositoryUrl: String(args.repositoryUrl || ''),
         testPlanId: String(args.testPlanId || ''),
         codebaseVersion: String(args.codebaseVersion || ''),
+        repositoryDelivery: String(args.repositoryDelivery || ''),
         syncRepository: async syncArgs => {
           const result = await remote.callTool(
             'test_plans_sync_repository_diff',

@@ -93,20 +93,23 @@ test('validation runs are SHADOW executions pinned to the candidate version', ()
   assert.match(skill, /never a tight loop/i)
 })
 
-test('Git delivery is attempted but never gates the validated LIVE candidate', () => {
+test('the user chooses Git delivery and it never gates the validated LIVE candidate', () => {
   const promotion = skill.slice(
-    skill.indexOf('**Best-effort code delivery**'),
+    skill.indexOf('**LIVE and Git choice**'),
     skill.indexOf('## Writing the confirmation gates')
   )
 
   assert.match(promotion, /mergeToDefaultBranch: true/)
   assert.match(promotion, /Git failure NEVER blocks/)
+  assert.match(promotion, /publicar em LIVE e também levar o código ao Git/)
+  assert.match(promotion, /publicar somente em\s+LIVE, sem alterar o Git/)
+  assert.match(promotion, /repositoryDelivery: SKIP/)
   assert.match(promotion, /SAME `codebaseVersion`/)
   assert.match(promotion, /Do not rebuild/)
   assert.match(promotion, /Voidr Bot/)
   assert.match(promotion, /LIVE is valid even when the bot reports queued/)
   assert.match(promotion, /PASSED or FAILED/)
-  assert.match(promotion, /FAILED\s+verdict has been diagnosed/)
+  assert.match(promotion, /FAILED verdict\s+has been diagnosed/)
 })
 
 test('a validation run pilots the shared preconditions before the whole plan', () => {

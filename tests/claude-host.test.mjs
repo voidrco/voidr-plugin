@@ -258,6 +258,51 @@ test('execution evidence blocks a Claude response without its link', () => {
   assert.deepEqual(allowed, {})
 })
 
+test('a TLS failure tells the agent how to trust the corporate CA', () => {
+  const post = runScript(
+    postToolHook,
+    {
+      hook_event_name: 'PostToolUse',
+      session_id: 'claude-corporate-ca',
+      tool_name: 'Bash',
+      tool_input: { command: 'npx voidr link' },
+      tool_response: {
+        resultType: 'failure',
+        text: 'SELF_SIGNED_CERT_IN_CHAIN'
+      }
+    },
+    dataRoot()
+  )
+
+  const guidance = post.hookSpecificOutput.additionalContext
+  assert.match(
+    guidance,
+    /certificate trust failure, not invalid Voidr credentials/
+  )
+  assert.match(guidance, /NODE_USE_SYSTEM_CA/)
+  assert.match(guidance, /retry the exact failed command once/)
+  assert.match(guidance, /Never set NODE_TLS_REJECT_UNAUTHORIZED=0/)
+})
+
+test('TLS recovery and execution evidence share the post-hook response', () => {
+  const executionId = '6a6a839850a27b89d2d7df2e'
+  const post = runScript(
+    postToolHook,
+    {
+      hook_event_name: 'PostToolUse',
+      session_id: 'claude-ca-with-execution',
+      tool_name: 'mcp__plugin_voidr_voidr__playwright_list_execution_failures',
+      tool_input: { executionId },
+      tool_response: { error: 'UNABLE_TO_VERIFY_LEAF_SIGNATURE' }
+    },
+    dataRoot()
+  )
+
+  const guidance = post.hookSpecificOutput.additionalContext
+  assert.match(guidance, /NODE_USE_SYSTEM_CA/)
+  assert.match(guidance, new RegExp(executionId))
+})
+
 test('the Stop gate releases the turn instead of looping forever', () => {
   const state = dataRoot()
   const sessionId = 'claude-stop-loop'

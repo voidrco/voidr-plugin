@@ -9,6 +9,15 @@ const TLS_TRUST_ERROR_CODES = new Set([
   'CERT_UNTRUSTED'
 ])
 
+const TLS_TRUST_ERROR_MESSAGES = [
+  'self-signed certificate in certificate chain',
+  'self signed certificate in certificate chain',
+  'unable to verify the first certificate',
+  'unable to verify leaf signature',
+  'unable to get issuer certificate',
+  'unable to get local issuer certificate'
+]
+
 export function applySystemCaTrust({ tlsImpl = tls } = {}) {
   if (
     typeof tlsImpl.getCACertificates !== 'function' ||
@@ -43,4 +52,28 @@ export function describeNetworkFailure(error, target = 'the Voidr API') {
     )
   }
   return `Could not reach ${target} (${detail}).`
+}
+
+export function tlsTrustFailureFrom(value) {
+  if (value === undefined || value === null) return null
+  const text = typeof value === 'string' ? value : JSON.stringify(value)
+  const upper = text.toUpperCase()
+  for (const code of TLS_TRUST_ERROR_CODES) {
+    if (upper.includes(code)) return code
+  }
+  const lower = text.toLowerCase()
+  return TLS_TRUST_ERROR_MESSAGES.find(message => lower.includes(message)) || null
+}
+
+export function tlsTrustRecoveryGuidance(failure) {
+  return [
+    `The previous tool failed because Node.js does not trust a certificate authority in the TLS chain (${failure}). On a corporate machine, this is usually the company proxy certificate authority.`,
+    'Treat this as certificate trust failure, not invalid Voidr credentials. Do not sign in again or rotate credentials.',
+    'Check node --version. Before the next Voidr CLI or network command, enable the operating system certificate store in the current shell and retry the exact failed command once.',
+    'On PowerShell with Node.js 22.19 or newer, run: $env:NODE_USE_SYSTEM_CA = "1"',
+    'On Node.js 22.15 through 22.18, append --use-system-ca to the current NODE_OPTIONS without replacing existing options.',
+    'On macOS or Linux with Node.js 22.19 or newer, run: export NODE_USE_SYSTEM_CA=1',
+    'If the retry still fails, ask the user for the corporate root CA as a PEM file, set NODE_EXTRA_CA_CERTS to that file in the same environment, restart the editor, and retry.',
+    'Never set NODE_TLS_REJECT_UNAUTHORIZED=0. Do not persist an environment variable at user or machine scope without explicit user approval.'
+  ].join('\n')
 }

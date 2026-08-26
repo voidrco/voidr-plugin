@@ -2,7 +2,9 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   applySystemCaTrust,
-  describeNetworkFailure
+  describeNetworkFailure,
+  tlsTrustFailureFrom,
+  tlsTrustRecoveryGuidance
 } from '../scripts/lib/network-trust.mjs'
 
 test('system CA trust reports unsupported runtimes without touching TLS', () => {
@@ -71,4 +73,27 @@ test('network failures honor a custom target label', () => {
     describeNetworkFailure(error, 'the Voidr MCP endpoint'),
     'Could not reach the Voidr MCP endpoint (ECONNRESET).'
   )
+})
+
+test('TLS trust failures are recognized in nested tool results', () => {
+  assert.equal(
+    tlsTrustFailureFrom({
+      content: [{ text: 'request failed: SELF_SIGNED_CERT_IN_CHAIN' }]
+    }),
+    'SELF_SIGNED_CERT_IN_CHAIN'
+  )
+  assert.equal(
+    tlsTrustFailureFrom('unable to get local issuer certificate'),
+    'unable to get local issuer certificate'
+  )
+  assert.equal(tlsTrustFailureFrom({ error: 'ETIMEDOUT' }), null)
+})
+
+test('TLS recovery guidance keeps verification enabled and retries safely', () => {
+  const guidance = tlsTrustRecoveryGuidance('SELF_SIGNED_CERT_IN_CHAIN')
+  assert.match(guidance, /NODE_USE_SYSTEM_CA/)
+  assert.match(guidance, /NODE_EXTRA_CA_CERTS/)
+  assert.match(guidance, /retry the exact failed command once/)
+  assert.match(guidance, /Never set NODE_TLS_REJECT_UNAUTHORIZED=0/)
+  assert.match(guidance, /explicit user approval/)
 })

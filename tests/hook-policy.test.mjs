@@ -674,6 +674,27 @@ test('execution evidence blocks a response without its link', () => {
   )
 })
 
+test('Copilot receives corporate CA recovery after a failed terminal call', () => {
+  const output = runScript(
+    postToolHook,
+    {
+      sessionId: 'copilot-corporate-ca',
+      toolName: 'powershell',
+      toolArgs: { command: 'npx voidr link' },
+      toolResult: {
+        resultType: 'failure',
+        output: 'self-signed certificate in certificate chain'
+      }
+    },
+    mkdtempSync(join(tmpdir(), 'voidr-hook-state-'))
+  )
+
+  const guidance = output.hookSpecificOutput.additionalContext
+  assert.match(guidance, /Check node --version/)
+  assert.match(guidance, /\$env:NODE_USE_SYSTEM_CA = "1"/)
+  assert.match(guidance, /Do not sign in again or rotate credentials/)
+})
+
 for (const defectTool of [
   'defects_create_defect',
   'defects_create_defect_with_issue'

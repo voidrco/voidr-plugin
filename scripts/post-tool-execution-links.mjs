@@ -14,6 +14,10 @@ import {
   recordAskUserSelections,
   updateSessionState
 } from './lib/session-state.mjs'
+import {
+  tlsTrustFailureFrom,
+  tlsTrustRecoveryGuidance
+} from './lib/network-trust.mjs'
 
 const payload = await readPayload()
 const toolName = canonicalToolName(
@@ -48,9 +52,19 @@ const inputIds = executionIdsFromToolInput(
 const resultIds = executionIdsFromToolResult(toolName, toolResult)
 const executionIds = uniqueExecutionIds([...inputIds, ...resultIds])
 const testCaseSlugs = testCaseSlugsFromToolInput(toolArgs)
+const contexts = []
+const tlsTrustFailure = tlsTrustFailureFrom(toolResult)
+
+if (tlsTrustFailure) {
+  contexts.push(tlsTrustRecoveryGuidance(tlsTrustFailure))
+}
 
 if (executionIds.length === 0) {
-  process.stdout.write('{}\n')
+  process.stdout.write(
+    `${JSON.stringify(
+      contexts.length > 0 ? postToolContextOutput(contexts.join('\n\n')) : {}
+    )}\n`
+  )
   process.exit(0)
 }
 
@@ -75,12 +89,13 @@ const lines = executionLinkLines(
   nextState.requiredExecutionIds,
   process.env.VOIDR_PLATFORM_URL
 )
+contexts.push(
+  `The final user-facing response must include these evidence links exactly:\n${lines}`
+)
 
 process.stdout.write(
   `${JSON.stringify(
-    postToolContextOutput(
-      `The final user-facing response must include these evidence links exactly:\n${lines}`
-    )
+    postToolContextOutput(contexts.join('\n\n'))
   )}\n`
 )
 

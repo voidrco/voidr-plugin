@@ -40,8 +40,8 @@ test(
         'test-plan-generation.tools.ts',
         'hive.triggerAction'
       ],
-      failure_reports_self_healing_trigger: [
-        'failure-reports.tools.ts',
+      self_healing_trigger: [
+        'self-healing.tools.ts',
         'triggerSelfHealingBypass'
       ],
       system_batch_execute: ['batch-execute.tools.ts', 'registry.callTool']
@@ -61,9 +61,15 @@ function discoverRegisteredTools(directory) {
   )) {
     const content = readFileSync(join(directory, file), 'utf8')
     const prefix = content.match(/const PREFIX = '([^']+)'/)?.[1]
-    if (!prefix) continue
-    for (const match of content.matchAll(/\bname:\s*'([a-zA-Z0-9_]+)'/g)) {
-      names.add(`${prefix}_${match[1]}`)
+    if (prefix) {
+      for (const match of content.matchAll(/\bname:\s*'([a-zA-Z0-9_]+)'/g)) {
+        names.add(`${prefix}_${match[1]}`)
+      }
+    }
+    for (const match of content.matchAll(
+      /registry\.register\(\s*'[^']+'\s*,\s*'([^']+)'\s*,\s*\{[\s\S]*?\bname:\s*'([a-zA-Z0-9_]+)'/g
+    )) {
+      names.add(`${match[1]}_${match[2]}`)
     }
   }
   return names

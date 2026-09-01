@@ -750,7 +750,7 @@ for (const forbidden of [
   'agent_jobs_trigger_automation',
   'agent_jobs_trigger_hive_automation',
   'test_plan_generation_generate_test_plan_draft',
-  'failure_reports_self_healing_trigger',
+  'self_healing_trigger',
   'system_batch_execute'
 ]) {
   test(`denies forbidden tool ${forbidden}`, () => {

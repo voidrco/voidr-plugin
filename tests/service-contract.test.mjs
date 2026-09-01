@@ -24,7 +24,7 @@ test(
 )
 
 test(
-  'each forbidden process-starting tool has concrete dispatch evidence',
+  'each forbidden delegated-authoring tool has concrete service evidence',
   { skip: !existsSync(toolsRoot) },
   () => {
     const evidence = {
@@ -36,9 +36,29 @@ test(
         'agent-jobs.tools.ts',
         'automationSessionService.create'
       ],
+      coverage_generate_from_sessions: [
+        'coverage-generation.tools.ts',
+        'handleGenerate'
+      ],
+      coverage_generate_from_documentation: [
+        'coverage-generation.tools.ts',
+        'handleGenerateFromDocumentation'
+      ],
+      coverage_apply_inferred_cases: [
+        'coverage-generation.tools.ts',
+        'handleApplyInferredCases'
+      ],
+      recording_interpret_journey: [
+        'recording-to-test-plan.tools.ts',
+        'anthropicProvider.createChatCompletion'
+      ],
       test_plan_generation_generate_test_plan_draft: [
         'test-plan-generation.tools.ts',
         'hive.triggerAction'
+      ],
+      test_plan_generation_apply_test_plan_draft: [
+        'test-plan-generation.tools.ts',
+        'handleApplyDraft'
       ],
       failure_reports_self_healing_trigger: [
         'failure-reports.tools.ts',

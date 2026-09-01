@@ -1,5 +1,7 @@
 import { platformExecutionDenial } from '../../core/policies/platform-execution.mjs'
+import { agentOwnedAuthoringDenial } from '../../core/policies/agent-owned-authoring.mjs'
 import { interactiveTestDevelopmentPrompt } from '../../core/workflow/interactive-test-development.mjs'
+import { registerDshPluginSkills } from './plugin-skills.mjs'
 
 const CONTEXT_EVENT_TYPE = 'voidr/project-context-hint'
 
@@ -12,12 +14,13 @@ export function registerKnownEvents(knownEventTypes) {
 }
 
 export const name = 'voidr-agent-plugin-dsh'
-export const inject = ['commands', 'systemPrompt', 'tools']
+export const inject = ['commands', 'skills', 'systemPrompt', 'tools']
 
 export function apply(ctx) {
+  registerDshPluginSkills(ctx.skills)
   ctx.systemPrompt.section({
     name: 'voidr:interactive-test-development',
-    order: 114,
+    order: 116,
     text: context => {
       const events = context.agent?.session?.events ?? []
       return interactiveTestDevelopmentPrompt({ hint: contextHint(events) })
@@ -44,7 +47,10 @@ export function apply(ctx) {
   })
   ctx.on('tools/pre-execute', async (exec, next) => {
     const decision = await next()
-    if (decision.kind !== 'allow' || exec.name !== 'bash') return decision
+    if (decision.kind !== 'allow') return decision
+    const authoringDenial = agentOwnedAuthoringDenial(exec.name)
+    if (authoringDenial) return { kind: 'deny', reason: authoringDenial }
+    if (exec.name !== 'bash') return decision
     const denial = platformExecutionDenial({
       command: typeof exec.args?.command === 'string' ? exec.args.command : '',
       platformValidation: true,

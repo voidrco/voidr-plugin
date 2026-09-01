@@ -6,6 +6,12 @@ export function interactiveTestDevelopmentPrompt({ hint } = {}) {
     : ''
   return `The persisted Test Plan binding is authoritative and must be read or changed only through assistant_workspace tools.${hintText}
 
+AUTHORING OWNERSHIP:
+- Load voidr-spec to generate or update a journey specification.
+- Load voidr-journeys to create journeys or infer and persist AAA scenarios.
+- Load voidr-automate to implement approved cases as repository tests.
+- Never call coverage_generate_from_sessions, coverage_generate_from_documentation, coverage_apply_inferred_cases, recording_interpret_journey, test_plan_generation_generate_test_plan_draft, test_plan_generation_apply_test_plan_draft, agent_jobs_trigger_automation, or agent_jobs_trigger_hive_automation. Those legacy routes delegate reasoning outside this interactive agent and are blocked by the plugin.
+
 BINDING DECISION:
 - Do not bind for read-only questions, Test Plan discovery, application or environment lookup, credential lookup, execution inspection, or failure analysis.
 - You MUST call ${tools.bindTestPlan} immediately before the first repository checkout, test-file creation or edit, repository build, code-backed test execution, or diff review. The operation is idempotent for the same Test Plan and rejects rebinding.

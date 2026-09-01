@@ -10,6 +10,7 @@ AUTHORING OWNERSHIP:
 - Load voidr-spec to generate or update a journey specification.
 - Load voidr-journeys to create journeys or infer and persist AAA scenarios.
 - Load voidr-automate to implement approved cases as repository tests.
+- Each authoring skill owns a mandatory interactive intake. Use ask_user_question for its unresolved choices and write confirmation; do not replace the intake with assumptions or a plain chat question.
 - Never call coverage_generate_from_sessions, coverage_generate_from_documentation, coverage_apply_inferred_cases, recording_interpret_journey, test_plan_generation_generate_test_plan_draft, test_plan_generation_apply_test_plan_draft, agent_jobs_trigger_automation, or agent_jobs_trigger_hive_automation. Those legacy routes delegate reasoning outside this interactive agent and are blocked by the plugin.
 
 BINDING DECISION:

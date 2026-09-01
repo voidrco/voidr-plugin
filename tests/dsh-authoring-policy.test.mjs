@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs'
 import { apply, inject } from '../adapters/dsh/index.mjs'
 import { loadDshPluginSkills } from '../adapters/dsh/plugin-skills.mjs'
 import { AGENT_OWNED_AUTHORING_TOOLS } from '../core/policies/agent-owned-authoring.mjs'
+import { interactiveTestDevelopmentPrompt } from '../core/workflow/interactive-test-development.mjs'
 import { loadPolicy } from '../scripts/lib/policy.mjs'
 
 test('DSH registers the three agent-owned authoring skills', () => {
@@ -71,4 +72,42 @@ test('authoring skills route persistence through deterministic Service tools', (
     'utf8'
   )
   for (const skill of Object.keys(byName)) assert.match(prompt, new RegExp(skill))
+})
+
+test('each DSH authoring skill owns an interactive intake and write gate', () => {
+  const byName = Object.fromEntries(loadDshPluginSkills().map(skill => [skill.name, skill]))
+
+  for (const skill of Object.values(byName)) {
+    assert.match(skill.content, /ask_user_question/)
+    assert.match(skill.content, /IDs?\s+estáve(?:l|is)/)
+    assert.match(skill.content, /não repita/i)
+  }
+
+  for (const id of ['spec-destination', 'spec-source', 'spec-scope', 'spec-focus', 'spec-approve']) {
+    assert.match(byName['voidr-spec'].content, new RegExp(id))
+  }
+  for (const id of [
+    'journeys-target',
+    'journeys-destination',
+    'journeys-source',
+    'journeys-coverage',
+    'journeys-volume',
+    'journeys-approve'
+  ]) {
+    assert.match(byName['voidr-journeys'].content, new RegExp(id))
+  }
+  for (const id of [
+    'automate-cases',
+    'automate-scope',
+    'automate-environment',
+    'automate-approve-edit',
+    'automate-promote',
+    'automate-publish'
+  ]) {
+    assert.match(byName['voidr-automate'].content, new RegExp(id))
+  }
+
+  const prompt = interactiveTestDevelopmentPrompt()
+  assert.match(prompt, /mandatory interactive intake/)
+  assert.match(prompt, /ask_user_question/)
 })

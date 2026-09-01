@@ -1,12 +1,37 @@
 ---
 name: voidr-journeys
-description: Cria jornadas e cenários AAA diretamente no Test Plan com o raciocínio do DSH, usando specs, sessões ou documentação sem jobs de coverage ou geração no Hive.
+description: Conduz uma entrevista e cria jornadas e cenários AAA no Test Plan com o raciocínio do DSH, sem jobs de coverage ou geração no Hive.
 ---
 
 # Gerar jornadas e cenários
 
 O DSH infere e classifica os cenários. Nunca use `coverage_*`,
 `test_plan_generation_*` ou um job de geração externo.
+
+Use `ask_user_question` para toda escolha, confirmação ou informação ausente.
+Agrupe em uma única chamada as perguntas que já puder fazer, sempre com IDs
+estáveis. A mensagem comum do chat não substitui essa ferramenta porque não
+pausa o runtime. Não repita uma pergunta que a pessoa já respondeu claramente.
+
+## 0. Entrevista da skill
+
+Antes de inferir qualquer cenário, resolva com ferramentas de leitura as opções
+reais e pergunte tudo que ainda estiver aberto:
+
+1. `journeys-target`: criar uma jornada ou trabalhar em uma existente;
+2. `journeys-destination`: aplicação, Test Plan e jornada exatos, usando opções
+   retornadas pela plataforma; nunca peça IDs;
+3. `journeys-source`: spec, sessões, documentação ou uma combinação, aceitando
+   seleção múltipla;
+4. `journeys-coverage`: fluxo principal, erros/alternativas, limites ou todos
+   os comportamentos sustentados pelas fontes;
+5. `journeys-volume`: proposta focada, intermediária ou ampla, salvo quando a
+   pessoa já tiver definido um limite.
+
+Para uma jornada nova, pergunte também nome, objetivo e severidade. Quando a
+fonte escolhida tiver várias sessões ou documentos relevantes, faça uma segunda
+pergunta selecionável com os itens encontrados. Nunca reutilize silenciosamente
+uma escolha de outra skill ou sessão.
 
 ## 1. Resolver o escopo
 
@@ -48,7 +73,10 @@ Para cada cenário, produza:
 acrescenta passos necessários ao mesmo comportamento. `NEW` representa um
 comportamento ainda não coberto.
 
-Mostre a proposta inteira e aguarde aprovação explícita antes de escrever.
+Mostre a proposta inteira e use `ask_user_question` com o ID
+`journeys-approve` para perguntar se deve persistir tudo, revisar a seleção ou
+cancelar. Se a pessoa escolher revisar, aplique as mudanças na proposta e peça
+nova confirmação. Somente persistir autoriza as escritas abaixo.
 
 ## 4. Persistir sem job
 

@@ -1,12 +1,34 @@
 ---
 name: voidr-automate
-description: Implementa os casos aprovados como testes no workspace isolado do Assistant, valida candidatos em SHADOW e publica somente quando solicitado, sem acionar automação do Hive.
+description: Conduz uma entrevista e implementa casos aprovados no workspace isolado do Assistant, validando em SHADOW sem acionar automação do Hive.
 ---
 
 # Automatizar testes no workspace do DSH
 
 O DSH escreve e corrige os testes. Nunca use `agent_jobs_trigger_automation` ou
 `agent_jobs_trigger_hive_automation`.
+
+Use `ask_user_question` para toda escolha, confirmação ou informação ausente.
+Agrupe em uma única chamada as perguntas que já puder fazer, sempre com IDs
+estáveis. A mensagem comum do chat não substitui essa ferramenta porque não
+pausa o runtime. Não repita uma pergunta que a pessoa já respondeu claramente.
+
+## 0. Entrevista da skill
+
+Antes de preparar o workspace, resolva com ferramentas de leitura as opções
+reais e pergunte tudo que ainda estiver aberto:
+
+1. `automate-cases`: casos, suite ou jornada exatos a implementar, renderizando
+   a árvore do Test Plan como opções quando a pessoa não tiver selecionado;
+2. `automate-scope`: somente preparar e revisar o diff, ou também iterar a
+   validação remota em SHADOW;
+3. `automate-environment`: ambiente existente onde validar, quando houver mais
+   de um e a validação tiver sido escolhida.
+
+Depois de ler o repositório, mostre quais casos e arquivos pretende alterar.
+Se o pedido atual ainda não autorizou explicitamente a implementação desses
+casos, use `ask_user_question` com o ID `automate-approve-edit` antes da primeira
+edição. A autorização cobre somente o escopo mostrado.
 
 ## 1. Vincular e preparar
 
@@ -41,9 +63,12 @@ errado, mostre a divergência e obtenha aprovação antes de atualizar o caso.
 
 ## 4. Entregar
 
-Promova com `assistant_workspace_deploy_latest` somente após validação e pedido
-explícito. Faça commit e push com `assistant_workspace_publish` somente quando
-a pessoa pedir. Promoção e publicação Git são decisões separadas.
+Promova com `assistant_workspace_deploy_latest` somente após validação e uma
+confirmação via `ask_user_question` com o ID `automate-promote`. Faça commit e
+push com `assistant_workspace_publish` somente após uma confirmação separada
+com o ID `automate-publish`. Nunca faça essas perguntas antes de existir um
+candidato validado e um diff final para a pessoa revisar. Promoção e publicação
+Git são decisões separadas.
 
 Finalize com casos implementados, resultado da última validação, versão do
 candidato e estado da publicação.

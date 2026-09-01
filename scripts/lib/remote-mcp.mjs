@@ -34,7 +34,7 @@ export class RemoteMcpClient {
       capabilities: {},
       clientInfo: {
         name: 'voidr-plugin',
-        version: '0.2.23'
+        version: '0.2.24'
       }
     })
     await this.notify('notifications/initialized', {})

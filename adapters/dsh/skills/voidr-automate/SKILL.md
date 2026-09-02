@@ -41,6 +41,25 @@ edição. A autorização cobre somente o escopo mostrado.
 4. Chame `assistant_workspace_prepare`; o Service resolve o repositório e as
    credenciais a partir do vínculo persistido. Nunca clone manualmente.
 
+O retorno de `assistant_workspace_bind_test_plan` e `assistant_workspace_status`
+informa `repositoryAccess.mode`, calculado pelo Service a partir do repositório
+vinculado ao plano, não da organização do usuário nem de uma URL no chat:
+
+- `voidr_managed`: repositório GitHub da organização interna da Voidr (`voidrco`).
+  Não exige conector Git do cliente. Prepare diretamente pelo Service, mesmo
+  quando `git_connector_list` estiver vazio; não chame essa listagem como pré-requisito.
+- `organization_connector`: repositório externo. O Service usa o conector da
+  organização autenticada. Se estiver ausente, peça a conexão; se não houver
+  permissão para o repositório, peça a correção dessa permissão. Nunca use o
+  acesso interno da Voidr como alternativa, nem busque tokens ou chaves locais.
+- `unsupported`, ausência de vínculo ou de `repositoryAccess`: não deduza um
+  acesso a partir do nome da jornada. Consulte o estado uma vez; se continuar
+  indisponível, informe que o vínculo/configuração precisa ser corrigido.
+
+O modo indica qual acesso usar, não garante que a credencial esteja funcionando.
+Falhas no acesso `voidr_managed` devem ser encaminhadas à Voidr, sem pedir ao
+cliente que instale um conector para `voidrco`.
+
 Se `assistant_workspace_prepare` falhar, consulte `assistant_workspace_status`
 uma vez e apresente o erro acionável. Nunca use `bash sleep` e nunca faça
 retentativas em loop. Só tente novamente uma única vez depois que a pessoa

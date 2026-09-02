@@ -124,6 +124,16 @@ test('DSH uses product widgets for recording and file evidence', () => {
   assert.match(byName['voidr-automate'].content, /document_input/)
 })
 
+test('automate follows server-selected repository access rather than assuming a customer connector', () => {
+  const automate = loadDshPluginSkills().find(skill => skill.name === 'voidr-automate').content
+  for (const value of ['repositoryAccess.mode', 'voidr_managed', 'organization_connector', 'unsupported', 'voidrco']) {
+    assert.ok(automate.includes(value), value)
+  }
+  assert.match(automate, /Não exige conector Git do cliente/)
+  assert.match(automate, /Nunca use o\s+acesso interno da Voidr como alternativa/)
+  assert.match(automate, /não garante que a credencial esteja funcionando/)
+})
+
 test('spec and journey intake always preserve the three evidence paths', () => {
   const byName = Object.fromEntries(loadDshPluginSkills().map(skill => [skill.name, skill]))
 
@@ -165,6 +175,11 @@ test('the backend preloads the selected surface skill into the system prompt', (
   assert.match(home, /generate a test plan, write a specification, create journeys and scenarios, automate tests, or analyze failures/)
   const monitor = interactiveTestDevelopmentPrompt({ hint: { surface: 'monitor' } })
   assert.match(monitor, /Diagnose with read-only Voidr tools first/)
+  const overview = variables.get('voidr_interactive_test_development')({ agent: { session: { events: [{ type: 'voidr/project-context-hint', data: { surface: 'journey-overview', testPlanId: 'plan-1' } }] } } })
+  assert.match(overview, /general Assistant for a Journeys page/)
+  assert.match(overview, /write or revise a spec, create a journey, create test scenarios, or automate approved tests/)
+  assert.match(overview, /Do not select the first module or case automatically/)
+  assert.doesNotMatch(overview, /Active surface skill:/)
 })
 
 test('DSH renders surface prompts without interpreting literal template examples', {
@@ -184,7 +199,7 @@ test('DSH renders surface prompts without interpreting literal template examples
     on: () => undefined
   })
 
-  for (const surface of ['home', 'monitor', 'spec', 'journeys', 'automate']) {
+  for (const surface of ['home', 'monitor', 'journey-overview', 'spec', 'journeys', 'automate']) {
     const hint = { surface, journeyName: 'Login {{unknown}} {{env.LOGIN_PASSWORD}} {{{nested}}}' }
     const context = { agent: { session: { events: [{ type: 'voidr/project-context-hint', data: hint }] } } }
     const variables = Object.fromEntries([...providers].map(([name, provider]) => [name, provider(context)]))

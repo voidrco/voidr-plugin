@@ -25,7 +25,7 @@ test('DSH denies every delegated authoring tool before execution', async () => {
   const registeredSkills = []
   apply({
     skills: { register: skill => registeredSkills.push(skill) },
-    systemPrompt: { section: () => undefined },
+    systemPrompt: { section: () => undefined, variable: () => undefined },
     commands: { register: () => undefined },
     tools: {},
     on: (event, handler) => handlers.set(event, handler)
@@ -139,4 +139,66 @@ test('spec and journey intake always preserve the three evidence paths', () => {
     interactiveTestDevelopmentPrompt(),
     /record a new session, use recorded sessions, and send documentation/
   )
+})
+
+test('the backend preloads the selected surface skill into the system prompt', () => {
+  let section
+  const variables = new Map()
+  apply({
+    skills: { register: () => undefined },
+    systemPrompt: {
+      section: value => { section = value },
+      variable: (name, provider) => variables.set(name, provider)
+    },
+    commands: { register: () => undefined },
+    tools: {},
+    on: () => undefined
+  })
+  assert.equal(section.text, '{{voidr_interactive_test_development}}')
+  for (const [surface, skillName] of Object.entries({ spec: 'voidr-spec', journeys: 'voidr-journeys', automate: 'voidr-automate' })) {
+    const text = variables.get('voidr_interactive_test_development')({ agent: { session: { events: [{ type: 'voidr/project-context-hint', data: { surface } }] } } })
+    assert.match(text, new RegExp(`Active surface skill: ${skillName}`))
+    assert.ok(text.includes(loadDshPluginSkills().find(skill => skill.name === skillName).content))
+  }
+  const home = interactiveTestDevelopmentPrompt({ hint: { surface: 'home' } })
+  assert.match(home, /generalist/)
+  assert.match(home, /generate a test plan, write a specification, create journeys and scenarios, automate tests, or analyze failures/)
+  const monitor = interactiveTestDevelopmentPrompt({ hint: { surface: 'monitor' } })
+  assert.match(monitor, /Diagnose with read-only Voidr tools first/)
+})
+
+test('DSH renders surface prompts without interpreting literal template examples', {
+  skip: !process.env.DSH_SYSTEM_PROMPT_MODULE
+}, async () => {
+  const { renderPrompt } = await import(process.env.DSH_SYSTEM_PROMPT_MODULE)
+  let section
+  const providers = new Map()
+  apply({
+    skills: { register: () => undefined },
+    systemPrompt: {
+      section: value => { section = value },
+      variable: (name, provider) => providers.set(name, provider)
+    },
+    commands: { register: () => undefined },
+    tools: {},
+    on: () => undefined
+  })
+
+  for (const surface of ['home', 'monitor', 'spec', 'journeys', 'automate']) {
+    const hint = { surface, journeyName: 'Login {{unknown}} {{env.LOGIN_PASSWORD}} {{{nested}}}' }
+    const context = { agent: { session: { events: [{ type: 'voidr/project-context-hint', data: hint }] } } }
+    const variables = Object.fromEntries([...providers].map(([name, provider]) => [name, provider(context)]))
+    const rendered = renderPrompt({ sections: [section], contexts: [], tools: [], variables })
+    assert.equal(rendered, variables.voidr_interactive_test_development)
+    assert.ok(rendered.includes(hint.journeyName))
+    assert.throws(() => renderPrompt({
+      sections: [{ ...section, text: rendered }], contexts: [], tools: [], variables: {}
+    }), /(?:malformed|unknown) prompt variable/)
+    if (surface === 'spec') {
+      assert.ok(rendered.includes('{{env.NOME_DA_VARIAVEL}}'))
+      for (const option of ['Gravar nova sessão', 'Usar sessões gravadas', 'Enviar documentação']) {
+        assert.ok(rendered.includes(option))
+      }
+    }
+  }
 })

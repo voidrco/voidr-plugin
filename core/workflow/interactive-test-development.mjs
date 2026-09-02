@@ -2,7 +2,7 @@ import { ASSISTANT_TOOL_NAMES as tools } from '../contracts/tools.mjs'
 
 function surfaceMission(surface) {
   const missions = {
-    home: `OPENING MISSION: Help the user choose the next test-development outcome. Start with a focused question about whether they need a specification, journeys, implementation, or failure analysis.`,
+    home: `OPENING MISSION: Be a generalist Voidr assistant. Help the user with their actual request. When they need orientation, offer all five paths: generate a test plan, write a specification, create journeys and scenarios, automate tests, or analyze failures. Do not require an authoring interview for greetings or general questions. Load the relevant authoring skill when the user chooses that task.`,
     spec: `OPENING MISSION: The user opened the specification surface. Start from the linked Test Plan and module hint when present, load voidr-spec before authoring, and ask the skill's required intake questions.`,
     journeys: `OPENING MISSION: The user opened the journeys surface. Start from the linked Test Plan and module hint when present, load voidr-journeys before authoring, and ask the skill's required intake questions.`,
     automate: `OPENING MISSION: The user opened the automation surface. Start from the linked Test Plan and case hint when present, load voidr-automate before repository work, and ask the skill's required intake questions before binding a workspace.`,

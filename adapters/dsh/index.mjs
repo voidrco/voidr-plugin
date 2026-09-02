@@ -1,7 +1,7 @@
 import { platformExecutionDenial } from '../../core/policies/platform-execution.mjs'
 import { agentOwnedAuthoringDenial } from '../../core/policies/agent-owned-authoring.mjs'
 import { interactiveTestDevelopmentPrompt } from '../../core/workflow/interactive-test-development.mjs'
-import { registerDshPluginSkills } from './plugin-skills.mjs'
+import { loadDshPluginSkills } from './plugin-skills.mjs'
 
 const CONTEXT_EVENT_TYPE = 'voidr/project-context-hint'
 
@@ -17,14 +17,23 @@ export const name = 'voidr-agent-plugin-dsh'
 export const inject = ['commands', 'skills', 'systemPrompt', 'tools']
 
 export function apply(ctx) {
-  registerDshPluginSkills(ctx.skills)
+  const skills = loadDshPluginSkills()
+  for (const skill of skills) ctx.skills.register(skill)
+  // DSH does not re-interpolate variable values, preserving skill examples and UI hint literals.
+  ctx.systemPrompt.variable('voidr_interactive_test_development', context => {
+    const events = context.agent?.session?.events ?? []
+    const hint = contextHint(events)
+    const skillName = { spec: 'voidr-spec', journeys: 'voidr-journeys', automate: 'voidr-automate' }[hint?.surface]
+    const skill = skills.find(candidate => candidate.name === skillName)
+    return [
+      interactiveTestDevelopmentPrompt({ hint }),
+      ...(skill ? [`Active surface skill: ${skill.name}\nThese instructions are already loaded for this surface.\n${skill.content}`] : [])
+    ].join('\n\n')
+  })
   ctx.systemPrompt.section({
     name: 'voidr:interactive-test-development',
     order: 116,
-    text: context => {
-      const events = context.agent?.session?.events ?? []
-      return interactiveTestDevelopmentPrompt({ hint: contextHint(events) })
-    }
+    text: '{{voidr_interactive_test_development}}'
   })
   ctx.commands.register({
     name: 'assistant-context',

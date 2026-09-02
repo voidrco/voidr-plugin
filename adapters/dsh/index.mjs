@@ -34,8 +34,13 @@ export function apply(ctx) {
       try {
         const value = JSON.parse(Buffer.from(rawInput.trim(), 'base64url').toString('utf8'))
         const hint = Object.fromEntries(
-          ['assistantSessionId', 'applicationId', 'testPlanId', 'testCaseSlug']
-            .filter(key => typeof value[key] === 'string' && value[key].length > 0)
+          [
+            'assistantSessionId', 'applicationId', 'testPlanId', 'testCaseSlug', 'moduleSlug',
+            'suiteSlug', 'executionId', 'journeyName', 'productType', 'environment', 'severity',
+            'hasSpec', 'specVersion', 'specUpdatedAt', 'suiteCount', 'caseCount', 'sessionIds',
+            'intent', 'surface'
+          ]
+            .filter(key => value[key] !== undefined && value[key] !== null)
             .map(key => [key, value[key]])
         )
         if (Object.keys(hint).length > 0) agent.session.append(CONTEXT_EVENT_TYPE, hint)

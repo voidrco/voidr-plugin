@@ -8,7 +8,9 @@ description: Conduz uma entrevista e cria jornadas e cenários AAA no Test Plan 
 O DSH infere e classifica os cenários. Nunca use `coverage_*`,
 `test_plan_generation_*` ou um job de geração externo.
 
-Use `ask_user_question` para toda escolha, confirmação ou informação ausente.
+Use `ask_user_question` para escolhas, confirmações ou informações ausentes que
+não tenham um widget próprio. Para gravar ou selecionar sessões reais, use o
+widget `session_coverage_picker`; para enviar documentos, use `document_input`.
 Agrupe em uma única chamada as perguntas que já puder fazer, sempre com IDs
 estáveis. A mensagem comum do chat não substitui essa ferramenta porque não
 pausa o runtime. Não repita uma pergunta que a pessoa já respondeu claramente.
@@ -20,18 +22,33 @@ reais e pergunte tudo que ainda estiver aberto:
 
 1. `journeys-target`: criar uma jornada ou trabalhar em uma existente;
 2. `journeys-destination`: aplicação, Test Plan e jornada exatos, usando opções
-   retornadas pela plataforma; nunca peça IDs;
-3. `journeys-source`: spec, sessões, documentação ou uma combinação, aceitando
-   seleção múltipla;
+   retornadas pela plataforma; nunca peça IDs. Quando o contexto da UI já
+   trouxer o Test Plan e a jornada abertos, valide-os e use-os como destino;
+   não repita essa pergunta;
+3. `journeys-source`: uma escolha obrigatória e de seleção múltipla das fontes.
+   Sempre ofereça **Gravar nova sessão**, **Usar sessões gravadas** e **Enviar
+   documentação**, mesmo quando ainda não houver sessão ou documento
+   disponível. Inclua **Spec atual** somente quando ela tiver conteúdo válido;
 4. `journeys-coverage`: fluxo principal, erros/alternativas, limites ou todos
    os comportamentos sustentados pelas fontes;
 5. `journeys-volume`: proposta focada, intermediária ou ampla, salvo quando a
    pessoa já tiver definido um limite.
 
-Para uma jornada nova, pergunte também nome, objetivo e severidade. Quando a
-fonte escolhida tiver várias sessões ou documentos relevantes, faça uma segunda
-pergunta selecionável com os itens encontrados. Nunca reutilize silenciosamente
-uma escolha de outra skill ou sessão.
+Para uma jornada nova, pergunte também nome, objetivo e severidade. Fonte é um
+contrato de produto, não uma inferência do modelo: nunca escolha nem omita uma
+dessas alternativas por conta própria. Depois da resposta:
+
+- para **Gravar nova sessão**, renderize `session_coverage_picker` com a
+  aplicação, URL, plano e jornada; ele inicia a captura real pela extensão.
+  Faça isso na mesma rodada da seleção: não faça outra `ask_user_question`
+  para pedir qual fluxo gravar, porque a jornada já resolvida entra em `flows`;
+- para **Usar sessões gravadas**, renderize o mesmo
+  `session_coverage_picker`, agora com as sessões existentes como opções;
+- para **Enviar documentação**, renderize `document_input` para o anexo real.
+
+Espere os widgets devolverem as evidências escolhidas antes de inferir. Não
+peça a descrição de uma navegação em texto, nem reutilize uma sessão ou escolha
+de outra skill silenciosamente.
 
 ## 1. Resolver o escopo
 

@@ -111,3 +111,32 @@ test('each DSH authoring skill owns an interactive intake and write gate', () =>
   assert.match(prompt, /mandatory interactive intake/)
   assert.match(prompt, /ask_user_question/)
 })
+
+test('DSH uses product widgets for recording and file evidence', () => {
+  const prompt = interactiveTestDevelopmentPrompt()
+  assert.match(prompt, /session_coverage_picker/)
+  assert.match(prompt, /document_input/)
+  assert.match(prompt, /Do not ask the user to describe a browser flow in a text field/)
+
+  const byName = Object.fromEntries(loadDshPluginSkills().map(skill => [skill.name, skill]))
+  assert.match(byName['voidr-spec'].content, /session_coverage_picker/)
+  assert.match(byName['voidr-journeys'].content, /session_coverage_picker/)
+  assert.match(byName['voidr-automate'].content, /document_input/)
+})
+
+test('spec and journey intake always preserve the three evidence paths', () => {
+  const byName = Object.fromEntries(loadDshPluginSkills().map(skill => [skill.name, skill]))
+
+  for (const name of ['voidr-spec', 'voidr-journeys']) {
+    assert.match(byName[name].content, /Gravar nova sessão/)
+    assert.match(byName[name].content, /Usar sessões gravadas/)
+    assert.match(byName[name].content, /Enviar documentação/)
+    assert.match(byName[name].content, /session_coverage_picker/)
+    assert.match(byName[name].content, /document_input/)
+  }
+
+  assert.match(
+    interactiveTestDevelopmentPrompt(),
+    /record a new session, use recorded sessions, and send documentation/
+  )
+})

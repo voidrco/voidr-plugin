@@ -8,7 +8,9 @@ description: Conduz uma entrevista e gera ou atualiza a especificação técnica
 O DSH faz toda a análise e redação. Nunca use `recording_interpret_journey`,
 `coverage_*` ou `test_plan_generation_*`.
 
-Use `ask_user_question` para toda escolha, confirmação ou informação ausente.
+Use `ask_user_question` para escolhas, confirmações ou informações ausentes que
+não tenham um widget próprio. Para gravar ou selecionar sessões reais, use o
+widget `session_coverage_picker`; para enviar documentos, use `document_input`.
 Agrupe em uma única chamada as perguntas que já puder fazer, sempre com IDs
 estáveis. A mensagem comum do chat não substitui essa ferramenta porque não
 pausa o runtime. Não repita uma pergunta que a pessoa já respondeu claramente.
@@ -19,16 +21,30 @@ Antes de analisar as evidências, resolva com ferramentas de leitura as opções
 reais e pergunte tudo que ainda estiver aberto:
 
 1. `spec-destination`: aplicação, Test Plan e jornada exatos, usando opções
-   retornadas pela plataforma; nunca peça IDs;
-2. `spec-source`: spec atual, sessões, documentação ou uma combinação, com
-   seleção múltipla quando fizer sentido;
+   retornadas pela plataforma; nunca peça IDs. Quando o contexto da UI já
+   trouxer o Test Plan e a jornada abertos, valide-os e use-os como destino;
+   não repita essa pergunta;
+2. `spec-source`: uma escolha obrigatória e de seleção múltipla das fontes. A
+   pergunta sempre oferece **Gravar nova sessão**, **Usar sessões gravadas** e
+   **Enviar documentação**, mesmo quando ainda não houver sessão ou documento
+   disponível. Inclua **Spec atual** somente quando ela tiver conteúdo válido;
 3. `spec-scope`: jornada inteira ou fluxo específico que a pessoa quer cobrir;
 4. `spec-focus`: fluxo principal, erros/alternativas ou ambos.
 
-Quando a fonte escolhida tiver várias sessões ou documentos relevantes, faça
-uma segunda pergunta selecionável com os itens encontrados. Não escolha pelo
-usuário com base no diretório, na sessão anterior ou na opção que parecer mais
-provável.
+Fonte é um contrato de produto, não uma inferência do modelo: nunca escolha
+nem omita uma dessas alternativas por conta própria. Depois da resposta:
+
+- para **Gravar nova sessão**, renderize `session_coverage_picker` com a
+  aplicação, URL, plano e jornada; ele inicia a captura real pela extensão.
+  Faça isso na mesma rodada da seleção: não faça outra `ask_user_question`
+  para pedir qual fluxo gravar, porque a jornada já resolvida entra em `flows`;
+- para **Usar sessões gravadas**, renderize o mesmo
+  `session_coverage_picker`, agora com as sessões existentes como opções;
+- para **Enviar documentação**, renderize `document_input` para o anexo real.
+
+Espere os widgets devolverem as evidências escolhidas antes de analisar. Não
+peça a descrição de uma navegação num campo de texto, nem selecione uma sessão
+ou documento em nome da pessoa.
 
 ## 1. Resolver o destino
 
@@ -36,8 +52,8 @@ provável.
 2. Liste as jornadas com `test_plans_list_modules` e selecione a exata. Um
    módulo da plataforma é uma jornada neste fluxo.
 3. Leia a versão atual com `test_plans_get_module_spec`.
-4. Quando houver mais de uma opção, use `ask_user_question`. Nunca invente IDs
-   ou peça para a pessoa digitá-los.
+4. Quando não houver destino da UI e existir mais de uma opção, use
+   `ask_user_question`. Nunca invente IDs ou peça para a pessoa digitá-los.
 
 ## 2. Reunir evidência
 

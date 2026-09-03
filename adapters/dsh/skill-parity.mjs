@@ -63,14 +63,21 @@ Preserve credential placeholders and all evidence/provenance requirements below.
       '- assistant_workspace_run_validation — approved remote cases only; inspect returned execution evidence, never execute a browser in the pod.')
   }
   if (skill.name === 'voidr-execute') {
-    content = replaceSection(content, '6. **Local checkpoint**', '## Writing the confirmation gates', `6. **Delivery decisions**: after a completed test verdict, offer the SAME candidate for LIVE.
+    content = replaceSection(content, '6. **Local checkpoint**', '## Writing the confirmation gates', `6. **Code publication**: after a completed test verdict, offer to publish the SAME candidate as the latest code release.
    PASSED is eligible. FAILED is eligible only after diagnosing it and explaining the failure
    to the user. Cancellation, timeout without test verdict, or no executed tests is not eligible.
    Call assistant_workspace_deploy_latest only after explicit user confirmation, carrying
    confirm: true, executionId and failureDiagnosis for a failed run. Do not rebuild or require a Git push.
-7. Git publication is separate: ask before assistant_workspace_publish commits and pushes
+   This publishes code only: status: promoted and alreadyPublished: true do not mean case tags are LIVE.
+   caseTagsChanged: false is expected. An already published version needs no rebuild or repeated upload.
+7. **Case promotion** is separate: follow "Promoting a case to LIVE" below. Read current_tag,
+   obtain explicit consent for the selected cases, confirm canWrite: true, call
+   test_plans_update_test_case_tag, then read back the persisted tags. Refusal leaves tags unchanged.
+   If tags are already LIVE, report them without another write. If code publication failed, do not
+   proceed to tags. If tag promotion fails, report the affected cases; do not repeat the code deploy.
+8. Git publication is separate: ask before assistant_workspace_publish commits and pushes
    the session branch. Never use the local user's GitHub credentials or start Hive.
-   A Git failure does not invalidate a successful LIVE deployment.
+   A Git failure does not invalidate a successful code publication or confirmed case tags.
 `)
     content = replaceSection(content, '`voidr_create_validation_execution` (validation) takes', 'Always end the report',
       '`assistant_workspace_run_validation` takes sessionId, environment, codebaseVersion and explicit targets. Use the version and targets returned by assistant_workspace_deploy_validation. The Service supplies applicationId/testPlanId and derives a stable idempotency key; do not fabricate those fields.\n\n')
@@ -89,7 +96,8 @@ Preserve credential placeholders and all evidence/provenance requirements below.
 - assistant_workspace_build is build-only. deploy_validation also builds and uploads; it needs upload approval and returns codebaseVersion and exact targets.
 - All execution stays on Voidr infrastructure, never Playwright in this pod. Use assistant_workspace_validation_status to read the correct execution environment; never treat the local Service DB as proof of a staging result.
 - Ask with ask_user_question for unresolved choices and each publication decision; render_widget owns session recording and uploads. Do not require Claude/Copilot hooks or authorization phrases.
-- Failed but diagnosed test verdicts may be offered for LIVE after explicit approval. Pass confirm: true, executionId and failureDiagnosis when promoting. No test verdict means no promotion. Never publish a different rebuilt version.
+- Failed but diagnosed test verdicts may be offered for code publication after explicit approval. Pass confirm: true, executionId and failureDiagnosis to assistant_workspace_deploy_latest. No test verdict means no code publication. Never publish a different rebuilt version.
+- Publishing code does not promote case tags. Offer DEV to LIVE separately after reading current_tag, with explicit consent and canWrite: true; use test_plans_update_test_case_tag and read back the persisted tags. alreadyPublished: true confirms code only; never repeat its upload to fix a tag failure.
 - Every platform fact must come from a read tool or a context refresh in this turn, never folder names, memory or a manifest left from an earlier conversation. Preserve approved AAA, scope and evidence provenance.
 - Use only credentials passed by the Service to child processes, never local credential stores, and never print or read .env values.
 - Do not call legacy Hive automation. DSH owns code and its session directory.

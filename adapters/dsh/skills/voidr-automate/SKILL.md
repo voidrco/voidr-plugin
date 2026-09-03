@@ -106,15 +106,34 @@ do usuário. Diagnostique pela timeline, DOM e trace, não só pela mensagem.
 
 ## 4. Entregar
 
-Promova com `assistant_workspace_deploy_latest` somente após uma execução
-concluída com veredito dos testes (passou ou falhou após diagnóstico) e uma
-confirmação via `ask_user_question` com o ID `automate-promote`. Faça commit e
-push com `assistant_workspace_publish` somente após uma confirmação separada
-com o ID `automate-publish`. Nunca faça essas perguntas antes de existir um
-candidato executado e um diff final para a pessoa revisar. Execução cancelada
-ou sem veredito não permite promoção. Informe `confirm: true`, `executionId` e, em caso de
-falha, `failureDiagnosis`. Não reconstrua a versão antes de promover. Promoção e publicação
-Git são decisões separadas.
+Publicar código, promover tags e publicar no Git são três decisões separadas:
 
-Finalize com casos implementados, resultado da última validação, versão do
-candidato e estado da publicação.
+1. **Publicar o código:** use `assistant_workspace_deploy_latest` somente após
+   uma execução concluída com veredito dos testes (passou ou falhou após diagnóstico)
+   e confirmação via `ask_user_question` com o ID `automate-promote`.
+   Mostre a versão executada e o diff final antes de perguntar. Informe
+   `confirm: true`, `executionId` e, em caso de falha, `failureDiagnosis`.
+   Execução cancelada ou sem veredito não permite publicação. Não reconstrua a versão.
+   Essa ferramenta atualiza a release de código, não as tags dos casos.
+   `status: promoted` ou `alreadyPublished: true` confirma somente o código publicado;
+   `caseTagsChanged: false` não é erro e não significa que os casos estejam LIVE.
+2. **Promover DEV → LIVE:** após confirmar a publicação, leia as tags atuais com
+   `test_plans_get_test_plan`. Se os casos já estiverem LIVE, informe isso sem nova escrita.
+   Caso contrário, explique quais casos passarão a ser monitorados e elegíveis para
+   self-healing. Peça confirmação separada via `ask_user_question` com o ID
+   `automate-promote-live`. Confirme `canWrite: true` e use
+   `test_plans_update_test_case_tag` uma vez por caso confirmado. Releia o plano
+   e informe o `current_tag` persistido de cada caso. Nunca anuncie LIVE sem essa leitura.
+   Se a pessoa recusar, preserve as tags e informe que o código está publicado, mas
+   os casos não foram promovidos. Se faltar permissão ou a mudança falhar, informe
+   quais casos não mudaram; não repita o deploy nem reconstrua o candidato para corrigir tags.
+3. **Publicar no Git:** faça commit e push com `assistant_workspace_publish`
+   somente após confirmação separada com o ID `automate-publish`.
+   Falha no Git não desfaz a publicação do código nem as tags já confirmadas.
+
+Se a publicação de código falhar, não avance para a promoção de tags. Consulte o
+estado antes de propor uma nova tentativa. Se retornar `alreadyPublished: true`,
+continue da decisão de tags, sem novo upload. Preserve o mesmo candidato executado.
+
+Finalize com casos implementados, resultado da última validação, versão publicada,
+`current_tag` lido de cada caso e estado separado do commit/push.

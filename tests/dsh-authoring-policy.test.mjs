@@ -111,6 +111,7 @@ test('each DSH authoring skill owns an interactive intake and write gate', () =>
     'automate-environment',
     'automate-approve-edit',
     'automate-promote',
+    'automate-promote-live',
     'automate-publish'
   ]) {
     assert.match(byName['voidr-automate'].content, new RegExp(id))
@@ -119,6 +120,18 @@ test('each DSH authoring skill owns an interactive intake and write gate', () =>
   const prompt = interactiveTestDevelopmentPrompt()
   assert.match(prompt, /mandatory interactive intake/)
   assert.match(prompt, /ask_user_question/)
+})
+
+test('automate separates code publication, case tags and Git delivery', () => {
+  const automate = loadDshPluginSkills().find(skill => skill.name === 'voidr-automate').content
+  for (const text of ['alreadyPublished: true', 'caseTagsChanged: false',
+    'test_plans_get_test_plan', 'canWrite: true', 'test_plans_update_test_case_tag',
+    'automate-promote-live', 'current_tag']) assert.ok(automate.includes(text), text)
+  assert.match(automate, /não as tags dos casos/)
+  assert.match(automate, /Nunca anuncie LIVE sem essa leitura/)
+  assert.match(automate, /Se a pessoa recusar, preserve as tags/)
+  assert.match(automate, /não repita o deploy nem reconstrua o candidato para corrigir tags/)
+  assert.match(automate, /não avance para a promoção de tags/)
 })
 
 test('DSH uses product widgets for recording and file evidence', () => {

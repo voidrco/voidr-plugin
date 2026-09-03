@@ -146,3 +146,14 @@ test('canonical parity retains evidence and approval rules but replaces incompat
   assert.match(skills['voidr-execute'], /confirm: true/)
   assert.doesNotMatch(skills['voidr-execute'], /PreToolUse|GitHub choice|\*\*Claude Code\*\*/)
 })
+
+test('DSH execution keeps canonical tag consent and readback separate from code deployment', () => {
+  const execute = loadDshPluginSkills().find(skill => skill.name === 'voidr-execute').content
+  for (const text of ['## Promoting a case to LIVE', 'test_plans_update_test_case_tag',
+    'canWrite: true', 'Read the plan back', 'ask_user_question',
+    'caseTagsChanged: false', 'alreadyPublished: true']) assert.ok(execute.includes(text), text)
+  assert.match(execute, /Refusal leaves tags unchanged/)
+  assert.match(execute, /If code publication failed, do not\s+proceed to tags/)
+  assert.match(execute, /do not repeat the code deploy/)
+  assert.doesNotMatch(execute, /offer the SAME candidate for LIVE|successful LIVE deployment/)
+})

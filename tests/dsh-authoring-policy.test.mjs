@@ -83,6 +83,22 @@ test('authoring skills route persistence through deterministic Service tools', (
   for (const skill of Object.keys(byName)) assert.match(prompt, new RegExp(skill))
 })
 
+test('final Git delivery targets the default branch without changing isolated generation or LIVE promotion', () => {
+  const skills = Object.fromEntries(loadDshPluginSkills().map(skill => [skill.name, skill.content]))
+  assert.match(skills['voidr-automate'], /etapa final.*branch principal[\s\S]*resolvida pela ferramenta/)
+  assert.match(skills['voidr-automate'], /A geração continua no workspace e na branch local isolados/)
+  assert.match(skills['voidr-automate'], /nunca force o push/)
+  assert.match(skills['voidr-execute'], /default branch as the final delivery step/)
+  assert.match(skills['voidr-execute'], /never force push or silently fall back/)
+  const prompt = interactiveTestDevelopmentPrompt({ hint: { surface: 'automate' } })
+  assert.match(prompt, /At final Git delivery/)
+  assert.match(prompt, /Keep generation isolated on the local session branch/)
+  assert.match(prompt, /Promotion and Git publication are separate operations/)
+  for (const content of [skills['voidr-execute'], prompt]) {
+    assert.doesNotMatch(content, /pushes only the session branch|push the session branch\./)
+  }
+})
+
 test('each DSH authoring skill owns an interactive intake and write gate', () => {
   const byName = Object.fromEntries(loadDshPluginSkills().map(skill => [skill.name, skill]))
 

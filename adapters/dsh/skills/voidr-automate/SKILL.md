@@ -129,6 +129,14 @@ Publicar código, promover tags e publicar no Git são três decisões separadas
    quais casos não mudaram; não repita o deploy nem reconstrua o candidato para corrigir tags.
 3. **Publicar no Git:** faça commit e push com `assistant_workspace_publish`
    somente após confirmação separada com o ID `automate-publish`.
+   Esta é a etapa final: publique sempre na branch principal (default) do
+   repositório vinculado, resolvida pela ferramenta, nunca em `voidr/assistant/...`.
+   A geração continua no workspace e na branch local isolados; não mude esse fluxo.
+   Não suponha que a principal se chama `main`. Informe a `branch` e o `commitSha`
+   retornados pela ferramenta, sem confundir `workspaceBranch` com o destino do push.
+   Se a principal avançou, preserve os arquivos, atualize e valide antes de pedir
+   nova publicação. Se houver proteção contra push direto, informe o impedimento;
+   nunca force o push, contorne proteções ou publique numa branch alternativa.
    Falha no Git não desfaz a publicação do código nem as tags já confirmadas.
 
 Se a publicação de código falhar, não avance para a promoção de tags. Consulte o

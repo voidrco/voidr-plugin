@@ -76,7 +76,12 @@ Preserve credential placeholders and all evidence/provenance requirements below.
    If tags are already LIVE, report them without another write. If code publication failed, do not
    proceed to tags. If tag promotion fails, report the affected cases; do not repeat the code deploy.
 8. Git publication is separate: ask before assistant_workspace_publish commits and pushes
-   the session branch. Never use the local user's GitHub credentials or start Hive.
+   to the repository default branch as the final delivery step. Generation remains on the
+   isolated local session branch. The tool resolves origin HEAD; never guess main or push
+   voidr/assistant/... as the final destination. Report the returned branch and commitSha.
+   If the default branch advanced, preserve changes and update and validate before retrying.
+   Respect branch protections: never force push or silently fall back to a feature branch.
+   Never use the local user's GitHub credentials or start Hive.
    A Git failure does not invalidate a successful code publication or confirmed case tags.
 `)
     content = replaceSection(content, '`voidr_create_validation_execution` (validation) takes', 'Always end the report',
@@ -84,7 +89,7 @@ Preserve credential placeholders and all evidence/provenance requirements below.
     content = replaceSection(content, 'Track the execution until a terminal state', '### When to offer cancelling',
       'Track the execution with assistant_workspace_validation_status(sessionId, executionId), at least 30 seconds between polls. Continue until a terminal verdict and report the execution link.\n\n')
     content = content.replace(/- `voidr_repository_sync_github`[\s\S]*?(?=- `executions_get_execution`)/,
-      '- assistant_workspace_publish — commits and pushes only the session branch after explicit user approval; Git delivery is independent of LIVE.\n')
+      '- assistant_workspace_publish — final commit and push to the repository default branch after explicit user approval; Git delivery is independent of LIVE.\n')
   }
   for (const [from, to] of Object.entries(replacements)) content = content.replaceAll(from, to)
   content = content.replaceAll('`ask_user`', '`ask_user_question`')

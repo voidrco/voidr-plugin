@@ -65,8 +65,14 @@ export function apply(ctx) {
     const authoringDenial = agentOwnedAuthoringDenial(exec.name)
     if (authoringDenial) return { kind: 'deny', reason: authoringDenial }
     if (exec.name !== 'bash') return decision
+    const command = typeof exec.args?.command === 'string' ? exec.args.command : ''
+    const manualSetup = command.split(/\|\||&&|[;|&\n]/).some(stage =>
+      /(?:^|\s)(?:\S*\/)?voidr(?:\.js)?\s+(?:login|link|scaffold|env\s+pull)\b/i.test(stage.trim()) &&
+      !/^(?:cat|echo|printf|rg|grep|sed|head|tail|git\s+(?:diff|show))\b/.test(stage.trim()))
+    if (manualSetup) return { kind: 'deny', reason:
+      'DSH setup uses the organization Service Account supplied by the Service. Call assistant_workspace_prepare with sessionId and environmentSlug; never run interactive voidr login or request credentials from the user.' }
     const denial = platformExecutionDenial({
-      command: typeof exec.args?.command === 'string' ? exec.args.command : '',
+      command,
       platformValidation: true,
       guidance:
         'Use assistant_workspace_deploy_validation followed by assistant_workspace_run_validation.'

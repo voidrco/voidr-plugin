@@ -40,6 +40,14 @@ edição. A autorização cobre somente o escopo mostrado.
    checkout ou edição.
 4. Chame `assistant_workspace_prepare`; o Service resolve o repositório e as
    credenciais a partir do vínculo persistido. Nunca clone manualmente.
+5. A preparação executa o context setup original: manifesto, dependências,
+   link validado, estrutura dos casos e ambiente. Se retornar
+   `needsEnvironmentSelection`, pergunte e repita com `environmentSlug`.
+   O Service injeta a Service Account da organização nesses comandos. Nunca
+   peça `voidr login`, acesso ao terminal do usuário ou credenciais em chat.
+6. Antes de cada turno de geração, inclusive ao retomar, chame
+   `assistant_workspace_context_refresh` e leia `manifest-context.json`.
+   Se o contexto estiver incompleto, prepare novamente antes de editar.
 
 O retorno de `assistant_workspace_bind_test_plan` e `assistant_workspace_status`
 informa `repositoryAccess.mode`, calculado pelo Service a partir do repositório
@@ -78,6 +86,8 @@ localmente. Nunca leia ou exponha valores de `.env`.
 ## 3. Validar e corrigir
 
 1. Revise o diff com `assistant_workspace_inspect`.
+   Use `assistant_workspace_build` para validar sem publicar. Só faça upload
+   após aprovação; não substitua esse build por uma checagem de sintaxe.
 2. Gere um candidato imutável com `assistant_workspace_deploy_validation`.
 3. Execute apenas os targets retornados usando
    `assistant_workspace_run_validation` em um ambiente existente.
@@ -89,14 +99,21 @@ localmente. Nunca leia ou exponha valores de `.env`.
 
 Não enfraqueça asserts para obter verde. Se a evidência provar que o AAA está
 errado, mostre a divergência e obtenha aprovação antes de atualizar o caso.
+Carregue `voidr-execute` para o piloto, diagnóstico e entrega. Primeiro valide
+um caso representativo; com sucesso, execute os restantes juntos. Limite a três
+validações por caso e duas correções da mesma falha; outra rodada exige pedido
+do usuário. Diagnostique pela timeline, DOM e trace, não só pela mensagem.
 
 ## 4. Entregar
 
-Promova com `assistant_workspace_deploy_latest` somente após validação e uma
+Promova com `assistant_workspace_deploy_latest` somente após uma execução
+concluída com veredito dos testes (passou ou falhou após diagnóstico) e uma
 confirmação via `ask_user_question` com o ID `automate-promote`. Faça commit e
 push com `assistant_workspace_publish` somente após uma confirmação separada
 com o ID `automate-publish`. Nunca faça essas perguntas antes de existir um
-candidato validado e um diff final para a pessoa revisar. Promoção e publicação
+candidato executado e um diff final para a pessoa revisar. Execução cancelada
+ou sem veredito não permite promoção. Informe `confirm: true`, `executionId` e, em caso de
+falha, `failureDiagnosis`. Não reconstrua a versão antes de promover. Promoção e publicação
 Git são decisões separadas.
 
 Finalize com casos implementados, resultado da última validação, versão do

@@ -7,11 +7,11 @@ import { AGENT_OWNED_AUTHORING_TOOLS } from '../core/policies/agent-owned-author
 import { interactiveTestDevelopmentPrompt } from '../core/workflow/interactive-test-development.mjs'
 import { loadPolicy } from '../scripts/lib/policy.mjs'
 
-test('DSH registers the three agent-owned authoring skills', () => {
+test('DSH registers authoring skills and canonical context/generate/execute', () => {
   const skills = loadDshPluginSkills()
   assert.deepEqual(
     skills.map(skill => skill.name),
-    ['voidr-automate', 'voidr-journeys', 'voidr-spec']
+    ['voidr-automate', 'voidr-context', 'voidr-execute', 'voidr-generate', 'voidr-journeys', 'voidr-spec']
   )
   assert.equal(inject.includes('skills'), true)
   for (const skill of skills) {
@@ -31,7 +31,7 @@ test('DSH denies every delegated authoring tool before execution', async () => {
     on: (event, handler) => handlers.set(event, handler)
   })
 
-  assert.equal(registeredSkills.length, 3)
+  assert.equal(registeredSkills.length, 6)
   const preExecute = handlers.get('tools/pre-execute')
   assert.equal(typeof preExecute, 'function')
 
@@ -49,6 +49,15 @@ test('DSH denies every delegated authoring tool before execution', async () => {
     async () => ({ kind: 'allow' })
   )
   assert.deepEqual(allowed, { kind: 'allow' })
+  for (const command of ['npx voidr login', 'npx --no-install voidr link --yes',
+    'node node_modules/@voidrco/playwright/cli/voidr.js env pull', 'voidr scaffold']) {
+    const denied = await preExecute({ name: 'bash', args: { command } }, async () => ({ kind: 'allow' }))
+    assert.equal(denied.kind, 'deny', command)
+    assert.match(denied.reason, /Service Account/)
+    assert.match(denied.reason, /assistant_workspace_prepare/)
+  }
+  assert.deepEqual(await preExecute({ name: 'bash', args: { command: 'rg "voidr login" README.md' } },
+    async () => ({ kind: 'allow' })), { kind: 'allow' })
 })
 
 test('shared policy blocks the same authoring shortcuts on every plugin host', () => {
@@ -77,7 +86,7 @@ test('authoring skills route persistence through deterministic Service tools', (
 test('each DSH authoring skill owns an interactive intake and write gate', () => {
   const byName = Object.fromEntries(loadDshPluginSkills().map(skill => [skill.name, skill]))
 
-  for (const skill of Object.values(byName)) {
+  for (const skill of ['voidr-spec', 'voidr-journeys', 'voidr-automate'].map(name => byName[name])) {
     assert.match(skill.content, /ask_user_question/)
     assert.match(skill.content, /IDs?\s+estáve(?:l|is)/)
     assert.match(skill.content, /não repita/i)

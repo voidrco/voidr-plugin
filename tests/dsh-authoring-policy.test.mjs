@@ -28,6 +28,21 @@ test('DSH proactively offers delivery at the attempt limit or user stop across e
   assert.doesNotMatch(skills['voidr-execute'], /produced a PASSED or diagnosed FAILED validation verdict, only/)
 })
 
+test('DSH reports automatic plan activation only after latest publication', () => {
+  const skills = Object.fromEntries(loadDshPluginSkills().map(skill => [skill.name, skill.content]))
+  for (const content of [skills['voidr-generate'], skills['voidr-execute'], interactiveTestDevelopmentPrompt()]) {
+    for (const text of ['at least one automated test', 'DRAFT', 'ACTIVE', 'ARCHIVED',
+      'planStatusChanged', 'alreadyPublished', 'not a LIVE case tag or a passing verdict',
+      'without rebuilding or uploading again', 'never report ACTIVE without confirmation']) {
+      assert.ok(content.includes(text), text)
+    }
+  }
+  for (const text of ['DRAFT', 'ACTIVE', 'ARCHIVED', 'alreadyPublished', 'planStatusChanged',
+    'Build, upload de validação e SHADOW não ativam']) {
+    assert.ok(skills['voidr-automate'].includes(text), text)
+  }
+})
+
 test('unvalidated delivery adaptation does not relax the original plugin host rules', () => {
   const execute = readFileSync(new URL('../skills/voidr-execute/SKILL.md', import.meta.url), 'utf8')
   assert.match(execute, /Do not offer LIVE from it/)

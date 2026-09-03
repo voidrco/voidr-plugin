@@ -149,6 +149,14 @@ Publicar código, promover tags e publicar no Git são três decisões separadas
    Essa ferramenta atualiza a release de código, não as tags dos casos.
    `status: promoted` ou `alreadyPublished: true` confirma somente o código publicado;
    `caseTagsChanged: false` não é erro e não significa que os casos estejam LIVE.
+   Ao confirmar `latest` com ao menos um teste automatizado, a ferramenta muda
+   automaticamente o plano de `DRAFT` para `ACTIVE`, inclusive em uma retomada
+   `alreadyPublished`. Informe `planStatus` e `planStatusChanged` retornados.
+   Build, upload de validação e SHADOW não ativam o plano. `ACTIVE` não significa
+   casos LIVE nem testes passando; planos já ativos ou arquivados não mudam.
+   Se a ativação falhar após publicar o código, informe o resultado parcial e
+   retome a mesma versão aprovada, sem reconstruir nem fazer outro upload.
+   Nunca anuncie plano ativo sem confirmação.
 2. **Promover DEV → LIVE:** ofereça esta decisão após confirmar a publicação,
    inclusive com testes falhando ou não validados, explicando o risco. Leia as tags atuais com
    `test_plans_get_test_plan`. Se os casos já estiverem LIVE, informe isso sem nova escrita.

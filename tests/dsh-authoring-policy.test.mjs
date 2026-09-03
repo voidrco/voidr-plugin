@@ -49,17 +49,36 @@ test('unvalidated delivery adaptation does not relax the original plugin host ru
   assert.doesNotMatch(execute, /unvalidatedApproval/)
 })
 
-test('DSH registers authoring skills and canonical context/generate/execute', () => {
+test('DSH registers authoring skills and canonical analysis/context/generate/execute', () => {
   const skills = loadDshPluginSkills()
   assert.deepEqual(
     skills.map(skill => skill.name),
-    ['voidr-automate', 'voidr-context', 'voidr-execute', 'voidr-generate', 'voidr-journeys', 'voidr-spec']
+    ['voidr-automate', 'voidr-context', 'voidr-execute', 'voidr-failure-analysis', 'voidr-generate', 'voidr-journeys', 'voidr-spec']
   )
   assert.equal(inject.includes('skills'), true)
   for (const skill of skills) {
     assert.equal(skill.provider, 'voidr-plugin')
     assert.equal(skill.content.length > 300, true)
   }
+})
+
+test('DSH failure analysis stays specialized and hands explicit corrections to remote authoring', () => {
+  const analysis = loadDshPluginSkills().find(skill => skill.name === 'voidr-failure-analysis').content
+  for (const text of [
+    'organization Service Account',
+    'execution_analysis_viewer',
+    'playwright_analyze_frames_vision',
+    'analyzing: true',
+    're-emit the SAME widget id',
+    'multiple executions',
+    'evidence-only fallback',
+    'This skill diagnoses only',
+    'load voidr-automate, voidr-generate and voidr-execute',
+    'Correction validation runs only on Voidr infrastructure',
+    'Never run Playwright in the DSH pod'
+  ]) assert.ok(analysis.includes(text), text)
+  assert.doesNotMatch(analysis, /Execute `\/copilot voidr-setup`/)
+  assert.doesNotMatch(analysis, /GitHub Copilot CLI|Claude Code/)
 })
 
 test('DSH denies every delegated authoring tool before execution', async () => {
@@ -73,7 +92,7 @@ test('DSH denies every delegated authoring tool before execution', async () => {
     on: (event, handler) => handlers.set(event, handler)
   })
 
-  assert.equal(registeredSkills.length, 6)
+  assert.equal(registeredSkills.length, 7)
   const preExecute = handlers.get('tools/pre-execute')
   assert.equal(typeof preExecute, 'function')
 
@@ -245,7 +264,12 @@ test('the backend preloads the selected surface skill into the system prompt', (
     on: () => undefined
   })
   assert.equal(section.text, '{{voidr_interactive_test_development}}')
-  for (const [surface, skillName] of Object.entries({ spec: 'voidr-spec', journeys: 'voidr-journeys', automate: 'voidr-automate' })) {
+  for (const [surface, skillName] of Object.entries({
+    spec: 'voidr-spec',
+    journeys: 'voidr-journeys',
+    automate: 'voidr-automate',
+    monitor: 'voidr-failure-analysis'
+  })) {
     const text = variables.get('voidr_interactive_test_development')({ agent: { session: { events: [{ type: 'voidr/project-context-hint', data: { surface } }] } } })
     assert.match(text, new RegExp(`Active surface skill: ${skillName}`))
     assert.ok(text.includes(loadDshPluginSkills().find(skill => skill.name === skillName).content))
@@ -253,6 +277,7 @@ test('the backend preloads the selected surface skill into the system prompt', (
   const home = interactiveTestDevelopmentPrompt({ hint: { surface: 'home' } })
   assert.match(home, /generalist/)
   assert.match(home, /generate a test plan, write a specification, create journeys and scenarios, automate tests, or analyze failures/)
+  assert.match(home, /Load voidr-failure-analysis/)
   const monitor = interactiveTestDevelopmentPrompt({ hint: { surface: 'monitor' } })
   assert.match(monitor, /Diagnose with read-only Voidr tools first/)
   const overview = variables.get('voidr_interactive_test_development')({ agent: { session: { events: [{ type: 'voidr/project-context-hint', data: { surface: 'journey-overview', testPlanId: 'plan-1' } }] } } })

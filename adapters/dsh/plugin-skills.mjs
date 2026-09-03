@@ -10,8 +10,12 @@ export function loadDshPluginSkills() {
     .filter(entry => entry.isDirectory())
     .map(entry => readSkill(join(skillsRoot, entry.name, 'SKILL.md')))
   const originalRoot = join(skillsRoot, '../../../skills')
-  const canonical = ['voidr-context', 'voidr-generate', 'voidr-execute'].map(name =>
-    adaptDshSkill(readSkill(join(originalRoot, name, 'SKILL.md'))))
+  const canonical = [
+    'voidr-context',
+    'voidr-failure-analysis',
+    'voidr-generate',
+    'voidr-execute'
+  ].map(name => adaptDshSkill(readSkill(join(originalRoot, name, 'SKILL.md'))))
   const automate = skills.find(skill => skill.name === 'voidr-automate')
   automate.content += '\n\n## Canonical generation contract\n' + canonical.find(skill => skill.name === 'voidr-generate').content
   return [...skills, ...canonical].sort((left, right) => left.name.localeCompare(right.name))

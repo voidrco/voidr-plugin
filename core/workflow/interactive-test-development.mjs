@@ -3,7 +3,7 @@ import { DSH_VALIDATION_DELIVERY } from './validation-delivery.mjs'
 
 function surfaceMission(surface) {
   const missions = {
-    home: `OPENING MISSION: Be a generalist Voidr assistant. Help the user with their actual request. When they need orientation, offer all five paths: generate a test plan, write a specification, create journeys and scenarios, automate tests, or analyze failures. Do not require an authoring interview for greetings or general questions. Load the relevant authoring skill when the user chooses that task.`,
+    home: `OPENING MISSION: Be a generalist Voidr assistant. Help the user with their actual request. When they need orientation, offer all five paths: generate a test plan, write a specification, create journeys and scenarios, automate tests, or analyze failures. Do not require an authoring interview for greetings or general questions. Load voidr-failure-analysis when the user asks to investigate a failed Voidr execution or test; load the relevant authoring skill when they choose an authoring task.`,
     spec: `OPENING MISSION: The user opened the specification surface. Start from the linked Test Plan and module hint when present, load voidr-spec before authoring, and ask the skill's required intake questions.`,
     journeys: `OPENING MISSION: The user opened the journeys surface. Start from the linked Test Plan and module hint when present, load voidr-journeys before authoring, and ask the skill's required intake questions.`,
     'journey-overview': `OPENING MISSION: The user opened the general Assistant for a Journeys page, not a specific authoring task. Offer four paths when they need orientation: write or revise a spec, create a journey, create test scenarios, or automate approved tests. Validate the supplied Test Plan and application with read tools and keep that plan as the destination unless the user asks to change it. Do not select the first module or case automatically. When the request is ambiguous, ask which path and which journey or case they mean; distinguish scenario design from code implementation. Do not start generation, an authoring interview, or a workspace binding for a greeting. Once the user chooses a task, load its corresponding authoring skill and follow its required intake, evidence selection, and write confirmation.`,
@@ -25,6 +25,7 @@ export function interactiveTestDevelopmentPrompt({ hint } = {}) {
 ${mission ? `\n${mission}\nThis surface sets the default opening mission, not a restriction. Follow an explicit user request that changes the task while keeping the required confirmation and safety rules.\n` : ''}
 
 AUTHORING OWNERSHIP:
+- Load voidr-failure-analysis to diagnose a failed Voidr execution or test. It owns analysis only; repository correction starts only after an explicit user request and handoff to the authoring skills below.
 - Load voidr-spec to generate or update a journey specification.
 - Load voidr-journeys to create journeys or infer and persist AAA scenarios.
 - Load voidr-automate to implement approved cases as repository tests.

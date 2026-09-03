@@ -23,7 +23,12 @@ export function apply(ctx) {
   ctx.systemPrompt.variable('voidr_interactive_test_development', context => {
     const events = context.agent?.session?.events ?? []
     const hint = contextHint(events)
-    const skillName = { spec: 'voidr-spec', journeys: 'voidr-journeys', automate: 'voidr-automate' }[hint?.surface]
+    const skillName = {
+      spec: 'voidr-spec',
+      journeys: 'voidr-journeys',
+      automate: 'voidr-automate',
+      monitor: 'voidr-failure-analysis'
+    }[hint?.surface]
     const skill = skills.find(candidate => candidate.name === skillName)
     return [
       interactiveTestDevelopmentPrompt({ hint }),
@@ -45,7 +50,9 @@ export function apply(ctx) {
         const hint = Object.fromEntries(
           [
             'assistantSessionId', 'applicationId', 'testPlanId', 'testCaseSlug', 'moduleSlug',
-            'suiteSlug', 'executionId', 'journeyName', 'productType', 'environment', 'severity',
+            'suiteSlug', 'executionId', 'journeyId', 'journeyName', 'testName', 'productType',
+            'environment', 'errorType', 'errorMessage', 'stackTrace', 'filePath', 'line',
+            'browser', 'os', 'branch', 'commitSha', 'currentState', 'severity', 'targetType', 'analysisMode',
             'hasSpec', 'specVersion', 'specUpdatedAt', 'suiteCount', 'caseCount', 'sessionIds',
             'intent', 'surface'
           ]

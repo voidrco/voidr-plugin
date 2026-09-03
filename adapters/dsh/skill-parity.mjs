@@ -43,6 +43,44 @@ case selection. It refreshes IDs and session references without reinstalling,
 relinking, scaffolding or pulling secrets. A changed environment requires prepare.
 `)
   }
+  if (skill.name === 'voidr-failure-analysis') {
+    content = content.replace(/A routed tool missing[\s\S]*?which tool is unreachable and\nstop\.\n/, '')
+    content = replaceSection(content, '## Authentication', '## Resolve the execution', `## Authentication
+
+The Service authenticates every Voidr tool with the organization Service Account assigned to this DSH.
+Never run an interactive login, load local credentials, or ask the user for a token. If a remote read is
+rejected, report an organization access problem and stop without trying another identity.
+
+Read-only analysis does not require write access. Every defect mutation and tag change requires
+canWrite: true and the confirmation required below.`)
+    content = content.replace('## Reach the diagnosis', `## Visual execution analysis
+
+For this DSH adaptation, render_widget and playwright_analyze_frames_vision extend the tool routing
+below only for the deep analysis of one exact execution and test. Do not use this viewer for trends,
+multiple executions, or before executionId and testCaseSlug are authoritative.
+
+1. Before the evidence deep-dive, emit render_widget with preset execution_analysis_viewer, a stable
+   id of execution-analysis-{executionId}-{testCaseSlug}, and data containing executionId,
+   testCaseSlug, optional label/status/environment/applicationName, and analyzing: true. The widget
+   fetches its own frames and evidence; never place frames in the widget payload.
+2. Call playwright_analyze_frames_vision with executionId, testCaseSlug and locale, without
+   resourceNames, while gathering the remaining evidence.
+3. Always re-emit the SAME widget id with the returned analysis. Copy analysis fields and map evidence to
+   analysis.diagnostics. Omit analyzing so the scan stops and findings attach to their frames.
+4. If frames are absent, visual analysis fails, or the analysis payload is rejected, re-emit the SAME
+   id with only executionId and testCaseSlug. Then continue the text diagnosis with the remaining
+   evidence and name the missing visual source.
+5. Once analyzing: true was emitted, the turn cannot finish until the same id is re-emitted through
+   step 3 or 4. Never leave the scan animation running after the analysis ends.
+6. When the widget submits action: analyze_frames, rerun playwright_analyze_frames_vision using its
+   authoritative locale and re-emit the same id. Analyze the whole selected test execution; do not
+   invent resourceNames from the selected frame.
+
+Frame timestamps are sample positions, not state durations. Do not infer duration by subtracting
+frames or claim visual evidence that the tool did not return.
+
+## Reach the diagnosis`)
+  }
   if (skill.name === 'voidr-generate') {
     content = replaceSection(content, '### Three validation runs, and then stop', '## 7.',
       `### Three validation runs, and then offer delivery\n\n${DSH_VALIDATION_DELIVERY}`)
@@ -109,7 +147,7 @@ Preserve credential placeholders and all evidence/provenance requirements below.
   }
   for (const [from, to] of Object.entries(replacements)) content = content.replaceAll(from, to)
   content = content.replaceAll('`ask_user`', '`ask_user_question`')
-  const rules = `DSH HOST CONTRACT (replaces host-specific commands, never the original evidence or scope requirements):
+  const authoringRules = `DSH HOST CONTRACT (replaces host-specific commands, never the original evidence or scope requirements):
 - The Service-authorized session binding is immutable. Call assistant_workspace_bind_test_plan before checkout.
 - Workspace tools take assistantSessionId as sessionId, not a filesystem path or repository URL. prepare/context_refresh take environmentSlug when selected; never fabricate IDs.
 - prepare runs the original context bootstrap, link/project validation, scaffold and environment preparation in the DSH session directory. Handle needsEnvironmentSelection using ask_user_question.
@@ -124,5 +162,18 @@ Preserve credential placeholders and all evidence/provenance requirements below.
 - Use only credentials passed by the Service to child processes, never local credential stores, and never print or read .env values.
 - Do not call legacy Hive automation. DSH owns code and its session directory.
 `
+  const failureAnalysisRules = `DSH HOST CONTRACT (replaces host-specific commands, never the original evidence requirements):
+- The Service supplies the organization Service Account. Never run interactive login or request credentials from the user.
+- Treat Monitor and Home context as lookup hints. Validate execution, application, Test Plan and case with Voidr read tools in this turn.
+- For one exact execution and test, show execution_analysis_viewer while the ClickHouse-backed visual analysis runs, then always settle the same widget id with results or the evidence-only fallback.
+- This skill diagnoses only. Do not bind a workspace, edit files, deploy, run tests, or trigger self-healing while it is active.
+- If the user explicitly asks to correct the test, finish the diagnosis and load voidr-automate, voidr-generate and voidr-execute before binding or editing.
+- Correction validation runs only on Voidr infrastructure through assistant_workspace tools, after the confirmations owned by the authoring skills. Never run Playwright in the DSH pod.
+- Defect and tag mutations remain available only behind their own explicit confirmation and canWrite: true read-back rules below.
+- Use ask_user_question for unresolved choices. Never rely on host-specific hooks, slash commands or authorization phrases.
+- Every platform fact must come from a read tool in this turn. Never treat a UI hint, old message or local file as authoritative.
+- Never call legacy Hive automation or start a Hive process.
+`
+  const rules = skill.name === 'voidr-failure-analysis' ? failureAnalysisRules : authoringRules
   return { ...skill, content: `${rules}\n\n${content}`, provider: 'voidr-plugin' }
 }

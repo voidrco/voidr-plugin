@@ -6,6 +6,33 @@ import { loadDshPluginSkills } from '../adapters/dsh/plugin-skills.mjs'
 import { AGENT_OWNED_AUTHORING_TOOLS } from '../core/policies/agent-owned-authoring.mjs'
 import { interactiveTestDevelopmentPrompt } from '../core/workflow/interactive-test-development.mjs'
 import { loadPolicy } from '../scripts/lib/policy.mjs'
+import { DSH_VALIDATION_DELIVERY } from '../core/workflow/validation-delivery.mjs'
+
+test('DSH proactively offers delivery at the attempt limit or user stop across every entry point', () => {
+  const skills = Object.fromEntries(loadDshPluginSkills().map(skill => [skill.name, skill.content]))
+  for (const content of [skills['voidr-generate'], skills['voidr-execute'], interactiveTestDevelopmentPrompt()]) {
+    assert.ok(content.includes(DSH_VALIDATION_DELIVERY))
+    for (const text of ['at most three runs', 'including resumed turns',
+      'In that same turn', 'automate-promote', 'automate-promote-live',
+      'If the user already declined extra attempts', 'NOT_VALIDATED',
+      'unvalidatedApproval', 'budget_exhausted', 'user_stopped',
+      'Never reuse a previous version', 'Without informed approval']) assert.ok(content.includes(text), text)
+    assert.doesNotMatch(content, /No test verdict means no code publication|Do not offer LIVE from it|no executed tests is not eligible|canceled runs or no test verdict are not/)
+  }
+  for (const text of ['Ao encerrar as tentativas', 'NOT_VALIDATED', 'unvalidatedApproval',
+    'Nunca invente nem altere o veredito', 'não ofereça outra nem execute novamente',
+    'Não espere a pessoa pedir', 'reason: "user_stopped"', 'Nunca reutilize o ID']) {
+    assert.ok(skills['voidr-automate'].includes(text), text)
+  }
+  assert.doesNotMatch(skills['voidr-automate'], /sem veredito não permite publicação/)
+  assert.doesNotMatch(skills['voidr-execute'], /produced a PASSED or diagnosed FAILED validation verdict, only/)
+})
+
+test('unvalidated delivery adaptation does not relax the original plugin host rules', () => {
+  const execute = readFileSync(new URL('../skills/voidr-execute/SKILL.md', import.meta.url), 'utf8')
+  assert.match(execute, /Do not offer LIVE from it/)
+  assert.doesNotMatch(execute, /unvalidatedApproval/)
+})
 
 test('DSH registers authoring skills and canonical context/generate/execute', () => {
   const skills = loadDshPluginSkills()

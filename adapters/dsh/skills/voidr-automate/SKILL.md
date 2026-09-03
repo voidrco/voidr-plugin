@@ -104,20 +104,53 @@ um caso representativo; com sucesso, execute os restantes juntos. Limite a três
 validações por caso e duas correções da mesma falha; outra rodada exige pedido
 do usuário. Diagnostique pela timeline, DOM e trace, não só pela mensagem.
 
+### Ao encerrar as tentativas
+
+Conte as execuções por caso em toda a conversa, inclusive ao retomar e quando a
+causa muda. Polling não conta como tentativa. Ao atingir três execuções, repetir
+duas correções sem resolver a mesma falha, ou o usuário pedir para parar, não
+agende mais execuções nem faça uma correção extra sem pedido. Uma extensão
+precisa de autorização explícita e limitada; não reinicia o contador.
+
+Nesse mesmo turno, mostre o resumo de entrega: tentativas e links, diagnóstico,
+risco restante, versão executada e diff atual. Diferencie `PASSED`, `FAILED` e
+`NOT_VALIDATED` por caso; um build verde não valida o comportamento do teste.
+Se houve edição após a execução, o resultado anterior não vale para esse código.
+Nunca invente nem altere o veredito da execução para liberar publicação.
+
+Chame `ask_user_question` com `automate-promote` para oferecer publicar com o
+risco informado ou manter o trabalho sem publicar. Não espere a pessoa pedir
+deploy e não encerre apenas reportando falha. Se ela já recusou mais tentativas,
+não ofereça outra nem execute novamente. Parar tentativas não autoriza upload,
+publicação, LIVE ou Git. Sem aprovação, preserve os arquivos e não publique.
+
 ## 4. Entregar
 
 Publicar código, promover tags e publicar no Git são três decisões separadas:
 
-1. **Publicar o código:** use `assistant_workspace_deploy_latest` somente após
-   uma execução concluída com veredito dos testes (passou ou falhou após diagnóstico)
-   e confirmação via `ask_user_question` com o ID `automate-promote`.
-   Mostre a versão executada e o diff final antes de perguntar. Informe
-   `confirm: true`, `executionId` e, em caso de falha, `failureDiagnosis`.
-   Execução cancelada ou sem veredito não permite publicação. Não reconstrua a versão.
+1. **Publicar o código:** ofereça `assistant_workspace_deploy_latest` ao encerrar
+   as tentativas, mesmo com falha, usando `ask_user_question` com `automate-promote`.
+   Mostre a versão e o diff final antes de perguntar. Para o candidato exato que
+   passou ou falhou, informe `confirm: true`, `executionId` e, se falhou,
+   `failureDiagnosis`. Não exija verde nem outra execução só para publicar.
+   Se o código mudou depois da execução, não publique o candidato antigo como se
+   contivesse as correções: informe `NOT_VALIDATED`. Após consentimento para upload,
+   use `assistant_workspace_deploy_validation` para build e upload do código atual,
+   sem chamar `assistant_workspace_run_validation`. Build ou upload com erro ainda
+   impede publicação. Congele a versão retornada e peça consentimento para publicar
+   essa versão sem validação concluída, informando falhas anteriores e novas edições.
+   Envie `unvalidatedApproval: { confirm: true, reason: "budget_exhausted", explanation: "..." }`
+   ao atingir três tentativas; use `reason: "user_stopped"` quando o usuário decidir
+   parar antes. `explanation` deve registrar o risco explicado e a ausência de validação.
+   Omita `executionId` se essa versão nunca rodou; se foi cancelada ou não teve
+   veredito, use somente seu próprio ID e essa aprovação. Confirme o cancelamento
+   de uma execução em andamento antes de prosseguir. Nunca reutilize o ID de uma
+   versão anterior. Não reconstrua nem edite a versão depois da aprovação.
    Essa ferramenta atualiza a release de código, não as tags dos casos.
    `status: promoted` ou `alreadyPublished: true` confirma somente o código publicado;
    `caseTagsChanged: false` não é erro e não significa que os casos estejam LIVE.
-2. **Promover DEV → LIVE:** após confirmar a publicação, leia as tags atuais com
+2. **Promover DEV → LIVE:** ofereça esta decisão após confirmar a publicação,
+   inclusive com testes falhando ou não validados, explicando o risco. Leia as tags atuais com
    `test_plans_get_test_plan`. Se os casos já estiverem LIVE, informe isso sem nova escrita.
    Caso contrário, explique quais casos passarão a ser monitorados e elegíveis para
    self-healing. Peça confirmação separada via `ask_user_question` com o ID
@@ -141,7 +174,7 @@ Publicar código, promover tags e publicar no Git são três decisões separadas
 
 Se a publicação de código falhar, não avance para a promoção de tags. Consulte o
 estado antes de propor uma nova tentativa. Se retornar `alreadyPublished: true`,
-continue da decisão de tags, sem novo upload. Preserve o mesmo candidato executado.
+continue da decisão de tags, sem novo upload. Preserve o mesmo candidato aprovado.
 
 Finalize com casos implementados, resultado da última validação, versão publicada,
 `current_tag` lido de cada caso e estado separado do commit/push.

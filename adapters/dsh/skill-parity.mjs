@@ -1,3 +1,5 @@
+import { DSH_VALIDATION_DELIVERY } from '../../core/workflow/validation-delivery.mjs'
+
 const replacements = {
   voidr_context_bootstrap: 'assistant_workspace_prepare',
   voidr_context_refresh: 'assistant_workspace_context_refresh',
@@ -42,6 +44,8 @@ relinking, scaffolding or pulling secrets. A changed environment requires prepar
 `)
   }
   if (skill.name === 'voidr-generate') {
+    content = replaceSection(content, '### Three validation runs, and then stop', '## 7.',
+      `### Three validation runs, and then offer delivery\n\n${DSH_VALIDATION_DELIVERY}`)
     content = replaceSection(content, '## 0b.', '## 1.', `## 0b. Validation runs on the platform
 
 The user selected platform execution for this DSH product. Do not offer execution on this machine.
@@ -63,11 +67,20 @@ Preserve credential placeholders and all evidence/provenance requirements below.
       '- assistant_workspace_run_validation — approved remote cases only; inspect returned execution evidence, never execute a browser in the pod.')
   }
   if (skill.name === 'voidr-execute') {
+    content = replaceSection(content, '4. **Branch on the pilot verdict**:', '6. **Local checkpoint**', `4. **Branch on the pilot verdict**:
+   - PASSED: run remaining approved targets together within the agreed scope.
+   - FAILED: diagnose; correct and retry only within the three-run budget and repeated-failure limit.
+   - Canceled or zero-verdict: record NOT_VALIDATED, never PASSED.
+   - Budget exhausted or user stops: follow the delivery contract below in this same turn;
+     do not require another execution or wait for a manual deployment request.
+5. Read the evidence before offering failed code. Keep execution results distinct from later edits.
+`)
     content = replaceSection(content, '6. **Local checkpoint**', '## Writing the confirmation gates', `6. **Code publication**: after a completed test verdict, offer to publish the SAME candidate as the latest code release.
    PASSED is eligible. FAILED is eligible only after diagnosing it and explaining the failure
-   to the user. Cancellation, timeout without test verdict, or no executed tests is not eligible.
+   to the user. Missing validation is NOT_VALIDATED and needs unvalidatedApproval as defined below.
    Call assistant_workspace_deploy_latest only after explicit user confirmation, carrying
-   confirm: true, executionId and failureDiagnosis for a failed run. Do not rebuild or require a Git push.
+   confirm: true, executionId and failureDiagnosis for a failed run, or the explicit unvalidated approval.
+   Do not rebuild a frozen candidate or require a Git push. New edits need their own build, upload and consent.
    This publishes code only: status: promoted and alreadyPublished: true do not mean case tags are LIVE.
    caseTagsChanged: false is expected. An already published version needs no rebuild or repeated upload.
 7. **Case promotion** is separate: follow "Promoting a case to LIVE" below. Read current_tag,
@@ -83,11 +96,14 @@ Preserve credential placeholders and all evidence/provenance requirements below.
    Respect branch protections: never force push or silently fall back to a feature branch.
    Never use the local user's GitHub credentials or start Hive.
    A Git failure does not invalidate a successful code publication or confirmed case tags.
+\n${DSH_VALIDATION_DELIVERY}
 `)
     content = replaceSection(content, '`voidr_create_validation_execution` (validation) takes', 'Always end the report',
       '`assistant_workspace_run_validation` takes sessionId, environment, codebaseVersion and explicit targets. Use the version and targets returned by assistant_workspace_deploy_validation. The Service supplies applicationId/testPlanId and derives a stable idempotency key; do not fabricate those fields.\n\n')
     content = replaceSection(content, 'Track the execution until a terminal state', '### When to offer cancelling',
       'Track the execution with assistant_workspace_validation_status(sessionId, executionId), at least 30 seconds between polls. Continue until a terminal verdict and report the execution link.\n\n')
+    content = replaceSection(content, '- `voidr_release_deploy_live`', '- `voidr_repository_sync_github`',
+      '- assistant_workspace_deploy_latest — publishes the exact approved version with its real validation status: PASSED, diagnosed FAILED, or explicitly approved NOT_VALIDATED. No rebuild after consent and no Git side effect.')
     content = content.replace(/- `voidr_repository_sync_github`[\s\S]*?(?=- `executions_get_execution`)/,
       '- assistant_workspace_publish — final commit and push to the repository default branch after explicit user approval; Git delivery is independent of LIVE.\n')
   }
@@ -101,7 +117,7 @@ Preserve credential placeholders and all evidence/provenance requirements below.
 - assistant_workspace_build is build-only. deploy_validation also builds and uploads; it needs upload approval and returns codebaseVersion and exact targets.
 - All execution stays on Voidr infrastructure, never Playwright in this pod. Use assistant_workspace_validation_status to read the correct execution environment; never treat the local Service DB as proof of a staging result.
 - Ask with ask_user_question for unresolved choices and each publication decision; render_widget owns session recording and uploads. Do not require Claude/Copilot hooks or authorization phrases.
-- Failed but diagnosed test verdicts may be offered for code publication after explicit approval. Pass confirm: true, executionId and failureDiagnosis to assistant_workspace_deploy_latest. No test verdict means no code publication. Never publish a different rebuilt version.
+- Proactively offer code publication at the validation budget or user stop. Failed but diagnosed tests use confirm: true, executionId and failureDiagnosis. Unvalidated code uses explicit unvalidatedApproval after disclosure, build and upload of that exact code; never borrow another version's execution or invent PASSED. Follow the validation budget and delivery contract in voidr-generate/voidr-execute.
 - Publishing code does not promote case tags. Offer DEV to LIVE separately after reading current_tag, with explicit consent and canWrite: true; use test_plans_update_test_case_tag and read back the persisted tags. alreadyPublished: true confirms code only; never repeat its upload to fix a tag failure.
 - Every platform fact must come from a read tool or a context refresh in this turn, never folder names, memory or a manifest left from an earlier conversation. Preserve approved AAA, scope and evidence provenance.
 - Use only credentials passed by the Service to child processes, never local credential stores, and never print or read .env values.

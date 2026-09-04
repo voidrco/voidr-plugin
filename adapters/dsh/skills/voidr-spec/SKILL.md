@@ -15,6 +15,12 @@ Agrupe em uma única chamada as perguntas que já puder fazer, sempre com IDs
 estáveis. A mensagem comum do chat não substitui essa ferramenta porque não
 pausa o runtime. Não repita uma pergunta que a pessoa já respondeu claramente.
 
+Para aplicação ainda não confirmada, use `app_target_picker` com
+`includeNewOption: true`, incluindo **Nova aplicação**. Se a pessoa escolher
+`__new_app__`, pedir um produto novo ou não houver aplicações, use
+`app_registration` e aguarde `app_registered`; valide o `applicationId`
+retornado antes de continuar. Não substitua esses widgets por `ask_user_question`.
+
 ## 0. Entrevista da skill
 
 Antes de analisar as evidências, resolva com ferramentas de leitura as opções
@@ -52,8 +58,9 @@ ou documento em nome da pessoa.
 2. Liste as jornadas com `test_plans_list_modules` e selecione a exata. Um
    módulo da plataforma é uma jornada neste fluxo.
 3. Leia a versão atual com `test_plans_get_module_spec`.
-4. Quando não houver destino da UI e existir mais de uma opção, use
-   `ask_user_question`. Nunca invente IDs ou peça para a pessoa digitá-los.
+4. Quando o plano ou a jornada ainda estiverem ambíguos, use
+   `ask_user_question`; a aplicação usa os widgets acima. Nunca invente IDs
+   ou peça para a pessoa digitá-los.
 
 ## 2. Reunir evidência
 

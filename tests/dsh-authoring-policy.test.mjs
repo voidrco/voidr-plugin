@@ -223,6 +223,25 @@ test('DSH uses product widgets for recording and file evidence', () => {
   assert.match(byName['voidr-automate'].content, /document_input/)
 })
 
+test('DSH offers product registration before resolving a new Test Plan destination', () => {
+  for (const surface of ['home', 'journeys', 'spec', 'journey-overview']) {
+    const prompt = interactiveTestDevelopmentPrompt({ hint: { surface } })
+    for (const required of [
+      'app_target_picker', 'includeNewOption: true', 'even when only one application exists',
+      'explicitly selected application', '__new_app__', 'app_registration',
+      'Cadastrar nova aplicação', 'no applications exist', 'do not list existing applications first',
+      'stop and wait for the widget submission', 'action: "app_registered"',
+      'validate that application with Voidr read tools', 'If cancelled or not detected',
+      'never an applicationId', 'do not register the application through an API'
+    ]) assert.ok(prompt.includes(required), `${surface}: ${required}`)
+  }
+  for (const skill of loadDshPluginSkills().filter(skill => ['voidr-spec', 'voidr-journeys'].includes(skill.name))) {
+    for (const required of ['app_target_picker', 'includeNewOption: true', 'app_registration', 'app_registered']) {
+      assert.ok(skill.content.includes(required), `${skill.name}: ${required}`)
+    }
+  }
+})
+
 test('automate follows server-selected repository access rather than assuming a customer connector', () => {
   const automate = loadDshPluginSkills().find(skill => skill.name === 'voidr-automate').content
   for (const value of ['repositoryAccess.mode', 'voidr_managed', 'organization_connector', 'unsupported', 'voidrco']) {

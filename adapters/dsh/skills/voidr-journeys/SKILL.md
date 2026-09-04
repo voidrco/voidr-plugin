@@ -15,6 +15,12 @@ Agrupe em uma única chamada as perguntas que já puder fazer, sempre com IDs
 estáveis. A mensagem comum do chat não substitui essa ferramenta porque não
 pausa o runtime. Não repita uma pergunta que a pessoa já respondeu claramente.
 
+Para aplicação ainda não confirmada, use `app_target_picker` com
+`includeNewOption: true`, incluindo **Nova aplicação**. Se a pessoa escolher
+`__new_app__`, pedir um produto novo ou não houver aplicações, use
+`app_registration` e aguarde `app_registered`; valide o `applicationId`
+retornado antes de continuar. Não substitua esses widgets por `ask_user_question`.
+
 ## 0. Entrevista da skill
 
 Antes de inferir qualquer cenário, resolva com ferramentas de leitura as opções

@@ -4,6 +4,26 @@ import { interactiveTestDevelopmentPrompt } from '../../core/workflow/interactiv
 import { loadDshPluginSkills } from './plugin-skills.mjs'
 
 const CONTEXT_EVENT_TYPE = 'voidr/project-context-hint'
+const SPEND_CONTEXTS_KEY = Symbol.for('voidr.dsh.litellm-contexts.v1')
+const SPEND_CONTEXT_LIMIT = 10_000
+const SPEND_SUBACTION_BY_SURFACE = {
+  home: 'dsh-general',
+  spec: 'dsh-spec',
+  journeys: 'dsh-journeys',
+  'journey-overview': 'dsh-journey-overview',
+  automate: 'dsh-automate',
+  monitor: 'dsh-failure-analysis'
+}
+
+function registerSpendContext(sessionId, surface) {
+  const subaction = SPEND_SUBACTION_BY_SURFACE[surface]
+  if (!subaction) return
+  const root = globalThis
+  const registry = root[SPEND_CONTEXTS_KEY] ??= new Map()
+  registry.delete(String(sessionId))
+  registry.set(String(sessionId), { surface, subaction })
+  if (registry.size > SPEND_CONTEXT_LIMIT) registry.delete(registry.keys().next().value)
+}
 
 function contextHint(events) {
   return events.findLast(event => event.type === CONTEXT_EVENT_TYPE)?.data
@@ -60,6 +80,7 @@ export function apply(ctx) {
             .map(key => [key, value[key]])
         )
         if (Object.keys(hint).length > 0) agent.session.append(CONTEXT_EVENT_TYPE, hint)
+        registerSpendContext(agent.id, hint.surface)
         return { kind: 'success', text: 'Assistant context registered' }
       } catch {
         return { kind: 'error', text: 'Invalid assistant context' }

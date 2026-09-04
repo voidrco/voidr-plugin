@@ -211,6 +211,33 @@ test('automate separates code publication, case tags and Git delivery', () => {
   assert.match(automate, /não avance para a promoção de tags/)
 })
 
+test('DSH cannot finish after publishing while implemented failed cases remain silently in DEV', () => {
+  const skills = Object.fromEntries(loadDshPluginSkills().map(skill => [skill.name, skill.content]))
+  const entryPoints = [skills['voidr-generate'], skills['voidr-execute'],
+    interactiveTestDevelopmentPrompt()]
+
+  for (const content of entryPoints) {
+    for (const required of [
+      'implemented case', 'FAILED', 'NOT_VALIDATED', 'automate-promote-live',
+      'promote all implemented cases', 'promote only PASSED cases', 'keep every current tag'
+    ]) assert.ok(content.toLowerCase().includes(required.toLowerCase()), required)
+    assert.match(content, /before (?:it can emit a final delivery|final delivery)|antes de encerrar a entrega/)
+    assert.match(content, /generic approval to publish code does not approve LIVE|Aprovação para publicar código[\s\S]*não aprova[\s\S]*LIVE/)
+    assert.match(content, /Never silently promote only PASSED cases|Nunca promova silenciosamente apenas os aprovados/)
+    assert.match(content, /failed cases as ineligible/)
+  }
+
+  const automate = skills['voidr-automate']
+  for (const required of [
+    'todos os casos implementados', '`FAILED` e `NOT_VALIDATED`', 'automate-promote-live',
+    'promover todos os casos implementados', 'promover somente os `PASSED`',
+    'manter todas as tags atuais', 'antes de encerrar a entrega'
+  ]) assert.ok(automate.includes(required), required)
+  assert.match(automate, /Aprovação para publicar código[\s\S]*não aprova[\s\S]*LIVE/)
+  assert.match(automate, /Nunca promova silenciosamente apenas os aprovados/)
+  assert.match(automate, /reprovados são[\s\S]*“não elegíveis”/)
+})
+
 test('DSH uses product widgets for recording and file evidence', () => {
   const prompt = interactiveTestDevelopmentPrompt()
   assert.match(prompt, /session_coverage_picker/)

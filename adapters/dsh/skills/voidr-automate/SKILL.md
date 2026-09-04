@@ -157,17 +157,35 @@ Publicar código, promover tags e publicar no Git são três decisões separadas
    Se a ativação falhar após publicar o código, informe o resultado parcial e
    retome a mesma versão aprovada, sem reconstruir nem fazer outro upload.
    Nunca anuncie plano ativo sem confirmação.
-2. **Promover DEV → LIVE:** ofereça esta decisão após confirmar a publicação,
-   inclusive com testes falhando ou não validados, explicando o risco. Leia as tags atuais com
-   `test_plans_get_test_plan`. Se os casos já estiverem LIVE, informe isso sem nova escrita.
-   Caso contrário, explique quais casos passarão a ser monitorados e elegíveis para
-   self-healing. Peça confirmação separada via `ask_user_question` com o ID
-   `automate-promote-live`. Confirme `canWrite: true` e use
-   `test_plans_update_test_case_tag` uma vez por caso confirmado. Releia o plano
-   e informe o `current_tag` persistido de cada caso. Nunca anuncie LIVE sem essa leitura.
-   Se a pessoa recusar, preserve as tags e informe que o código está publicado, mas
-   os casos não foram promovidos. Se faltar permissão ou a mudança falhar, informe
-   quais casos não mudaram; não repita o deploy nem reconstrua o candidato para corrigir tags.
+2. **Promover DEV → LIVE:** depois de confirmar a publicação, leia as tags atuais
+   com `test_plans_get_test_plan` e classifique todos os casos implementados. Um caso
+   está implementado quando o código publicado contém um teste executável para ele;
+   isso inclui `FAILED` e `NOT_VALIDATED`. Exclua apenas stubs deliberadamente
+   incompletos, pulados ou não executáveis.
+
+   Se algum caso implementado não estiver LIVE, é obrigatório chamar
+   `ask_user_question` com o ID `automate-promote-live` antes de encerrar a entrega.
+   Falha ou ausência de validação muda o alerta de risco, não a elegibilidade para
+   LIVE. Nunca promova silenciosamente apenas os aprovados, diga que reprovados são
+   “não elegíveis”, nem deixe reprovados em DEV sem a escolha explícita da pessoa.
+   Aprovação para publicar código, inclusive “pode finalizar publicando”, não aprova
+   tags LIVE.
+
+   Nomeie os casos falhando ou não validados e ofereça exatamente estes três caminhos:
+   promover todos os casos implementados para LIVE; promover somente os `PASSED`;
+   ou manter todas as tags atuais. Explique que LIVE os torna monitorados e elegíveis
+   para self-healing sem mudar o veredito. Confirme `canWrite: true`, use
+   `test_plans_update_test_case_tag` somente nos casos da opção escolhida e releia o
+   plano. Informe o `current_tag` persistido de cada caso afetado.
+   Nunca anuncie LIVE sem essa leitura.
+
+   Só dispense a pergunta se todos os casos implementados já estiverem LIVE, se a
+   pessoa já tiver feito uma escolha explícita de LIVE cobrindo também os falhos e
+   não validados, ou se a publicação do código falhou ou foi recusada. Se ela optar
+   por manter ou promover apenas aprovados, preserve exatamente as demais tags e
+   registre essa escolha. Se a pessoa recusar, preserve as tags. Se faltar permissão
+   ou a mudança falhar, informe quais
+   casos não mudaram; não repita o deploy nem reconstrua o candidato para corrigir tags.
 3. **Publicar no Git:** faça commit e push com `assistant_workspace_publish`
    somente após confirmação separada com o ID `automate-publish`.
    Esta é a etapa final: publique sempre na branch principal (default) do

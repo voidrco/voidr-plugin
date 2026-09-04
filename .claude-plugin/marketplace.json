@@ -5,14 +5,14 @@
   },
   "metadata": {
     "description": "Official Voidr plugins for Claude Code",
-    "version": "0.2.22"
+    "version": "0.2.24"
   },
   "plugins": [
     {
       "name": "voidr",
       "source": "./",
       "description": "Develop, deploy, and execute Voidr Playwright tests with MCP-backed application and Test Plan selection.",
-      "version": "0.2.22",
+      "version": "0.2.24",
       "author": {
         "name": "Voidr"
       },

@@ -1,8 +1,9 @@
-# Voidr Testing plugin for GitHub Copilot CLI and Claude Code
+# Voidr Testing plugin for DSH, GitHub Copilot CLI, and Claude Code
 
-One plugin, two hosts. The skills, the MCP bridge, the policy engine, and the
-gate hooks are shared; only the manifest, the hook wiring, and the plugin-root
-variable differ per host. See [Host support](#host-support).
+One plugin, three hosts. The policy and workflow contracts are shared. DSH
+loads its authoring skills and enforcement through the runtime adapter;
+Copilot and Claude share the MCP bridge, manifests, and gate hooks. See
+[Host support](#host-support).
 
 This plugin guides a developer from “I want to develop tests in Voidr” through:
 
@@ -32,18 +33,16 @@ on Claude Code.
 
 ## Host support
 
-| | GitHub Copilot CLI | Claude Code |
-|---|---|---|
-| Plugin name | `copilot` | `voidr` |
-| Manifest | `plugin.json` | `.claude-plugin/plugin.json` |
-| Marketplace | `.github/plugin/marketplace.json` | `.claude-plugin/marketplace.json` |
-| Hooks | `hooks.json` | `hooks/hooks.json` |
-| MCP config | `.mcp.json` | `mcp/claude.json` |
-| Plugin root | `${PLUGIN_ROOT}` | `${CLAUDE_PLUGIN_ROOT}` |
-| Skill call | `/copilot:voidr-setup` | `/voidr:voidr-setup` |
+| | DSH | GitHub Copilot CLI | Claude Code |
+|---|---|---|---|
+| Plugin name | `voidr-agent-plugin-dsh` | `copilot` | `voidr` |
+| Entry point | `adapters/dsh/index.mjs` | `plugin.json` | `.claude-plugin/plugin.json` |
+| Skills | `adapters/dsh/skills/` | `skills/` | `skills/` |
+| MCP | Assistant Runtime scope | `.mcp.json` | `mcp/claude.json` |
+| Skill call | native `skill` tool | `/copilot:voidr-setup` | `/voidr:voidr-setup` |
 
-Everything else is shared: `skills/`, `scripts/`, `policy/`, and
-`templates/`. `scripts/lib/host.mjs` detects the host from the hook payload
+Copilot and Claude share `skills/`, `scripts/`, `policy/`, and `templates/`.
+`scripts/lib/host.mjs` detects the host from the hook payload
 (Claude stamps `hook_event_name`; Copilot does not) and serializes each hook's
 output in that host's dialect. Set `VOIDR_PLUGIN_HOST=claude|copilot` to force
 it.
@@ -61,8 +60,14 @@ Three host differences are worth knowing when changing hook code:
   the policy allowlist and every gate keep matching. Breaking that resolution
   silently opens every gate — `tests/claude-host.test.mjs` covers it.
 
-`npm run validate` asserts both hosts stay in step: same version, same Voidr
-endpoints, and every hook event wired to its script.
+DSH registers three runtime skills from this repository: `voidr-spec` owns
+journey-spec authoring, `voidr-journeys` owns journey and AAA-scenario creation,
+and `voidr-automate` owns repository test implementation. The adapter rejects
+the Service tools that previously delegated these actions to Hive or to a
+Service-side LLM. Reads and deterministic Test Plan writes remain available.
+
+`npm run validate` checks both manifest-based hosts and the shared policy;
+the DSH adapter and skill contracts are covered by the test suite.
 
 ## Local development
 

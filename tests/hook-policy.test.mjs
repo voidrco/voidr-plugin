@@ -749,7 +749,12 @@ for (const defectTool of [
 for (const forbidden of [
   'agent_jobs_trigger_automation',
   'agent_jobs_trigger_hive_automation',
+  'coverage_generate_from_sessions',
+  'coverage_generate_from_documentation',
+  'coverage_apply_inferred_cases',
+  'recording_interpret_journey',
   'test_plan_generation_generate_test_plan_draft',
+  'test_plan_generation_apply_test_plan_draft',
   'failure_reports_self_healing_trigger',
   'system_batch_execute'
 ]) {
@@ -761,7 +766,7 @@ for (const forbidden of [
       toolArgs: {}
     })
     assert.equal(output.permissionDecision, 'deny')
-    assert.match(output.permissionDecisionReason, /Hive process/i)
+    assert.match(output.permissionDecisionReason, /outside the plugin/i)
   })
 }
 

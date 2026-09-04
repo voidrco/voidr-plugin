@@ -223,6 +223,19 @@ test('DSH uses product widgets for recording and file evidence', () => {
   assert.match(byName['voidr-automate'].content, /document_input/)
 })
 
+test('DSH persists approved environment URLs before offering new recording', () => {
+  const prompt = interactiveTestDevelopmentPrompt()
+  for (const required of [
+    'applications_list_environments', 'applications_create_environment',
+    'applications_update_environment', 'applicationId, name and applicationUrl',
+    'applicationId, envSlug and applicationUrl', 'explicitly confirm the persistent change',
+    'passing targetUrl alone does not register anything', 'read environments before retrying',
+    'Existing-session selection does not require creating a new environment',
+    'Missing environment setup is the only prerequisite exception',
+  ]) assert.ok(prompt.includes(required), required)
+  assert.doesNotMatch(prompt, /selected “Gravar nova sessão”, render/)
+})
+
 test('DSH offers product registration before resolving a new Test Plan destination', () => {
   for (const surface of ['home', 'journeys', 'spec', 'journey-overview']) {
     const prompt = interactiveTestDevelopmentPrompt({ hint: { surface } })

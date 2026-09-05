@@ -1,6 +1,5 @@
 {
   "name": "voidr",
-  "displayName": "Voidr Testing",
   "description": "Develop, deploy, and execute Voidr tests, analyze failures, and generate authenticated Echo monitoring reports.",
   "version": "0.2.23",
   "author": {

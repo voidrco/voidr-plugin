@@ -15,7 +15,7 @@
         "VOIDR_MCP_ORIGIN": "https://platform.voidr.co",
         "VOIDR_TOKEN_URL": "https://api.voidr.co/v1/service-accounts/token"
       },
-      "timeout": 360000
+      "timeout": 1800000
     }
   }
 }

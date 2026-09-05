@@ -64,6 +64,20 @@ function isConnectPrompt(prompt) {
   )
 }
 
+function isEchoMonitoringReportPrompt(prompt) {
+  const text = normalizePrompt(prompt)
+  const action =
+    /\b(?:gerar?|gere|criar?|crie|montar?|monte|enviar?|envie|generate|create|send)\b/.test(
+      text
+    )
+  const report = /\b(?:reports?|relatorios?|digests?)\b/.test(text)
+  const echoContext =
+    /\bvoidr\s*echo\b|\becho\b|\bassistente\s+de\s+voz\b|\bmonitoramento\s+(?:diario|semanal|mensal)\b/.test(
+      text
+    )
+  return action && report && echoContext
+}
+
 // Correcting an implemented case is the same work as implementing it, so it
 // belongs to /voidr-generate. Without a route the model edited specs on its
 // own after a failure analysis — outside the rules that make the change safe
@@ -116,6 +130,16 @@ voidr_workspace_git_context tool
 (never cd or run git in the terminal — workspace paths with spaces break shell
 quoting). Render every workflow choice with the native ask_user selectable
 options when available; free text is only a fallback.`
+  }
+
+  if (isEchoMonitoringReportPrompt(prompt)) {
+    return `Use the /voidr-echo-report skill for this request. Load it before
+calling any tool. Start with voidr_auth_status, resolve the application only
+from echo_list_applications, and resolve a complete civil-day period. Report
+generation sends an email: show the exact application, inclusive dates,
+timezone, artifacts, and signed-in recipient semantics; then stop for explicit
+confirmation. Call echo_generate_monitoring_report only on the separate
+confirmation turn, never pass a recipient, and never retry a timeout blindly.`
   }
 
   if (isDeployTestsPrompt(prompt) || isRunTestPlanPrompt(prompt)) {

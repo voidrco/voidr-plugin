@@ -23,6 +23,13 @@ Routing invariants:
 | `voidr_auth_select_organization` | `voidr-setup`, `voidr-context` | Apply the user's choice among accounts/organizations returned by `voidr_auth_status`. |
 | `voidr_auth_login` | `voidr-setup` only | Official browser login. No other skill may call it; they redirect to `/copilot voidr-setup`. |
 
+## Echo monitoring reports
+
+| Tool | Owner skills | Purpose |
+| --- | --- | --- |
+| `echo_list_applications` | `voidr-echo-report` | Resolve the exact Echo application from the authenticated organization before proposing a report. |
+| `echo_generate_monitoring_report` | `voidr-echo-report` | After a separate explicit confirmation, generate and email the evidence-bound report for an inclusive range of complete civil days. Delivery is restricted to the authenticated member; the tool accepts no recipient address. |
+
 ## Applications
 
 | Tool | Owner skills | Purpose |

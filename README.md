@@ -1,4 +1,4 @@
-# Voidr Testing plugin for GitHub Copilot CLI and Claude Code
+# Voidr plugin for GitHub Copilot CLI and Claude Code
 
 One plugin, two hosts. The skills, the MCP bridge, the policy engine, and the
 gate hooks are shared; only the manifest, the hook wiring, and the plugin-root
@@ -16,6 +16,12 @@ This plugin guides a developer from “I want to develop tests in Voidr” throu
 8. creating an execution after a second confirmation;
 9. analyzing a failed execution from ClickHouse-backed Playwright evidence.
 
+It also exposes the authenticated Voidr Echo report workflow. Ask for a daily,
+weekly, monthly, or custom-period Echo monitoring report; the plugin resolves
+the application and complete civil-day range, presents the exact delivery for
+confirmation, then generates and emails the report to the signed-in member.
+The server deliberately accepts no arbitrary recipient address.
+
 The current build uses Voidr production for browser authentication, application
 discovery, Test Plans, repository provisioning, deploy, and execution. Service
 Accounts use the standard production store at
@@ -29,6 +35,9 @@ and discarded after the account is created and validated.
 To run an already-automated plan without the development workflow, invoke
 `/copilot:voidr-execute` on Copilot, or `/voidr:voidr-execute`
 on Claude Code.
+
+To generate an Echo report explicitly, invoke `/copilot:voidr-echo-report` on
+Copilot, or `/voidr:voidr-echo-report` on Claude Code.
 
 ## Host support
 
@@ -237,8 +246,8 @@ default; the bridge sets `NODE_USE_ENV_PROXY=1` so Node 24+ honors
 
 ## Security
 
-The local MCP bridge exposes a small allowlist of application, Test Plan,
-execution, Playwright analytics, defect, and governance-tag tools. A
+The local MCP bridge exposes a small allowlist of Echo reporting, application,
+Test Plan, execution, Playwright analytics, defect, and governance-tag tools. A
 `preToolUse` hook independently blocks direct, nested, and shell-based
 attempts to dispatch Hive processes.
 

@@ -5,14 +5,14 @@
   },
   "metadata": {
     "description": "Official Voidr plugins for Claude Code",
-    "version": "0.2.22"
+    "version": "0.2.23"
   },
   "plugins": [
     {
       "name": "voidr",
       "source": "./",
-      "description": "Develop, deploy, and execute Voidr Playwright tests with MCP-backed application and Test Plan selection.",
-      "version": "0.2.22",
+      "description": "Develop, deploy, and execute Voidr tests, analyze failures, and generate authenticated Echo monitoring reports.",
+      "version": "0.2.23",
       "author": {
         "name": "Voidr"
       },
@@ -21,7 +21,9 @@
         "voidr",
         "playwright",
         "testing",
-        "test-plan"
+        "test-plan",
+        "echo",
+        "monitoring"
       ]
     }
   ]

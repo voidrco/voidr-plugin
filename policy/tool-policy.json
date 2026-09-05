@@ -1,6 +1,8 @@
 {
   "schemaVersion": 1,
   "safeRemoteTools": [
+    "echo_list_applications",
+    "echo_generate_monitoring_report",
     "applications_list_applications",
     "applications_get_application",
     "applications_list_environments",
@@ -61,6 +63,7 @@
     "defects_assign_defect"
   ],
   "writeRemoteTools": [
+    "echo_generate_monitoring_report",
     "test_plans_create_test_plan",
     "test_plans_update_test_plan",
     "test_plans_populate_test_plan",

@@ -101,7 +101,7 @@ const forbiddenTool = policy.forbiddenTools.find(name =>
 )
 if (forbiddenTool) {
   deny(
-    `Blocked by Voidr policy: ${forbiddenTool} can start or indirectly dispatch a Hive process.`
+    `Blocked by Voidr policy: ${forbiddenTool} can start a Hive process, delegate agent work outside the plugin, or depend on such a job.`
   )
 }
 

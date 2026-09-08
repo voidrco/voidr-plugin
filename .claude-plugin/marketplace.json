@@ -5,14 +5,14 @@
   },
   "metadata": {
     "description": "Official Voidr plugins for Claude Code",
-    "version": "0.2.23"
+    "version": "0.2.24"
   },
   "plugins": [
     {
       "name": "voidr",
       "source": "./",
       "description": "Develop, deploy, and execute Voidr tests, analyze failures, and generate authenticated Echo monitoring reports.",
-      "version": "0.2.23",
+      "version": "0.2.24",
       "author": {
         "name": "Voidr"
       },

@@ -136,6 +136,18 @@ test('authoring skills route persistence through deterministic Service tools', (
   assert.match(byName['voidr-journeys'].content, /test_plans_update_case/)
   assert.match(byName['voidr-automate'].content, /assistant_workspace_deploy_validation/)
   assert.match(byName['voidr-automate'].content, /assistant_workspace_run_validation/)
+  for (const text of [
+    'applications_get_environment_secrets',
+    'applications_add_environment_secret',
+    'automate-environment-credentials-{environmentSlug}'
+  ]) assert.ok(byName['voidr-automate'].content.includes(text), text)
+  assert.match(byName['voidr-automate'].content, /Salvar credenciais e\s+continuar/)
+  assert.match(byName['voidr-automate'].content, /Form.*genérico/)
+  assert.match(byName['voidr-automate'].content, /USUARIO_EMAIL[\s\S]*type: "text"/)
+  assert.match(byName['voidr-automate'].content, /USUARIO_SENHA[\s\S]*type: "password"/)
+  assert.match(byName['voidr-automate'].content, /já forneceu os valores[\s\S]*sem perguntar novamente/)
+  assert.match(byName['voidr-automate'].content, /Só prossiga[\s\S]*todas as chaves exigidas/)
+  assert.match(byName['voidr-automate'].content, /não execute a validação/)
 
   const prompt = readFileSync(
     new URL('../core/workflow/interactive-test-development.mjs', import.meta.url),

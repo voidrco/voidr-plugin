@@ -83,6 +83,43 @@ São permitidos Git, instalação local de dependências, build, lint e TypeScri
 dentro do workspace isolado. Nunca instale browsers nem execute Playwright
 localmente. Nunca leia ou exponha valores de `.env`.
 
+### Credenciais exigidas pelos testes
+
+Antes de publicar um candidato ou iniciar uma validação, levante as chaves
+`{{env.NOME}}` usadas pelo preflight e pelos casos selecionados. Consulte
+`applications_get_environment_secrets` para o ambiente aprovado e compare
+somente os nomes das chaves; a ferramenta nunca deve devolver os valores.
+
+Se alguma chave estiver ausente:
+
+1. Se a pessoa já forneceu os valores nesta conversa e pediu explicitamente
+   para salvá-los nesse ambiente, use esses valores sem perguntar novamente.
+2. Caso contrário, use `render_widget` com um `Form` genérico, ID estável
+   `automate-environment-credentials-{environmentSlug}` e um campo obrigatório
+   por chave ausente. Use `password` para senha, token, secret e API key; use
+   `text` para usuário ou e-mail. O botão deve dizer “Salvar credenciais e
+   continuar” e informar que os valores serão guardados como secrets do
+   ambiente e usados pelo runner. Não peça credenciais com
+   `ask_user_question` nem em uma pergunta comum do chat.
+
+   O `spec` deve usar o componente já existente, sem preset customizado. Por
+   exemplo, para `USUARIO_EMAIL` e `USUARIO_SENHA`, use `root: "credentials"`
+   e um elemento `credentials` do tipo `Form`, com `props.fields` contendo os
+   campos `{ key: "USUARIO_EMAIL", type: "text", required: true }` e
+   `{ key: "USUARIO_SENHA", type: "password", required: true }`. Substitua o
+   exemplo pelas chaves realmente ausentes e não inclua chaves já configuradas.
+3. Após a submissão, chame `applications_add_environment_secret` uma vez para
+   cada chave e para o ambiente aprovado. Nunca copie os valores para a
+   resposta, raciocínio, arquivos do teste, Arrange, Act ou Assert.
+4. Consulte `applications_get_environment_secrets` novamente. Só prossiga
+   quando todas as chaves exigidas aparecerem como configuradas. Se uma gravação
+   falhar, informe quais nomes continuam ausentes e não execute a validação.
+
+O envio do formulário autoriza apenas salvar aquelas chaves no ambiente
+mostrado. Não o trate como aprovação para upload, execução, publicação, LIVE ou
+Git. Credencial ausente é um pré-requisito corrigível, não uma falha do teste:
+nunca rode o preflight sabendo que uma chave exigida ainda não está configurada.
+
 ## 3. Validar e corrigir
 
 1. Revise o diff com `assistant_workspace_inspect`.

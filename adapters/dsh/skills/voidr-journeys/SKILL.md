@@ -49,7 +49,10 @@ dessas alternativas por conta própria. Depois da resposta:
   Faça isso na mesma rodada da seleção: não faça outra `ask_user_question`
   para pedir qual fluxo gravar, porque a jornada já resolvida entra em `flows`;
 - para **Usar sessões gravadas**, renderize o mesmo
-  `session_coverage_picker`, agora com as sessões existentes como opções;
+  `session_coverage_picker` com `sourceMode: existing_session` e passe em
+  `sessionIds` todas as sessões já associadas à jornada no contexto da UI.
+  Se listar outras sessões, passe-as em `sessions`; nunca renderize um seletor
+  vazio quando o contexto já trouxe sessões associadas;
 - para **Enviar documentação**, renderize `document_input` para o anexo real.
 
 Espere os widgets devolverem as evidências escolhidas antes de inferir. Não

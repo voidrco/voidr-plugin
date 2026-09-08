@@ -16,6 +16,8 @@
         "VOIDR_TOKEN_URL": "https://api.voidr.co/v1/service-accounts/token"
       },
       "tools": [
+        "echo_list_applications",
+        "echo_generate_monitoring_report",
         "voidr_environment_doctor",
         "voidr_auth_status",
         "voidr_auth_select_organization",
@@ -95,7 +97,7 @@
         "defects_update_defect_status",
         "defects_assign_defect"
       ],
-      "timeout": 360000,
+      "timeout": 1800000,
       "disableToolCache": true
     }
   }

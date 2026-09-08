@@ -12,7 +12,7 @@
     {
       "name": "copilot",
       "source": "./",
-      "description": "Develop, deploy, and execute Voidr Playwright tests with MCP-backed application and Test Plan selection.",
+      "description": "Develop, deploy, and execute Voidr tests, analyze failures, and generate authenticated Echo monitoring reports.",
       "version": "0.2.24",
       "author": {
         "name": "Voidr"
@@ -22,7 +22,9 @@
         "voidr",
         "playwright",
         "testing",
-        "test-plan"
+        "test-plan",
+        "echo",
+        "monitoring"
       ]
     }
   ]

@@ -232,6 +232,32 @@ test('connect and organization-switch intents route to /voidr-connect', () => {
   assert.deepEqual(routeVoidrPrompt({ prompt: 'faz login na aplicação e testa' }), {})
 })
 
+test('Echo monitoring report intents route to the authenticated report skill', () => {
+  for (const prompt of [
+    'Gere o relatório diário do Voidr Echo',
+    'Envie o report semanal do Echo',
+    'Crie o relatório mensal do assistente de voz',
+    'Monte o relatório de monitoramento diário'
+  ]) {
+    const routed = routeVoidrPrompt({ prompt })
+    assert.match(
+      routed.modifiedTransformedPrompt || '',
+      /\/voidr-echo-report/,
+      prompt
+    )
+    assert.match(routed.modifiedTransformedPrompt || '', /voidr_auth_status/)
+    assert.match(
+      routed.modifiedTransformedPrompt || '',
+      /echo_generate_monitoring_report/
+    )
+  }
+
+  assert.deepEqual(
+    routeVoidrPrompt({ prompt: 'gere um relatório de cobertura do projeto' }),
+    {}
+  )
+})
+
 test('a Test Plan named with its id routes to the pipeline', () => {
   // The phrasing that started this: Portuguese sentence, platform vocabulary,
   // no "voidr" anywhere. It matched nothing, so the model picked a skill by

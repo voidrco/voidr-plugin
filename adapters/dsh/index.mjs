@@ -6,22 +6,34 @@ import { loadDshPluginSkills } from './plugin-skills.mjs'
 const CONTEXT_EVENT_TYPE = 'voidr/project-context-hint'
 const SPEND_CONTEXTS_KEY = Symbol.for('voidr.dsh.litellm-contexts.v1')
 const SPEND_CONTEXT_LIMIT = 10_000
-const SPEND_SUBACTION_BY_SURFACE = {
-  home: 'dsh-general',
-  spec: 'dsh-spec',
-  journeys: 'dsh-journeys',
-  'journey-overview': 'dsh-journey-overview',
-  automate: 'dsh-automate',
-  monitor: 'dsh-failure-analysis'
+const SPEND_ACTION_BY_SURFACE = {
+  home: 'voidr_dsh_general',
+  spec: 'voidr_dsh_spec',
+  journeys: 'voidr_dsh_journeys',
+  'journey-overview': 'voidr_dsh_journeys',
+  automate: 'voidr_dsh_automate',
+  monitor: 'voidr_dsh_failure_analysis',
+  performance: 'voidr_dsh_performance_analysis'
 }
 
-function registerSpendContext(sessionId, surface) {
-  const subaction = SPEND_SUBACTION_BY_SURFACE[surface]
-  if (!subaction) return
+const SPEND_ACTION_BY_INTENT = {
+  journey_spec_generation: 'voidr_dsh_spec',
+  journey_scenarios_generation: 'voidr_dsh_journeys',
+  test_creation: 'voidr_dsh_journeys',
+  plan_from_single_session: 'voidr_dsh_journeys',
+  coverage_from_sessions: 'voidr_dsh_journeys',
+  automation: 'voidr_dsh_automate',
+  automate_single_case: 'voidr_dsh_automate'
+}
+
+function registerSpendContext(sessionId, hint) {
+  const surface = hint?.surface
+  const action = SPEND_ACTION_BY_INTENT[hint?.intent] ?? SPEND_ACTION_BY_SURFACE[surface]
+  if (!action) return
   const root = globalThis
   const registry = root[SPEND_CONTEXTS_KEY] ??= new Map()
   registry.delete(String(sessionId))
-  registry.set(String(sessionId), { surface, subaction })
+  registry.set(String(sessionId), { surface, action })
   if (registry.size > SPEND_CONTEXT_LIMIT) registry.delete(registry.keys().next().value)
 }
 
@@ -80,7 +92,7 @@ export function apply(ctx) {
             .map(key => [key, value[key]])
         )
         if (Object.keys(hint).length > 0) agent.session.append(CONTEXT_EVENT_TYPE, hint)
-        registerSpendContext(agent.id, hint.surface)
+        registerSpendContext(agent.id, hint)
         return { kind: 'success', text: 'Assistant context registered' }
       } catch {
         return { kind: 'error', text: 'Invalid assistant context' }

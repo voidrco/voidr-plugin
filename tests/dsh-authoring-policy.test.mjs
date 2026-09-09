@@ -49,6 +49,15 @@ test('unvalidated delivery adaptation does not relax the original plugin host ru
   assert.doesNotMatch(execute, /unvalidatedApproval/)
 })
 
+test('custom question answers remain authoritative user instructions', () => {
+  const prompt = interactiveTestDevelopmentPrompt()
+
+  assert.match(prompt, /custom value is the user's direct answer/)
+  assert.match(prompt, /valid when selected is empty/)
+  assert.match(prompt, /changes or stops the current task/)
+  assert.match(prompt, /never authorizes an unrelated write/)
+})
+
 test('DSH registers authoring skills and canonical analysis/context/generate/execute', () => {
   const skills = loadDshPluginSkills()
   assert.deepEqual(

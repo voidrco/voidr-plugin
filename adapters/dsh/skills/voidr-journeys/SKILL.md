@@ -8,12 +8,14 @@ description: Conduz uma entrevista e cria jornadas e cenários AAA no Test Plan 
 O DSH infere e classifica os cenários. Nunca use `coverage_*`,
 `test_plan_generation_*` ou um job de geração externo.
 
-Use `ask_user_question` para escolhas, confirmações ou informações ausentes que
-não tenham um widget próprio. Para gravar ou selecionar sessões reais, use o
-widget `session_coverage_picker`; para enviar documentos, use `document_input`.
-Agrupe em uma única chamada as perguntas que já puder fazer, sempre com IDs
-estáveis. A mensagem comum do chat não substitui essa ferramenta porque não
-pausa o runtime. Não repita uma pergunta que a pessoa já respondeu claramente.
+Use `ask_user_question` quando precisar perguntar sobre escolhas, confirmações
+ou informações ainda ausentes que não tenham um widget próprio. Para gravar ou
+selecionar sessões reais, use o widget `session_coverage_picker`; para enviar
+documentos, use `document_input`. Agrupe em uma única chamada as perguntas que
+já puder fazer, sempre com IDs estáveis. A ferramenta define como perguntar e
+pausar o runtime; ela não invalida informações ou diretivas explícitas já
+fornecidas no chat ou em uma resposta customizada. Não repita uma pergunta que
+a pessoa já respondeu claramente.
 
 Para aplicação ainda não confirmada, use `app_target_picker` com
 `includeNewOption: true`, incluindo **Nova aplicação**. Se a pessoa escolher

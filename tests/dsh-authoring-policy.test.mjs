@@ -52,10 +52,34 @@ test('unvalidated delivery adaptation does not relax the original plugin host ru
 test('custom question answers remain authoritative user instructions', () => {
   const prompt = interactiveTestDevelopmentPrompt()
 
-  assert.match(prompt, /custom value is the user's direct answer/)
+  assert.match(prompt, /custom value is a direct user instruction/)
   assert.match(prompt, /valid when selected is empty/)
-  assert.match(prompt, /changes or stops the current task/)
-  assert.match(prompt, /never authorizes an unrelated write/)
+  assert.match(prompt, /changes or stops the task/)
+  assert.match(prompt, /custom conflicts with selected options, custom wins/)
+  assert.match(prompt, /authorize an unrelated write/)
+})
+
+test('composer and form directives outrank assistant hypotheses without rewriting runtime evidence', () => {
+  const skills = Object.fromEntries(loadDshPluginSkills().map(skill => [skill.name, skill.content]))
+  const prompt = interactiveTestDevelopmentPrompt()
+
+  for (const text of [
+    'chat composer or as an ask_user_question answer',
+    'latest explicit user statement defines the intended product contract',
+    'Runtime evidence defines what happened in an execution',
+    'exact expected-versus-observed mismatch',
+    'cannot declare that an execution passed'
+  ]) assert.ok(prompt.includes(text), text)
+
+  for (const name of ['voidr-automate', 'voidr-generate', 'voidr-execute', 'voidr-failure-analysis']) {
+    assert.match(skills[name], /Explicit composer instructions and custom question answers/)
+    assert.match(skills[name], /Runtime evidence defines what happened/)
+  }
+
+  assert.match(skills['voidr-automate'], /não invalida informações ou diretivas explícitas/)
+  assert.match(skills['voidr-automate'], /sem\s+reescrever o que a pessoa declarou que deveria ocorrer/)
+  assert.match(skills['voidr-generate'], /latest directive and\s+approved AAA define the intended behavior/)
+  assert.doesNotMatch(skills['voidr-generate'], /code and observed runtime behavior\s+are authoritative/)
 })
 
 test('DSH registers authoring skills and canonical analysis/context/generate/execute', () => {

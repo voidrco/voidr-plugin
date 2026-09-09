@@ -153,8 +153,10 @@ plus at most one refined follow-up per case. Read evidence from
 `chunkIndex`. Accept user manuals, product and operations guides,
 business-rule references, flow walkthroughs, test guides, selector maps, and
 QA documentation; discard marketing, contracts, and meetings. Documentation
-is supporting evidence and may be stale — code and observed runtime behavior
-are authoritative; on conflict, follow code/runtime and report the mismatch.
+is supporting evidence and may be stale. The user's latest directive and
+approved AAA define the intended behavior; code and observed runtime behavior
+define the current implementation. On conflict, preserve the intended contract
+and report the exact implementation mismatch.
 Documentation cannot add an unselected case. Never fall back to
 `knowledge_*`; customer conversations and internal CS knowledge are a
 different data source.

@@ -8,12 +8,14 @@ description: Conduz uma entrevista e implementa casos aprovados no workspace iso
 O DSH escreve e corrige os testes. Nunca use `agent_jobs_trigger_automation` ou
 `agent_jobs_trigger_hive_automation`.
 
-Use `ask_user_question` para escolhas, confirmações ou informações ausentes que
-não tenham um widget próprio. Quando a evidência necessária ainda precisa ser
-gravada, use `session_coverage_picker`; para arquivos, use `document_input`.
-Agrupe em uma única chamada as perguntas que já puder fazer, sempre com IDs
-estáveis. A mensagem comum do chat não substitui essa ferramenta porque não
-pausa o runtime. Não repita uma pergunta que a pessoa já respondeu claramente.
+Use `ask_user_question` quando precisar perguntar sobre escolhas, confirmações
+ou informações ainda ausentes que não tenham um widget próprio. Quando a
+evidência necessária ainda precisa ser gravada, use `session_coverage_picker`;
+para arquivos, use `document_input`. Agrupe em uma única chamada as perguntas
+que já puder fazer, sempre com IDs estáveis. A ferramenta define como perguntar
+e pausar o runtime; ela não invalida informações ou diretivas explícitas já
+fornecidas no chat ou em uma resposta customizada. Não repita uma pergunta que
+a pessoa já respondeu claramente.
 
 ## 0. Entrevista da skill
 
@@ -134,12 +136,16 @@ nunca rode o preflight sabendo que uma chave exigida ainda não está configurad
 5. Leia a execução e suas evidências. Corrija o workspace e repita o ciclo
    candidato → SHADOW quando necessário.
 
-Não enfraqueça asserts para obter verde. Se a evidência provar que o AAA está
-errado, mostre a divergência e obtenha aprovação antes de atualizar o caso.
+Não enfraqueça asserts para obter verde. Se a evidência divergir do AAA ou da
+diretiva mais recente da pessoa, preserve o comportamento pretendido, mostre
+exatamente o esperado e o observado e investigue o candidato ou o ambiente.
+Só proponha atualizar o caso quando a pessoa confirmar que o contrato pretendido
+mudou.
 Carregue `voidr-execute` para o piloto, diagnóstico e entrega. Primeiro valide
 um caso representativo; com sucesso, execute os restantes juntos. Limite a três
 validações por caso e duas correções da mesma falha; outra rodada exige pedido
-do usuário. Diagnostique pela timeline, DOM e trace, não só pela mensagem.
+do usuário. Use timeline, DOM e trace para diagnosticar o que ocorreu, sem
+reescrever o que a pessoa declarou que deveria ocorrer.
 
 ### Ao encerrar as tentativas
 

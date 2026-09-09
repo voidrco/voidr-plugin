@@ -12,6 +12,11 @@ const echoReportSkill = await readFile(
   'utf8'
 )
 
+const sharedContracts = await readFile(
+  new URL('../skills/CONTRACTS.md', import.meta.url),
+  'utf8'
+)
+
 test('generate skill preserves deployed runtime API configuration', () => {
   assert.match(generateSkill, /load the selected frontend URL first/i)
   assert.match(generateSkill, /read the value that the deployed page actually exposes/i)
@@ -25,6 +30,13 @@ test('generate skill cannot infer a missing environment', () => {
   assert.match(generateSkill, /a `baseUrl` does not select a Voidr environment/is)
   assert.match(generateSkill, /list environments\s+through Voidr MCP and ask the user to choose/is)
   assert.match(generateSkill, /do not call any setup tool from this skill/i)
+})
+
+test('shared contract preserves authoritative user directives across chat and forms', () => {
+  assert.match(sharedContracts, /does not reduce\s+the authority of explicit information or instructions the user already\s+supplied in chat/i)
+  assert.match(sharedContracts, /custom wins/i)
+  assert.match(sharedContracts, /Runtime evidence defines what\s+did happen/i)
+  assert.match(sharedContracts, /Never rewrite the instruction to match a trace/i)
 })
 
 test('Echo report skill is authenticated, closed-period, and confirmation gated', () => {

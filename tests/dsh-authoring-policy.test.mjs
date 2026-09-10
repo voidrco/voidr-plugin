@@ -123,6 +123,26 @@ test('composer and form directives outrank assistant hypotheses without rewritin
   assert.doesNotMatch(skills['voidr-generate'], /code and observed runtime behavior\s+are authoritative/)
 })
 
+test('DSH exposes material progress without narrating every tool call', () => {
+  const automate = loadDshPluginSkills().find(skill => skill.name === 'voidr-automate').content
+
+  for (const text of [
+    'Checkpoints de andamento',
+    'Não narre cada comando nem exponha raciocínio interno',
+    'quando uma evidência mudar o diagnóstico ou a estratégia de implementação',
+    'antes de ampliar uma correção para outros arquivos ou casos',
+    'antes de cada validação',
+    'imediatamente após receber o resultado da validação',
+    'somente ao caso representativo e aos helpers indispensáveis',
+    'antes de propagar a estratégia aos demais casos'
+  ]) assert.ok(automate.includes(text), text)
+
+  assert.match(automate, /o alvo atual, a evidência observada, o que ela\s+significa/)
+  assert.match(automate, /os casos afetados e o número\s+da tentativa/)
+  assert.match(automate, /Não use apenas frases vagas[\s\S]*“continuando”/)
+  assert.match(automate, /alterar o comportamento pretendido[\s\S]*pare e peça confirmação/)
+})
+
 test('DSH registers authoring skills and canonical analysis/context/generate/execute', () => {
   const skills = loadDshPluginSkills()
   assert.deepEqual(

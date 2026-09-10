@@ -17,6 +17,11 @@ e pausar o runtime; ela não invalida informações ou diretivas explícitas já
 fornecidas no chat ou em uma resposta customizada. Não repita uma pergunta que
 a pessoa já respondeu claramente.
 
+Se qualquer opção da entrevista ainda estiver aberta, a próxima ação deve ser
+uma única chamada de `ask_user_question` agrupando todas as perguntas que já
+podem ser feitas. Não liste nem faça essas perguntas em uma resposta comum do
+chat. Só continue depois da resposta da ferramenta.
+
 ## 0. Entrevista da skill
 
 Antes de preparar o workspace, resolva com ferramentas de leitura as opções
@@ -85,6 +90,32 @@ São permitidos Git, instalação local de dependências, build, lint e TypeScri
 dentro do workspace isolado. Nunca instale browsers nem execute Playwright
 localmente. Nunca leia ou exponha valores de `.env`.
 
+### Checkpoints de andamento
+
+Não narre cada comando nem exponha raciocínio interno. Antes de uma ação
+material, envie uma atualização curta no chat com os fatos operacionais que a
+pessoa precisa para acompanhar o trabalho. Não use apenas frases vagas como
+“continuando”, “corrigindo os testes” ou “ajustando detalhes”.
+
+Faça esse checkpoint:
+
+1. antes da primeira edição;
+2. quando uma evidência mudar o diagnóstico ou a estratégia de implementação;
+3. antes de ampliar uma correção para outros arquivos ou casos;
+4. antes de cada validação; e
+5. imediatamente após receber o resultado da validação.
+
+Informe em linguagem natural: o alvo atual, a evidência observada, o que ela
+significa, a próxima alteração ou validação exata, os casos afetados e o número
+da tentativa quando houver. Não transforme o checkpoint em uma nova aprovação
+se a ação já estiver autorizada.
+
+Se um piloto falhar e exigir uma estratégia diferente, aplique primeiro a
+mudança somente ao caso representativo e aos helpers indispensáveis. Valide
+esse piloto novamente antes de propagar a estratégia aos demais casos. Se a
+mudança alterar o comportamento pretendido, o AAA aprovado ou ampliar o escopo
+autorizado, pare e peça confirmação.
+
 ### Credenciais exigidas pelos testes
 
 Antes de publicar um candidato ou iniciar uma validação, levante as chaves
@@ -135,6 +166,28 @@ nunca rode o preflight sabendo que uma chave exigida ainda não está configurad
    execução pertence ao staging, não ao Service local.
 5. Leia a execução e suas evidências. Corrija o workspace e repita o ciclo
    candidato → SHADOW quando necessário.
+
+### Prévia obrigatória de uma falha
+
+Ao receber um resultado `FAILED`, mostre a falha antes de editar ou iniciar
+outra validação. A prévia deve ser curta e compreensível, mas conter a evidência
+técnica disponível:
+
+- caso e etapa que falharam, duração e mensagem literal do Playwright;
+- página, ação ou locator envolvido e esperado versus observado;
+- de dois a cinco eventos relevantes do trace, em ordem, ao redor da falha;
+- erros de console relacionados;
+- requisições relacionadas que falharam ou responderam incorretamente, com
+  método, endpoint, status e um resumo sanitizado da resposta; e
+- link da execução ou relatório onde a pessoa pode abrir a evidência completa.
+
+Inclua requisições bem-sucedidas apenas quando ajudarem a mostrar até onde o
+fluxo funcionou. Nunca exponha headers de autorização, cookies, tokens,
+credenciais, parâmetros sensíveis nem corpos completos de resposta. Se trace,
+DOM, console ou rede não estiver disponível, diga qual fonte está ausente em
+vez de preencher a lacuna por inferência. Uma falha ao consultar a ferramenta
+de evidência é um problema de leitura da evidência, não prova de falha do
+aplicativo ou do teste.
 
 Não enfraqueça asserts para obter verde. Se a evidência divergir do AAA ou da
 diretiva mais recente da pessoa, preserve o comportamento pretendido, mostre

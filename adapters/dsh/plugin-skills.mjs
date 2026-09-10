@@ -1,7 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { adaptDshSkill } from './skill-parity.mjs'
+import { adaptDshSkill, qualifyDshVoidrTools } from './skill-parity.mjs'
 
 const skillsRoot = join(dirname(fileURLToPath(import.meta.url)), 'skills')
 
@@ -18,7 +18,9 @@ export function loadDshPluginSkills() {
   ].map(name => adaptDshSkill(readSkill(join(originalRoot, name, 'SKILL.md'))))
   const automate = skills.find(skill => skill.name === 'voidr-automate')
   automate.content += '\n\n## Canonical generation contract\n' + canonical.find(skill => skill.name === 'voidr-generate').content
-  return [...skills, ...canonical].sort((left, right) => left.name.localeCompare(right.name))
+  return [...skills, ...canonical]
+    .map(skill => ({ ...skill, content: qualifyDshVoidrTools(skill.content) }))
+    .sort((left, right) => left.name.localeCompare(right.name))
 }
 
 export function registerDshPluginSkills(registry) {

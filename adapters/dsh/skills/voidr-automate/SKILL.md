@@ -17,6 +17,11 @@ e pausar o runtime; ela não invalida informações ou diretivas explícitas já
 fornecidas no chat ou em uma resposta customizada. Não repita uma pergunta que
 a pessoa já respondeu claramente.
 
+Se qualquer opção da entrevista ainda estiver aberta, a próxima ação deve ser
+uma única chamada de `ask_user_question` agrupando todas as perguntas que já
+podem ser feitas. Não liste nem faça essas perguntas em uma resposta comum do
+chat. Só continue depois da resposta da ferramenta.
+
 ## 0. Entrevista da skill
 
 Antes de preparar o workspace, resolva com ferramentas de leitura as opções

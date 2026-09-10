@@ -1,5 +1,38 @@
 import { DSH_VALIDATION_DELIVERY } from '../../core/workflow/validation-delivery.mjs'
 
+const VOIDR_MCP_PREFIX = 'mcp__voidr__'
+const VOIDR_MCP_FAMILIES = [
+  'agent_jobs',
+  'applications',
+  'assistant_context',
+  'assistant_workspace',
+  'coverage',
+  'defects',
+  'echo',
+  'executions',
+  'failure_analysis',
+  'failure_reports',
+  'file_embeddings',
+  'git_connector',
+  'issue_tracker',
+  'playwright',
+  'recording',
+  'sessions',
+  'system_batch',
+  'test_plan_generation',
+  'test_plans'
+]
+const DSH_NATIVE_FAMILY_TOOLS = new Set(['playwright_analyze_frames_vision'])
+const voidrMcpToolPattern = new RegExp(
+  `(?<!${VOIDR_MCP_PREFIX})\\b(?:${VOIDR_MCP_FAMILIES.join('|')})_[a-z0-9_]*[a-z0-9]\\b`,
+  'g'
+)
+
+export function qualifyDshVoidrTools(content) {
+  return content.replace(voidrMcpToolPattern, tool =>
+    DSH_NATIVE_FAMILY_TOOLS.has(tool) ? tool : `${VOIDR_MCP_PREFIX}${tool}`)
+}
+
 const replacements = {
   voidr_context_bootstrap: 'assistant_workspace_prepare',
   voidr_context_refresh: 'assistant_workspace_context_refresh',
@@ -154,7 +187,7 @@ Preserve credential placeholders and all evidence/provenance requirements below.
 - Call assistant_workspace_context_refresh at the beginning of every generation turn, including resumed conversations, then read manifest-context.json. Missing/incomplete setup routes to prepare, not manual CLI setup.
 - assistant_workspace_build is build-only. deploy_validation also builds and uploads; it needs upload approval and returns codebaseVersion and exact targets.
 - All execution stays on Voidr infrastructure, never Playwright in this pod. Use assistant_workspace_validation_status to read the correct execution environment; never treat the local Service DB as proof of a staging result.
-- Ask with ask_user_question for unresolved choices and each publication decision; render_widget owns session recording and uploads. Do not require Claude/Copilot hooks or authorization phrases.
+- If any intake choice remains unresolved, the next action must be one ask_user_question call grouping every answerable question. Do not print or enumerate those questions in a normal assistant response. Use ask_user_question for each publication decision; render_widget owns session recording and uploads. Do not require Claude/Copilot hooks or authorization phrases.
 - Proactively offer code publication at the validation budget or user stop. Failed but diagnosed tests use confirm: true, executionId and failureDiagnosis. Unvalidated code uses explicit unvalidatedApproval after disclosure, build and upload of that exact code; never borrow another version's execution or invent PASSED. Follow the validation budget and delivery contract in voidr-generate/voidr-execute.
 - Publishing code does not promote case tags. After a successful publication, read current_tag for every implemented executable case. FAILED and NOT_VALIDATED cases remain eligible for LIVE; their verdict changes disclosure, not eligibility. If any implemented case is not LIVE, ask automate-promote-live before final delivery and offer all implemented, PASSED only, or no tag changes. Never silently leave failed cases in DEV or call them ineligible. Generic code publication consent does not cover LIVE. With explicit consent and canWrite: true, use test_plans_update_test_case_tag only for the selected cases and read back the persisted tags. alreadyPublished: true confirms code only; never repeat its upload to fix a tag failure.
 - After latest publication contains at least one automated test, deploy_latest changes a DRAFT Test Plan to ACTIVE automatically, including alreadyPublished recovery. Report planStatus and planStatusChanged from the tool. Do not activate on build, validation upload or SHADOW. Preserve ARCHIVED plans; plan activation is not LIVE promotion or a passing verdict. If activation fails, report partial publication and retry the same approved version without another upload.
@@ -177,5 +210,5 @@ Preserve credential placeholders and all evidence/provenance requirements below.
 - Never call legacy Hive automation or start a Hive process.
 `
   const rules = skill.name === 'voidr-failure-analysis' ? failureAnalysisRules : authoringRules
-  return { ...skill, content: `${rules}\n\n${content}`, provider: 'voidr-plugin' }
+  return { ...skill, content: qualifyDshVoidrTools(`${rules}\n\n${content}`), provider: 'voidr-plugin' }
 }

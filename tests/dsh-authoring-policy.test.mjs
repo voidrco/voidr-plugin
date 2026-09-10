@@ -7,11 +7,52 @@ import { AGENT_OWNED_AUTHORING_TOOLS } from '../core/policies/agent-owned-author
 import { interactiveTestDevelopmentPrompt } from '../core/workflow/interactive-test-development.mjs'
 import { loadPolicy } from '../scripts/lib/policy.mjs'
 import { DSH_VALIDATION_DELIVERY } from '../core/workflow/validation-delivery.mjs'
+import { qualifyDshVoidrTools } from '../adapters/dsh/skill-parity.mjs'
+
+const unqualifiedVoidrTool =
+  /(?<!mcp__voidr__)\b(?!playwright_analyze_frames_vision\b)(?:agent_jobs|applications|assistant_context|assistant_workspace|coverage|defects|echo|executions|failure_analysis|failure_reports|file_embeddings|git_connector|issue_tracker|playwright|recording|sessions|system_batch|test_plan_generation|test_plans)_[a-z0-9_]*[a-z0-9]\b/g
+
+test('DSH uses exact MCP namespaces while preserving native tools', () => {
+  const skills = loadDshPluginSkills()
+  const workspaceTools = [
+    'assistant_workspace_status',
+    'assistant_workspace_bind_test_plan',
+    'assistant_workspace_prepare',
+    'assistant_workspace_context_refresh',
+    'assistant_workspace_build',
+    'assistant_workspace_inspect',
+    'assistant_workspace_sync',
+    'assistant_workspace_publish',
+    'assistant_workspace_deploy_validation',
+    'assistant_workspace_run_validation',
+    'assistant_workspace_validation_status',
+    'assistant_workspace_deploy_latest'
+  ]
+  const combined = skills.map(skill => skill.content).join('\n')
+
+  for (const tool of workspaceTools) {
+    assert.equal(qualifyDshVoidrTools(tool), `mcp__voidr__${tool}`, tool)
+  }
+  assert.match(combined, /\bmcp__voidr__assistant_workspace_status\b/)
+  assert.match(combined, /\bmcp__voidr__assistant_workspace_prepare\b/)
+  assert.doesNotMatch(combined, unqualifiedVoidrTool)
+  assert.match(combined, /\bask_user_question\b/)
+  assert.match(combined, /\brender_widget\b/)
+  assert.match(combined, /\bplaywright_analyze_frames_vision\b/)
+  assert.doesNotMatch(combined, /mcp__voidr__ask_user_question|mcp__voidr__render_widget/)
+
+  const once = qualifyDshVoidrTools('assistant_workspace_status ask_user_question playwright_analyze_frames_vision')
+  assert.equal(qualifyDshVoidrTools(once), once)
+  assert.equal(once, 'mcp__voidr__assistant_workspace_status ask_user_question playwright_analyze_frames_vision')
+})
 
 test('DSH proactively offers delivery at the attempt limit or user stop across every entry point', () => {
   const skills = Object.fromEntries(loadDshPluginSkills().map(skill => [skill.name, skill.content]))
   for (const content of [skills['voidr-generate'], skills['voidr-execute'], interactiveTestDevelopmentPrompt()]) {
-    assert.ok(content.includes(DSH_VALIDATION_DELIVERY))
+    const expectedDelivery = content === interactiveTestDevelopmentPrompt()
+      ? DSH_VALIDATION_DELIVERY
+      : qualifyDshVoidrTools(DSH_VALIDATION_DELIVERY)
+    assert.ok(content.includes(expectedDelivery))
     for (const text of ['at most three runs', 'including resumed turns',
       'In that same turn', 'automate-promote', 'automate-promote-live',
       'If the user already declined extra attempts', 'NOT_VALIDATED',

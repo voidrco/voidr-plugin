@@ -2,6 +2,7 @@ import { platformExecutionDenial } from '../../core/policies/platform-execution.
 import { agentOwnedAuthoringDenial } from '../../core/policies/agent-owned-authoring.mjs'
 import { interactiveTestDevelopmentPrompt } from '../../core/workflow/interactive-test-development.mjs'
 import { loadDshPluginSkills } from './plugin-skills.mjs'
+import { qualifyDshVoidrTools } from './skill-parity.mjs'
 
 const CONTEXT_EVENT_TYPE = 'voidr/project-context-hint'
 const SPEND_CONTEXTS_KEY = Symbol.for('voidr.dsh.litellm-contexts.v1')
@@ -63,7 +64,7 @@ export function apply(ctx) {
     }[hint?.surface]
     const skill = skills.find(candidate => candidate.name === skillName)
     return [
-      interactiveTestDevelopmentPrompt({ hint }),
+      qualifyDshVoidrTools(interactiveTestDevelopmentPrompt({ hint })),
       ...(skill ? [`Active surface skill: ${skill.name}\nThese instructions are already loaded for this surface.\n${skill.content}`] : [])
     ].join('\n\n')
   })
@@ -103,19 +104,19 @@ export function apply(ctx) {
     const decision = await next()
     if (decision.kind !== 'allow') return decision
     const authoringDenial = agentOwnedAuthoringDenial(exec.name)
-    if (authoringDenial) return { kind: 'deny', reason: authoringDenial }
+    if (authoringDenial) return { kind: 'deny', reason: qualifyDshVoidrTools(authoringDenial) }
     if (exec.name !== 'bash') return decision
     const command = typeof exec.args?.command === 'string' ? exec.args.command : ''
     const manualSetup = command.split(/\|\||&&|[;|&\n]/).some(stage =>
       /(?:^|\s)(?:\S*\/)?voidr(?:\.js)?\s+(?:login|link|scaffold|env\s+pull)\b/i.test(stage.trim()) &&
       !/^(?:cat|echo|printf|rg|grep|sed|head|tail|git\s+(?:diff|show))\b/.test(stage.trim()))
     if (manualSetup) return { kind: 'deny', reason:
-      'DSH setup uses the organization Service Account supplied by the Service. Call assistant_workspace_prepare with sessionId and environmentSlug; never run interactive voidr login or request credentials from the user.' }
+      'DSH setup uses the organization Service Account supplied by the Service. Call mcp__voidr__assistant_workspace_prepare with sessionId and environmentSlug; never run interactive voidr login or request credentials from the user.' }
     const denial = platformExecutionDenial({
       command,
       platformValidation: true,
       guidance:
-        'Use assistant_workspace_deploy_validation followed by assistant_workspace_run_validation.'
+        'Use mcp__voidr__assistant_workspace_deploy_validation followed by mcp__voidr__assistant_workspace_run_validation.'
     })
     return denial ? { kind: 'deny', reason: denial } : decision
   })

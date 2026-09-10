@@ -300,6 +300,18 @@ Publicar código, promover tags e publicar no Git são três decisões separadas
    nova publicação. Se houver proteção contra push direto, informe o impedimento;
    nunca force o push, contorne proteções ou publique numa branch alternativa.
    Falha no Git não desfaz a publicação do código nem as tags já confirmadas.
+4. **Escolher o próximo passo:** depois que a decisão de Git estiver resolvida,
+   se o código foi publicado e a releitura confirmou ao menos um caso implementado
+   como `LIVE`, chame `ask_user_question` com o ID `automate-live-next-step` antes
+   da entrega final. Faça exatamente uma pergunta de seleção única: “O teste está
+   publicado e LIVE. O que você deseja fazer agora?”. Ofereça exatamente, nesta
+   ordem, `Habilitar cron job` e `Ir ao Monitor`. A Platform abre `/schedules/`
+   para a primeira opção e `/monitor?view=products` para a segunda.
+
+   Essa escolha serve somente para navegar. Não crie um agendamento, não inicie
+   uma execução e não faça outra mutação a partir dela. Não mostre a pergunta se
+   a publicação falhou ou foi recusada, se nenhum caso implementado foi confirmado
+   como `LIVE` ou se ainda houver outra decisão de entrega pendente.
 
 Se a publicação de código falhar, não avance para a promoção de tags. Consulte o
 estado antes de propor uma nova tentativa. Se retornar `alreadyPublished: true`,

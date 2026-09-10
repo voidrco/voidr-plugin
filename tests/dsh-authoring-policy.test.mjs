@@ -408,6 +408,29 @@ test('DSH cannot finish after publishing while implemented failed cases remain s
   assert.match(automate, /reprovados são[\s\S]*“não elegíveis”/)
 })
 
+test('DSH offers schedule or Monitor navigation after confirmed LIVE delivery', () => {
+  const skills = Object.fromEntries(loadDshPluginSkills().map(skill => [skill.name, skill.content]))
+  const entryPoints = [skills['voidr-automate'], skills['voidr-generate'], skills['voidr-execute'],
+    interactiveTestDevelopmentPrompt()]
+
+  for (const content of entryPoints) {
+    for (const required of [
+      'automate-live-next-step',
+      'Habilitar cron job',
+      'Ir ao Monitor',
+      '/schedules/',
+      '/monitor?view=products'
+    ]) assert.ok(content.includes(required), required)
+    assert.match(content, /at least one implemented case is confirmed LIVE|ao menos um caso implementado[\s\S]*como `LIVE`/)
+    assert.match(content, /only navigates|somente para navegar/)
+  }
+
+  const automate = skills['voidr-automate']
+  assert.match(automate, /depois que a decisão de Git estiver resolvida/)
+  assert.match(automate, /Não mostre a pergunta se[\s\S]*publicação falhou ou foi recusada/)
+  assert.match(automate, /não inicie[\s\S]*execução/)
+})
+
 test('DSH uses product widgets for recording and file evidence', () => {
   const prompt = interactiveTestDevelopmentPrompt()
   assert.match(prompt, /session_coverage_picker/)

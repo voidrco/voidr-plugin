@@ -10,7 +10,7 @@ import { DSH_VALIDATION_DELIVERY } from '../core/workflow/validation-delivery.mj
 import { qualifyDshVoidrTools } from '../adapters/dsh/skill-parity.mjs'
 
 const unqualifiedVoidrTool =
-  /(?<!mcp__voidr__)\b(?!playwright_analyze_frames_vision\b)(?:agent_jobs|applications|assistant_context|assistant_workspace|coverage|defects|echo|executions|failure_analysis|failure_reports|file_embeddings|git_connector|issue_tracker|playwright|recording|sessions|system|test_plan_generation|test_plans)_[a-z0-9_]*[a-z0-9]\b/g
+  /(?<!mcp__voidr__)\b(?:agent_jobs|applications|assistant_context|assistant_workspace|coverage|defects|echo|executions|failure_analysis|failure_reports|file_embeddings|git_connector|group_diagnosis|issue_tracker|playwright|recording|sessions|system|test_failures|test_plan_generation|test_plans)_[a-z0-9_]*[a-z0-9]\b/g
 
 test('DSH uses exact MCP namespaces while preserving native tools', () => {
   const skills = loadDshPluginSkills()
@@ -35,7 +35,13 @@ test('DSH uses exact MCP namespaces while preserving native tools', () => {
   ]
   const combined = skills.map(skill => skill.content).join('\n')
 
-  for (const tool of [...workspaceTools, ...systemTools]) {
+  const evidenceTools = [
+    'test_failures_list_test_failures',
+    'group_diagnosis_get_trace_events',
+    'failure_analysis_get_context',
+    'failure_analysis_get_history'
+  ]
+  for (const tool of [...workspaceTools, ...systemTools, ...evidenceTools]) {
     assert.equal(qualifyDshVoidrTools(tool), `mcp__voidr__${tool}`, tool)
   }
   assert.match(combined, /\bmcp__voidr__assistant_workspace_status\b/)
@@ -43,12 +49,48 @@ test('DSH uses exact MCP namespaces while preserving native tools', () => {
   assert.doesNotMatch(combined, unqualifiedVoidrTool)
   assert.match(combined, /\bask_user_question\b/)
   assert.match(combined, /\brender_widget\b/)
-  assert.match(combined, /\bplaywright_analyze_frames_vision\b/)
+  assert.doesNotMatch(combined, /\bmcp__voidr__playwright_[a-z0-9_]+\b/)
+  assert.doesNotMatch(combined, /\bplaywright_analyze_frames_vision\b/)
+  assert.doesNotMatch(combined, /\bvoidr_auth_status\b/)
   assert.doesNotMatch(combined, /mcp__voidr__ask_user_question|mcp__voidr__render_widget/)
 
-  const once = qualifyDshVoidrTools('assistant_workspace_status ask_user_question playwright_analyze_frames_vision')
+  const once = qualifyDshVoidrTools('assistant_workspace_status ask_user_question group_diagnosis_get_trace_events')
   assert.equal(qualifyDshVoidrTools(once), once)
-  assert.equal(once, 'mcp__voidr__assistant_workspace_status ask_user_question playwright_analyze_frames_vision')
+  assert.equal(once, 'mcp__voidr__assistant_workspace_status ask_user_question mcp__voidr__group_diagnosis_get_trace_events')
+})
+
+test('DSH stops tool catalog mismatches instead of entering discovery loops', () => {
+  const skills = Object.fromEntries(loadDshPluginSkills().map(skill => [skill.name, skill.content]))
+  const combined = Object.values(skills).join('\n')
+  const unavailableTools = [
+    'playwright_get_execution_analytics',
+    'playwright_list_executions',
+    'playwright_list_test_results',
+    'playwright_list_execution_failures',
+    'playwright_get_test_timeline',
+    'playwright_get_test_history',
+    'playwright_get_test_dom',
+    'playwright_get_trace_events',
+    'playwright_get_step_timeline',
+    'playwright_get_step_frames',
+    'playwright_analyze_frames_vision',
+    'voidr_auth_status'
+  ]
+
+  for (const tool of unavailableTools) {
+    assert.doesNotMatch(combined, new RegExp(`\\b(?:mcp__voidr__)?${tool}\\b`), tool)
+  }
+
+  for (const name of ['voidr-execute', 'voidr-failure-analysis']) {
+    assert.match(skills[name], /unknown tool is a runtime contract failure/i)
+    assert.match(skills[name], /Never retry the same name/i)
+    assert.match(skills[name], /repeat an identical tool call/i)
+  }
+
+  assert.match(skills['voidr-execute'], /mcp__voidr__test_failures_list_test_failures/)
+  assert.match(skills['voidr-execute'], /mcp__voidr__group_diagnosis_get_trace_events/)
+  assert.match(skills['voidr-failure-analysis'], /Use only these directly attached DSH tools/)
+  assert.match(skills['voidr-failure-analysis'], /Do not search for a Playwright-prefixed substitute/)
 })
 
 test('DSH proactively offers delivery at the attempt limit or user stop across every entry point', () => {
@@ -185,11 +227,9 @@ test('DSH failure analysis stays specialized and hands explicit corrections to r
   for (const text of [
     'organization Service Account',
     'execution_analysis_viewer',
-    'playwright_analyze_frames_vision',
-    'analyzing: true',
-    're-emit the SAME widget id',
-    'multiple executions',
-    'evidence-only fallback',
+    'group_diagnosis_get_trace_events',
+    'The widget loads its own frames',
+    'continue without visual claims',
     'This skill diagnoses only',
     'load voidr-automate, voidr-generate and voidr-execute',
     'Correction validation runs only on Voidr infrastructure',

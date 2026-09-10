@@ -10,7 +10,7 @@ import { DSH_VALIDATION_DELIVERY } from '../core/workflow/validation-delivery.mj
 import { qualifyDshVoidrTools } from '../adapters/dsh/skill-parity.mjs'
 
 const unqualifiedVoidrTool =
-  /(?<!mcp__voidr__)\b(?!playwright_analyze_frames_vision\b)(?:agent_jobs|applications|assistant_context|assistant_workspace|coverage|defects|echo|executions|failure_analysis|failure_reports|file_embeddings|git_connector|issue_tracker|playwright|recording|sessions|system|test_plan_generation|test_plans)_[a-z0-9_]*[a-z0-9]\b/g
+  /(?<!mcp__voidr__)\b(?:agent_jobs|applications|assistant_context|assistant_workspace|coverage|defects|echo|executions|failure_analysis|failure_reports|file_embeddings|git_connector|group_diagnosis|issue_tracker|playwright|recording|sessions|system|test_failures|test_plan_generation|test_plans)_[a-z0-9_]*[a-z0-9]\b/g
 
 test('DSH uses exact MCP namespaces while preserving native tools', () => {
   const skills = loadDshPluginSkills()
@@ -43,12 +43,37 @@ test('DSH uses exact MCP namespaces while preserving native tools', () => {
   assert.doesNotMatch(combined, unqualifiedVoidrTool)
   assert.match(combined, /\bask_user_question\b/)
   assert.match(combined, /\brender_widget\b/)
-  assert.match(combined, /\bplaywright_analyze_frames_vision\b/)
+  assert.match(combined, /\bmcp__voidr__playwright_analyze_frames_vision\b/)
   assert.doesNotMatch(combined, /mcp__voidr__ask_user_question|mcp__voidr__render_widget/)
 
   const once = qualifyDshVoidrTools('assistant_workspace_status ask_user_question playwright_analyze_frames_vision')
   assert.equal(qualifyDshVoidrTools(once), once)
-  assert.equal(once, 'mcp__voidr__assistant_workspace_status ask_user_question playwright_analyze_frames_vision')
+  assert.equal(once, 'mcp__voidr__assistant_workspace_status ask_user_question mcp__voidr__playwright_analyze_frames_vision')
+})
+
+test('DSH treats unknown tools as a terminal branch error instead of looping', () => {
+  const skills = Object.fromEntries(loadDshPluginSkills().map(skill => [skill.name, skill.content]))
+
+  for (const name of ['voidr-execute', 'voidr-failure-analysis']) {
+    assert.match(skills[name], /unknown tool is a runtime contract failure/i)
+    assert.match(skills[name], /Never retry the same name/i)
+    assert.match(skills[name], /repeat an identical tool call/i)
+    assert.match(skills[name], /Search for a replacement once only/i)
+  }
+
+  const combined = Object.values(skills).join('\n')
+  for (const tool of [
+    'playwright_get_execution_analytics',
+    'playwright_get_test_timeline',
+    'playwright_get_test_history',
+    'playwright_get_test_dom',
+    'playwright_get_trace_events',
+    'playwright_get_step_timeline',
+    'playwright_get_step_frames',
+    'playwright_analyze_frames_vision'
+  ]) assert.match(combined, new RegExp(`\\bmcp__voidr__${tool}\\b`), tool)
+
+  assert.doesNotMatch(skills['voidr-failure-analysis'], /\bvoidr_auth_status\b/)
 })
 
 test('DSH proactively offers delivery at the attempt limit or user stop across every entry point', () => {

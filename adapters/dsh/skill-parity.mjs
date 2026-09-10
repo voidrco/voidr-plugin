@@ -14,15 +14,17 @@ const VOIDR_MCP_FAMILIES = [
   'failure_reports',
   'file_embeddings',
   'git_connector',
+  'group_diagnosis',
   'issue_tracker',
   'playwright',
   'recording',
   'sessions',
   'system',
+  'test_failures',
   'test_plan_generation',
   'test_plans'
 ]
-const DSH_NATIVE_FAMILY_TOOLS = new Set(['playwright_analyze_frames_vision'])
+const DSH_NATIVE_FAMILY_TOOLS = new Set()
 const voidrMcpToolPattern = new RegExp(
   `(?<!${VOIDR_MCP_PREFIX})\\b(?:${VOIDR_MCP_FAMILIES.join('|')})_[a-z0-9_]*[a-z0-9]\\b`,
   'g'
@@ -86,6 +88,7 @@ rejected, report an organization access problem and stop without trying another 
 
 Read-only analysis does not require write access. Every defect mutation and tag change requires
 canWrite: true and the confirmation required below.`)
+    content = content.replace(/^\| Check authentication \| `voidr_auth_status` \|\n/m, '')
     content = content.replace('## Reach the diagnosis', `## Visual execution analysis
 
 For this DSH adaptation, render_widget and playwright_analyze_frames_vision extend the tool routing
@@ -193,6 +196,7 @@ Preserve credential placeholders and all evidence/provenance requirements below.
 - Publishing code does not promote case tags. After a successful publication, read current_tag for every implemented executable case. FAILED and NOT_VALIDATED cases remain eligible for LIVE; their verdict changes disclosure, not eligibility. If any implemented case is not LIVE, ask automate-promote-live before final delivery and offer all implemented, PASSED only, or no tag changes. Never silently leave failed cases in DEV or call them ineligible. Generic code publication consent does not cover LIVE. With explicit consent and canWrite: true, use test_plans_update_test_case_tag only for the selected cases and read back the persisted tags. alreadyPublished: true confirms code only; never repeat its upload to fix a tag failure.
 - After latest publication contains at least one automated test, deploy_latest changes a DRAFT Test Plan to ACTIVE automatically, including alreadyPublished recovery. Report planStatus and planStatusChanged from the tool. Do not activate on build, validation upload or SHADOW. Preserve ARCHIVED plans; plan activation is not LIVE promotion or a passing verdict. If activation fails, report partial publication and retry the same approved version without another upload.
 - Every platform fact must come from a read tool or a context refresh in this turn, never folder names, memory or a manifest left from an earlier conversation. Preserve approved AAA, scope and evidence provenance.
+- An unknown tool is a runtime contract failure. Never retry the same name or repeat an identical tool call in the same turn. Search for a replacement once only when the skill does not already name a fallback; otherwise report the missing capability and stop that branch.
 - Explicit composer instructions and custom question answers define the user's intended contract. The question tool controls how DSH asks; it does not invalidate an answer already supplied in chat. The latest explicit correction wins for the facts it addresses. Runtime evidence defines what happened; when it conflicts with the intended contract, report the exact mismatch and inspect the candidate or environment instead of rewriting the directive or retrying blindly.
 - Use only credentials passed by the Service to child processes, never local credential stores, and never print or read .env values.
 - Do not call legacy Hive automation. DSH owns code and its session directory.
@@ -207,6 +211,7 @@ Preserve credential placeholders and all evidence/provenance requirements below.
 - Defect and tag mutations remain available only behind their own explicit confirmation and canWrite: true read-back rules below.
 - Use ask_user_question for unresolved choices. Never rely on host-specific hooks, slash commands or authorization phrases.
 - Every platform fact must come from a read tool in this turn. Never treat a UI hint, previous assistant message or local file as authoritative.
+- An unknown tool is a runtime contract failure. Never retry the same name or repeat an identical tool call in the same turn. Search for a replacement once only when the skill does not already name a fallback; otherwise report the missing capability and stop that branch.
 - Explicit composer instructions and custom question answers define the user's intended contract. The question tool controls how DSH asks; it does not invalidate an answer already supplied in chat. Runtime evidence defines what happened; when it conflicts with the intended contract, report the exact mismatch instead of rewriting the directive. The latest explicit correction wins for the facts it addresses.
 - Never call legacy Hive automation or start a Hive process.
 `

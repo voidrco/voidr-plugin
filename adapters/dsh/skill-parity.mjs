@@ -18,7 +18,7 @@ const VOIDR_MCP_FAMILIES = [
   'playwright',
   'recording',
   'sessions',
-  'system_batch',
+  'system',
   'test_plan_generation',
   'test_plans'
 ]

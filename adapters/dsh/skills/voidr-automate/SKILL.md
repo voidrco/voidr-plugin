@@ -167,6 +167,28 @@ nunca rode o preflight sabendo que uma chave exigida ainda não está configurad
 5. Leia a execução e suas evidências. Corrija o workspace e repita o ciclo
    candidato → SHADOW quando necessário.
 
+### Prévia obrigatória de uma falha
+
+Ao receber um resultado `FAILED`, mostre a falha antes de editar ou iniciar
+outra validação. A prévia deve ser curta e compreensível, mas conter a evidência
+técnica disponível:
+
+- caso e etapa que falharam, duração e mensagem literal do Playwright;
+- página, ação ou locator envolvido e esperado versus observado;
+- de dois a cinco eventos relevantes do trace, em ordem, ao redor da falha;
+- erros de console relacionados;
+- requisições relacionadas que falharam ou responderam incorretamente, com
+  método, endpoint, status e um resumo sanitizado da resposta; e
+- link da execução ou relatório onde a pessoa pode abrir a evidência completa.
+
+Inclua requisições bem-sucedidas apenas quando ajudarem a mostrar até onde o
+fluxo funcionou. Nunca exponha headers de autorização, cookies, tokens,
+credenciais, parâmetros sensíveis nem corpos completos de resposta. Se trace,
+DOM, console ou rede não estiver disponível, diga qual fonte está ausente em
+vez de preencher a lacuna por inferência. Uma falha ao consultar a ferramenta
+de evidência é um problema de leitura da evidência, não prova de falha do
+aplicativo ou do teste.
+
 Não enfraqueça asserts para obter verde. Se a evidência divergir do AAA ou da
 diretiva mais recente da pessoa, preserve o comportamento pretendido, mostre
 exatamente o esperado e o observado e investigue o candidato ou o ambiente.

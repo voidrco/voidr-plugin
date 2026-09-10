@@ -143,6 +143,25 @@ test('DSH exposes material progress without narrating every tool call', () => {
   assert.match(automate, /alterar o comportamento pretendido[\s\S]*pare e peça confirmação/)
 })
 
+test('DSH shows a sanitized Playwright evidence preview before correcting a failed run', () => {
+  const automate = loadDshPluginSkills().find(skill => skill.name === 'voidr-automate').content
+
+  for (const text of [
+    'Prévia obrigatória de uma falha',
+    'mensagem literal do Playwright',
+    'esperado versus observado',
+    'de dois a cinco eventos relevantes do trace',
+    'erros de console relacionados',
+    'método, endpoint, status e um resumo sanitizado da resposta',
+    'link da execução ou relatório',
+    'Nunca exponha headers de autorização, cookies, tokens',
+    'diga qual fonte está ausente'
+  ]) assert.ok(automate.includes(text), text)
+
+  assert.match(automate, /não prova de falha do\s+aplicativo ou do teste/)
+  assert.match(automate, /Ao receber um resultado `FAILED`[\s\S]*antes de editar ou iniciar\s+outra validação/)
+})
+
 test('DSH registers authoring skills and canonical analysis/context/generate/execute', () => {
   const skills = loadDshPluginSkills()
   assert.deepEqual(

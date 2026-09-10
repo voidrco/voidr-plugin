@@ -10,7 +10,7 @@ import { DSH_VALIDATION_DELIVERY } from '../core/workflow/validation-delivery.mj
 import { qualifyDshVoidrTools } from '../adapters/dsh/skill-parity.mjs'
 
 const unqualifiedVoidrTool =
-  /(?<!mcp__voidr__)\b(?!playwright_analyze_frames_vision\b)(?:agent_jobs|applications|assistant_context|assistant_workspace|coverage|defects|echo|executions|failure_analysis|failure_reports|file_embeddings|git_connector|issue_tracker|playwright|recording|sessions|system_batch|test_plan_generation|test_plans)_[a-z0-9_]*[a-z0-9]\b/g
+  /(?<!mcp__voidr__)\b(?!playwright_analyze_frames_vision\b)(?:agent_jobs|applications|assistant_context|assistant_workspace|coverage|defects|echo|executions|failure_analysis|failure_reports|file_embeddings|git_connector|issue_tracker|playwright|recording|sessions|system|test_plan_generation|test_plans)_[a-z0-9_]*[a-z0-9]\b/g
 
 test('DSH uses exact MCP namespaces while preserving native tools', () => {
   const skills = loadDshPluginSkills()
@@ -28,9 +28,14 @@ test('DSH uses exact MCP namespaces while preserving native tools', () => {
     'assistant_workspace_validation_status',
     'assistant_workspace_deploy_latest'
   ]
+  const systemTools = [
+    'system_search_tools',
+    'system_call_tool',
+    'system_batch_execute'
+  ]
   const combined = skills.map(skill => skill.content).join('\n')
 
-  for (const tool of workspaceTools) {
+  for (const tool of [...workspaceTools, ...systemTools]) {
     assert.equal(qualifyDshVoidrTools(tool), `mcp__voidr__${tool}`, tool)
   }
   assert.match(combined, /\bmcp__voidr__assistant_workspace_status\b/)

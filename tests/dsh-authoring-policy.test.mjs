@@ -148,6 +148,21 @@ test('DSH exposes material progress without narrating every tool call', () => {
   assert.match(automate, /alterar o comportamento pretendido[\s\S]*pare e peça confirmação/)
 })
 
+test('DSH keeps active validation polling inside the turn', () => {
+  const skills = Object.fromEntries(loadDshPluginSkills().map(skill => [skill.name, skill.content]))
+  const prompt = interactiveTestDevelopmentPrompt()
+
+  for (const content of [prompt, skills['voidr-automate'], skills['voidr-execute']]) {
+    assert.match(content, /QUEUED/)
+    assert.match(content, /RUNNING/)
+    assert.match(content, /30 seconds|30 segundos/)
+    assert.match(content, /automate-validation-running/)
+    assert.match(content, /Continuar acompanhando/)
+    assert.match(content, /Encerrar acompanhamento/)
+    assert.match(content, /verifica/)
+  }
+})
+
 test('DSH shows a sanitized Playwright evidence preview before correcting a failed run', () => {
   const automate = loadDshPluginSkills().find(skill => skill.name === 'voidr-automate').content
 

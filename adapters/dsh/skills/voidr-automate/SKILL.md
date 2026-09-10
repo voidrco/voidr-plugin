@@ -164,6 +164,13 @@ nunca rode o preflight sabendo que uma chave exigida ainda não está configurad
 4. Use `assistant_workspace_validation_status` para acompanhar a execução que
    acabou de criar. Não use `executions_get_execution`: em modo híbrido, a
    execução pertence ao staging, não ao Service local.
+   `QUEUED` e `RUNNING` significam trabalho ativo: espere pelo menos 30 segundos
+   entre consultas e continue no mesmo turno até obter um veredito terminal.
+   Nunca encerre pedindo para a pessoa escrever “verifica”, “continue” ou outra
+   palavra para retomar o acompanhamento. Se o limite do turno do host impedir
+   uma nova consulta, chame `ask_user_question` com o ID
+   `automate-validation-running` e ofereça “Continuar acompanhando (Recomendado)”
+   ou “Encerrar acompanhamento”; não faça essa pergunta como texto comum.
 5. Leia a execução e suas evidências. Corrija o workspace e repita o ciclo
    candidato → SHADOW quando necessário.
 

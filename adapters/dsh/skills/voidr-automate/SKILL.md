@@ -90,6 +90,32 @@ São permitidos Git, instalação local de dependências, build, lint e TypeScri
 dentro do workspace isolado. Nunca instale browsers nem execute Playwright
 localmente. Nunca leia ou exponha valores de `.env`.
 
+### Checkpoints de andamento
+
+Não narre cada comando nem exponha raciocínio interno. Antes de uma ação
+material, envie uma atualização curta no chat com os fatos operacionais que a
+pessoa precisa para acompanhar o trabalho. Não use apenas frases vagas como
+“continuando”, “corrigindo os testes” ou “ajustando detalhes”.
+
+Faça esse checkpoint:
+
+1. antes da primeira edição;
+2. quando uma evidência mudar o diagnóstico ou a estratégia de implementação;
+3. antes de ampliar uma correção para outros arquivos ou casos;
+4. antes de cada validação; e
+5. imediatamente após receber o resultado da validação.
+
+Informe em linguagem natural: o alvo atual, a evidência observada, o que ela
+significa, a próxima alteração ou validação exata, os casos afetados e o número
+da tentativa quando houver. Não transforme o checkpoint em uma nova aprovação
+se a ação já estiver autorizada.
+
+Se um piloto falhar e exigir uma estratégia diferente, aplique primeiro a
+mudança somente ao caso representativo e aos helpers indispensáveis. Valide
+esse piloto novamente antes de propagar a estratégia aos demais casos. Se a
+mudança alterar o comportamento pretendido, o AAA aprovado ou ampliar o escopo
+autorizado, pare e peça confirmação.
+
 ### Credenciais exigidas pelos testes
 
 Antes de publicar um candidato ou iniciar uma validação, levante as chaves

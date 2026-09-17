@@ -252,7 +252,7 @@ test('DSH denies every delegated authoring tool before execution', async () => {
     on: (event, handler) => handlers.set(event, handler)
   })
 
-  assert.equal(registeredSkills.length, 8)
+  assert.equal(registeredSkills.length, loadDshPluginSkills().length)
   const preExecute = handlers.get('tools/pre-execute')
   assert.equal(typeof preExecute, 'function')
 

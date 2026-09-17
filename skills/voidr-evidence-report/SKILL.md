@@ -1,6 +1,6 @@
 ---
 name: voidr-evidence-report
-description: Gera relatórios técnicos de evidências em HTML e PDF, com identidade Serasa e Voidr, paginação e download restrito à área logada. Use quando o usuário pedir um relatório de falha, diagnóstico, comparação de execuções ou evidências para baixar. Disponível somente para a organização Serasa nesta versão.
+description: Gera relatórios técnicos focados em DX com evidências navegáveis, screenshots reais, reprodução e cURL, em HTML e PDF, com identidade Serasa e Voidr, paginação e download restrito à área logada. Use quando o usuário pedir um relatório de falha, diagnóstico, comparação de execuções ou evidências para baixar. Disponível somente para a organização Serasa nesta versão.
 ---
 
 # Relatório técnico de evidências
@@ -20,11 +20,11 @@ description: Gera relatórios técnicos de evidências em HTML e PDF, com identi
 | Consultar geração existente | `evidence_reports_get` |
 
 
-Transforme as evidências disponíveis em um relatório objetivo. O serviço gera o
-HTML, pagina, converte em PDF, armazena os dois arquivos privados e devolve o link
+Transforme as evidências disponíveis em um relatório objetivo. A AI compõe o relatório com os componentes do contrato. O serviço gera o
+HTML responsivo, pagina a versão impressa, converte em PDF, armazena os dois arquivos privados e devolve o link
 da área logada. Use `evidence_reports_create`; não gere um arquivo público por
 conta própria. Leia [o contrato e o exemplo](references/contract.md) antes de montar
-a entrada e [o padrão de redação](references/writing.md) antes de revisar o texto.
+a entrada, [a composição para DX](references/dx.md) para escolher evidências e componentes, e [o padrão de redação](references/writing.md) antes de revisar o texto.
 
 ## Fluxo
 
@@ -35,9 +35,8 @@ a entrada e [o padrão de redação](references/writing.md) antes de revisar o t
    pertinentes. Preserve os identificadores reais da aplicação e execução. Para
    material colado ou anexado, use uma fonte `supplied-document` e mantenha claro
    que os fatos foram fornecidos pelo solicitante, sem alegar reprodução própria.
-3. Selecione as evidências relevantes, com IDs E1, E2 etc. Organize em resumo,
-   comportamento esperado e observado, evidências, impacto, hipótese/causa e ação
-   recomendada. Omita seções sem dados; não preencha espaço com texto genérico.
+3. Selecione as evidências relevantes, com IDs E1, E2 etc. Use fontes com localizadores de caso, tentativa, etapa e artefato.
+   Escolha finding, timeline, reproduction, code, screenshot e table conforme a evidência. Omita seções sem dados; não preencha espaço com texto genérico.
    Cada bloco deve referenciar uma fonte existente. Horários, denominadores,
    comparações e versões precisam coincidir com as fontes.
 4. Remova senhas, tokens, cookies, chaves, documentos pessoais e dados de clientes
@@ -46,8 +45,9 @@ a entrada e [o padrão de redação](references/writing.md) antes de revisar o t
 5. Monte a entrada estruturada. O template e as marcas são definidos no servidor.
    Não envie HTML, CSS, JavaScript, URLs de imagens, caminhos locais, credenciais,
    organizationId ou um logo escolhido pelo modelo. Não busque uma URL arbitrária
-   para contornar a validação. Uma captura aceita é PNG/JPEG em base64, até 525 KB;
-   se não houver bytes seguros disponíveis, mantenha a evidência textual.
+   para contornar a validação. Uma captura aceita é PNG/JPEG em base64, até 525 KB, ou uma referência frame
+   da execução (sourceId, testCaseSlug, resourceName). Veja references/dx.md para
+   obter os identificadores, revisar e mascarar a imagem. Sem captura segura, mantenha texto.
 6. Gere um UUID para `idempotencyKey` e chame `evidence_reports_create`. O pedido
    explícito de criar o relatório autoriza essa criação privada; não exige outra
    confirmação. Nunca publique, envie por e-mail ou altere permissões como efeito

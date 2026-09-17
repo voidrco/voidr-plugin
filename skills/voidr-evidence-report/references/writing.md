@@ -6,9 +6,10 @@ Adaptado dos critérios de linguagem do `linkedin-ghostwriting` do repositório
 - Abra com o fato, o fluxo afetado e a consequência observada.
 - Prefira frases completas, voz ativa e termos precisos. Use nomes de endpoints,
   códigos HTTP e trechos de erro quando explicarem o comportamento.
-- Resumo de até 650 caracteres. Como referência editorial, 3–8 páginas; o limite
+- Resumo de até 650 caracteres. Como referência editorial, 2–5 páginas; o limite
   técnico é 20. Use apenas o espaço necessário para preservar as evidências.
 - Separe fato, hipótese e recomendação. Diga o que não foi medido ou reproduzido.
+- Não repita o resumo em uma seção de abertura nem use slogans em frases telegráficas.
 - Não transforme uma ocorrência em taxa de falha; informe numerador e denominador
   quando ambos existirem. Nunca invente impacto financeiro ou número de usuários.
 - Evite “robusto”, “poderoso”, “revolucionário”, “de forma significativa”,

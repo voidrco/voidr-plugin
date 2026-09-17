@@ -13,6 +13,7 @@ export function loadDshPluginSkills() {
   const canonical = [
     'voidr-context',
     'voidr-failure-analysis',
+    'voidr-evidence-report',
     'voidr-generate',
     'voidr-execute'
   ].map(name => adaptDshSkill(readSkill(join(originalRoot, name, 'SKILL.md'))))

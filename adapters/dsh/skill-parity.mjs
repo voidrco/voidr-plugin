@@ -9,6 +9,7 @@ const VOIDR_MCP_FAMILIES = [
   'coverage',
   'defects',
   'echo',
+  'evidence_reports',
   'executions',
   'failure_analysis',
   'failure_reports',

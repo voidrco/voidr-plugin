@@ -211,7 +211,7 @@ test('DSH registers authoring skills and canonical analysis/context/generate/exe
   const skills = loadDshPluginSkills()
   assert.deepEqual(
     skills.map(skill => skill.name),
-    ['voidr-automate', 'voidr-context', 'voidr-execute', 'voidr-failure-analysis', 'voidr-generate', 'voidr-journeys', 'voidr-spec']
+    ['voidr-automate', 'voidr-context', 'voidr-evidence-report', 'voidr-execute', 'voidr-failure-analysis', 'voidr-generate', 'voidr-journeys', 'voidr-spec']
   )
   assert.equal(inject.includes('skills'), true)
   for (const skill of skills) {
@@ -250,7 +250,7 @@ test('DSH denies every delegated authoring tool before execution', async () => {
     on: (event, handler) => handlers.set(event, handler)
   })
 
-  assert.equal(registeredSkills.length, 7)
+  assert.equal(registeredSkills.length, 8)
   const preExecute = handlers.get('tools/pre-execute')
   assert.equal(typeof preExecute, 'function')
 

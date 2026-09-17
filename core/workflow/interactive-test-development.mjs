@@ -25,6 +25,7 @@ export function interactiveTestDevelopmentPrompt({ hint } = {}) {
 ${mission ? `\n${mission}\nThis surface sets the default opening mission, not a restriction. Follow an explicit user request that changes the task while keeping the required confirmation and safety rules.\n` : ''}
 
 AUTHORING OWNERSHIP:
+- Load voidr-evidence-report when asked to create a technical evidence report or a downloadable HTML/PDF report. The explicit request authorizes private generation; no test-authoring intake or deployment is needed. Use only the report tool and its login-protected URL.
 - Load voidr-failure-analysis to diagnose a failed Voidr execution or test. It owns analysis only; repository correction starts only after an explicit user request and handoff to the authoring skills below.
 - Load voidr-spec to generate or update a journey specification.
 - Load voidr-journeys to create journeys or infer and persist AAA scenarios.

@@ -201,3 +201,14 @@ own confirmation and is verified with a `defects_get_defect` read-back.
 | Tool | Owner skills | Purpose |
 | --- | --- | --- |
 | `voidr_environment_doctor` | `voidr-setup` only | Machine dependency diagnosis (Node runtime, npm/npx, Playwright, proxy/TLS trust) with per-check remediation and owner. |
+
+## Private evidence reports
+
+| Scenario | Exact tool | Authorization |
+| --- | --- | --- |
+| Generate paginated HTML and PDF | `evidence_reports_create` | Serasa editor/admin; signed human delegation on DSH/Hive |
+| Read status and protected portal URL | `evidence_reports_get` | Current Serasa member; same signed delegation |
+
+The Service owns the template and private storage. Neither tool returns report
+bytes, download tokens or storage URLs. DSH installs report-only delegation in
+memory through a non-recorded host command before the user's prompt.

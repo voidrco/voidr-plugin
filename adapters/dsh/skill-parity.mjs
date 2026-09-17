@@ -25,7 +25,7 @@ const VOIDR_MCP_FAMILIES = [
   'test_plan_generation',
   'test_plans'
 ]
-const DSH_NATIVE_FAMILY_TOOLS = new Set()
+const DSH_NATIVE_FAMILY_TOOLS = new Set(['echo_execution_confirmation', 'echo_render_deviations', 'echo_render_regulatory_controls'])
 const voidrMcpToolPattern = new RegExp(
   `(?<!${VOIDR_MCP_PREFIX})\\b(?:${VOIDR_MCP_FAMILIES.join('|')})_[a-z0-9_]*[a-z0-9]\\b`,
   'g'

@@ -11,7 +11,7 @@ test('assistant context registers the DSH feature and surface for spend attribut
     commands: { register(value) { if (value.name === 'assistant-context') command = value } },
     skills: { register() {} },
     systemPrompt: { variable() {}, section() {} },
-    tools: {},
+    tools: { register() {} },
     on() {}
   }
   apply(ctx)
@@ -31,7 +31,7 @@ test('assistant intent overrides the surface default feature', () => {
     commands: { register(value) { if (value.name === 'assistant-context') command = value } },
     skills: { register() {} },
     systemPrompt: { variable() {}, section() {} },
-    tools: {},
+    tools: { register() {} },
     on() {}
   }
   apply(ctx)

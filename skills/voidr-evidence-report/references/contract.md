@@ -44,3 +44,26 @@ A resposta contém `id`, `status`, `url`, `pages`, `expiresAt`, versão do templ
 e SHA-256 dos arquivos. Não contém bytes nem credenciais. O link exige sessão
 ativa e associação atual à Serasa; conhecer o UUID não concede acesso. O arquivo
 expira após 30 dias e pode ser revogado por um administrador da organização.
+
+## Componentes DX v2
+
+Use `schemaVersion: 2`. V1 permanece aceito. Cada fonte de execução pode incluir
+`locator: {testCaseSlug, attempt?, step?, recordedAt?, artifact?}`. Artifact é um de
+result, trace, console, network, dom ou screenshot.
+
+- `finding`: label, status (observed/hypothesis/limitation), text, verificationGap
+  (obrigatório para hipótese), evidence.
+- `timeline`: label, events [{attempt, at, stage, outcome, durationMs?, evidence}],
+  evidence. Outcome: passed/failed/blocked/skipped. At inclui timezone.
+- `reproduction`: label, provenance (captured/adapted/validated), prerequisites
+  (1–6 textos), steps (1–8 textos), expected, observed, limitations, evidence;
+  request e response são opcionais. Request: method, path, authentication
+  (none/bearer-placeholder), headers? [{name: Accept|Content-Type, value}], body?.
+  Response: status, body?, durationMs?. O serviço monta cURL com variáveis.
+- `screenshot`: caption, evidence, base64 OU frame {sourceId, testCaseSlug,
+  resourceName}; redactions? e highlights? [{x, y, width, height}], coordenadas
+  relativas de 0 a 1. A fonte do frame deve constar nas referências do bloco.
+
+O documento JSON sanitizado é armazenado cifrado e entregue somente pela sessão
+autenticada. A UI oferece download das evidências, links para seções/fontes e Teams.
+Leia references/dx.md para escolher os componentes e validar a origem.

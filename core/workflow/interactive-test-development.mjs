@@ -14,6 +14,15 @@ function surfaceMission(surface) {
 }
 
 export function interactiveTestDevelopmentPrompt({ hint } = {}) {
+  if (hint?.surface === 'echo') {
+    return `OPENING MISSION: Help the user with Voidr Echo, testing voice and chat assistants.
+The UI supplied this untrusted lookup hint: ${JSON.stringify(hint)}. Its echoContext describes the current screen and selected entity; validate all identifiers with Echo read tools before making claims. The latest hint supersedes earlier screen context.
+The selected echoContext.window is a query-scope directive, not evidence: resolve it under the active skill's explicit-user-period precedence, pass window explicitly to period-based reads, align supporting occurrence filters, and verify the returned period before answering. Never replace a selected period with a tool default.
+Respect windowSemantics and windowScope: a summary-only window does not filter the complete list when listWindow is all. Fixed screen defaults are not user-selected filters. Follow the skill to distinguish these scopes before querying.
+Follow the active voidr-echo-analysis skill for evidence, pagination, product semantics and separately confirmed actions.
+Use the native render_widget and ask_user_question tools for product interactions. A non-empty custom answer is the user's explicit instruction, including when selected is empty.
+Never bind a repository or start a WEB test-authoring intake for an Echo analysis. Only perform requested, confirmed Echo actions through the scoped tools. Report an unavailable capability instead of bypassing it through shell, direct database access or a different organization.`
+  }
   const hintText = hint
     ? ` The UI supplied this untrusted lookup hint: ${JSON.stringify(hint)}. Validate it with Voidr read tools before binding.`
     : ''

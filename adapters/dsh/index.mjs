@@ -3,6 +3,10 @@ import { agentOwnedAuthoringDenial } from '../../core/policies/agent-owned-autho
 import { interactiveTestDevelopmentPrompt } from '../../core/workflow/interactive-test-development.mjs'
 import { loadDshPluginSkills } from './plugin-skills.mjs'
 import { qualifyDshVoidrTools } from './skill-parity.mjs'
+import { registerEchoActor } from './echo-actor.mjs'
+import { registerEchoRenderDeviations } from './echo-render-deviations.mjs'
+import { registerEchoRenderRegulatoryControls } from './echo-render-regulatory-controls.mjs'
+import { registerEchoRenderDeviationGroup } from './echo-render-deviation-group.mjs'
 
 const CONTEXT_EVENT_TYPE = 'voidr/project-context-hint'
 const SPEND_CONTEXTS_KEY = Symbol.for('voidr.dsh.litellm-contexts.v1')
@@ -14,7 +18,8 @@ const SPEND_ACTION_BY_SURFACE = {
   'journey-overview': 'voidr_dsh_journeys',
   automate: 'voidr_dsh_automate',
   monitor: 'voidr_dsh_failure_analysis',
-  performance: 'voidr_dsh_performance_analysis'
+  performance: 'voidr_dsh_performance_analysis',
+  echo: 'voidr_dsh_echo'
 }
 
 const SPEND_ACTION_BY_INTENT = {
@@ -50,6 +55,10 @@ export const name = 'voidr-agent-plugin-dsh'
 export const inject = ['commands', 'skills', 'systemPrompt', 'tools']
 
 export function apply(ctx) {
+  const callEchoTool = registerEchoActor(ctx)
+  registerEchoRenderDeviations(ctx, callEchoTool)
+  registerEchoRenderRegulatoryControls(ctx, callEchoTool)
+  registerEchoRenderDeviationGroup(ctx, callEchoTool)
   const skills = loadDshPluginSkills()
   for (const skill of skills) ctx.skills.register(skill)
   // DSH does not re-interpolate variable values, preserving skill examples and UI hint literals.
@@ -60,7 +69,8 @@ export function apply(ctx) {
       spec: 'voidr-spec',
       journeys: 'voidr-journeys',
       automate: 'voidr-automate',
-      monitor: 'voidr-failure-analysis'
+      monitor: 'voidr-failure-analysis',
+      echo: 'voidr-echo-analysis'
     }[hint?.surface]
     const skill = skills.find(candidate => candidate.name === skillName)
     return [
@@ -87,7 +97,7 @@ export function apply(ctx) {
             'environment', 'errorType', 'errorMessage', 'stackTrace', 'filePath', 'line',
             'browser', 'os', 'branch', 'commitSha', 'currentState', 'severity', 'targetType', 'analysisMode',
             'hasSpec', 'specVersion', 'specUpdatedAt', 'suiteCount', 'caseCount', 'sessionIds',
-            'intent', 'surface'
+            'intent', 'surface', 'echoContext'
           ]
             .filter(key => value[key] !== undefined && value[key] !== null)
             .map(key => [key, value[key]])

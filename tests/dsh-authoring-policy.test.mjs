@@ -40,7 +40,9 @@ test('DSH uses exact MCP namespaces while preserving native tools', () => {
   }
   assert.match(combined, /\bmcp__voidr__assistant_workspace_status\b/)
   assert.match(combined, /\bmcp__voidr__assistant_workspace_prepare\b/)
-  assert.doesNotMatch(combined, unqualifiedVoidrTool)
+  const nativeEchoTools = ['echo_execution_confirmation', 'echo_render_deviations', 'echo_render_regulatory_controls']
+  for (const tool of nativeEchoTools) assert.equal(qualifyDshVoidrTools(tool), tool)
+  assert.doesNotMatch(nativeEchoTools.reduce((text, tool) => text.replaceAll(tool, 'native-widget'), combined), unqualifiedVoidrTool)
   assert.match(combined, /\bask_user_question\b/)
   assert.match(combined, /\brender_widget\b/)
   assert.match(combined, /\bmcp__voidr__playwright_analyze_frames_vision\b/)
@@ -211,7 +213,7 @@ test('DSH registers authoring skills and canonical analysis/context/generate/exe
   const skills = loadDshPluginSkills()
   assert.deepEqual(
     skills.map(skill => skill.name),
-    ['voidr-automate', 'voidr-context', 'voidr-evidence-report', 'voidr-execute', 'voidr-failure-analysis', 'voidr-generate', 'voidr-journeys', 'voidr-spec']
+    ['voidr-automate', 'voidr-context', 'voidr-echo-analysis', 'voidr-evidence-report', 'voidr-execute', 'voidr-failure-analysis', 'voidr-generate', 'voidr-journeys', 'voidr-spec']
   )
   assert.equal(inject.includes('skills'), true)
   for (const skill of skills) {
@@ -246,11 +248,11 @@ test('DSH denies every delegated authoring tool before execution', async () => {
     skills: { register: skill => registeredSkills.push(skill) },
     systemPrompt: { section: () => undefined, variable: () => undefined },
     commands: { register: () => undefined },
-    tools: {},
+    tools: { register() {} },
     on: (event, handler) => handlers.set(event, handler)
   })
 
-  assert.equal(registeredSkills.length, 8)
+  assert.equal(registeredSkills.length, loadDshPluginSkills().length)
   const preExecute = handlers.get('tools/pre-execute')
   assert.equal(typeof preExecute, 'function')
 
@@ -512,7 +514,7 @@ test('the backend preloads the selected surface skill into the system prompt', (
       variable: (name, provider) => variables.set(name, provider)
     },
     commands: { register: () => undefined },
-    tools: {},
+    tools: { register() {} },
     on: () => undefined
   })
   assert.equal(section.text, '{{voidr_interactive_test_development}}')

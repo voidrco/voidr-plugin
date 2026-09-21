@@ -109,10 +109,17 @@ For the selected `testCaseSlug`, gather:
 6. `test_plans_get_case` when `planId`, module, suite, and case slugs are all
    available.
 7. `test_plans_get_tag_history` when the Test Plan mapping is available.
+8. `connectors_context_list_active_integrations`; when Better Stack is active,
+   call `betterstack_summarize_log_patterns` for the failure window and then
+   `betterstack_query_logs` with the relevant error, endpoint, or request ID.
 
 Use trace evidence when it exists. If trace, DOM, console, network, or Test
 Plan context is absent, continue with the remaining evidence and state the
 missing source explicitly.
+
+Better Stack is external production evidence, not the source of the Voidr test
+verdict. Keep its query window bounded to the failure and describe temporal
+correlation as evidence, never as proof of causation by itself.
 
 ## Reach the diagnosis
 

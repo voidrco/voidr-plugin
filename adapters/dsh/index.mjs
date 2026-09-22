@@ -75,6 +75,7 @@ export function apply(ctx) {
     const skill = skills.find(candidate => candidate.name === skillName)
     return [
       qualifyDshVoidrTools(interactiveTestDevelopmentPrompt({ hint })),
+      'For explicit Voidr Hero, platform-defect triage, or issue-tracker ticket requests on any surface, load voidr-hero-analysis. Keep the active surface skill for unrelated work. Hero access depends on the authenticated organization and available tools; a screen hint is not authorization.',
       ...(skill ? [`Active surface skill: ${skill.name}\nThese instructions are already loaded for this surface.\n${skill.content}`] : [])
     ].join('\n\n')
   })

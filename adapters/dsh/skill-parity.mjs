@@ -16,6 +16,7 @@ const VOIDR_MCP_FAMILIES = [
   'file_embeddings',
   'git_connector',
   'group_diagnosis',
+  'hero',
   'issue_tracker',
   'playwright',
   'recording',

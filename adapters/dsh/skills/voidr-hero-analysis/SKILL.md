@@ -60,8 +60,19 @@ re-run or reprocess an existing defect or ticket. An ambiguous request such as
   the active run after being told one is already running.
 
 A successful dispatch means the workflow started, not that a PR was created.
-Report the returned session/run identifiers and inspect the defect or ticket
-again before claiming a verdict or PR.
+After `hero_reprocess_ticket` succeeds and returns a `runId`, discover
+`render_widget` and render `HeroRunProgress` with that exact `runId` and the
+ticket id. The widget follows the execution and any chained phases; do not
+manually poll merely to narrate progress. Never render it if dispatch failed or
+no run id was returned. For platform defects, report the returned session id;
+this Hero ticket widget does not track defect triage.
+
+Report the returned identifiers and inspect the defect or ticket again before
+claiming a verdict or PR. If a run becomes `superseded`, do not repeat the same
+dispatch automatically: explain the changed snapshot and investigate it first.
+`superseded` does not mean the run never executed; check its phase events and
+callbacks before describing what work did or did not happen. A provider revision
+change alone does not prove a material edit or identify its cause.
 
 ## Remaining execution boundary
 

@@ -15,7 +15,10 @@ test('Hero analysis is bundled globally with qualified reads and controlled writ
   assert.match(skill.content, /mcp__voidr__hero_reprocess_ticket/)
   assert.match(skill.content, /mode: "restart"/)
   assert.match(skill.content, /supersedeActive: true/)
+  assert.match(skill.content, /preset: "hero_run_progress"/)
+  assert.match(skill.content, /Do not send `type: "HeroRunProgress"`/)
   assert.equal(qualifyDshVoidrTools('hero_list_triaged'), 'mcp__voidr__hero_list_triaged')
+  assert.equal(qualifyDshVoidrTools('hero_run_progress'), 'hero_run_progress')
 })
 
 test('Hero skill is discoverable from every DSH surface', () => {

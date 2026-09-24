@@ -149,7 +149,7 @@ test('composer and form directives outrank assistant hypotheses without rewritin
     assert.match(skills[name], /Runtime evidence defines what happened/)
   }
 
-  assert.match(skills['voidr-automate'], /não invalida informações ou diretivas explícitas/)
+  assert.match(skills['voidr-automate'], /não repita o que a pessoa já\s+respondeu claramente/)
   assert.match(skills['voidr-automate'], /sem\s+reescrever o que a pessoa declarou que deveria ocorrer/)
   assert.match(skills['voidr-generate'], /latest directive and\s+approved AAA define the intended behavior/)
   assert.doesNotMatch(skills['voidr-generate'], /code and observed runtime behavior\s+are authoritative/)
@@ -334,43 +334,26 @@ test('final Git delivery targets the default branch without changing isolated ge
   }
 })
 
-test('each DSH authoring skill owns an interactive intake and write gate', () => {
+test('DSH authoring asks in chat by default and keeps write gates', () => {
   const byName = Object.fromEntries(loadDshPluginSkills().map(skill => [skill.name, skill]))
 
   for (const skill of ['voidr-spec', 'voidr-journeys', 'voidr-automate'].map(name => byName[name])) {
-    assert.match(skill.content, /ask_user_question/)
-    assert.match(skill.content, /IDs?\s+estáve(?:l|is)/)
+    assert.match(skill.content, /Pergunte em uma mensagem normal do chat/)
+    assert.match(skill.content, /Termine a mensagem e espere a resposta/)
+    assert.match(skill.content, /Não use\s+`ask_user_question` como padrão/)
     assert.match(skill.content, /não repita/i)
   }
 
-  for (const id of ['spec-destination', 'spec-source', 'spec-scope', 'spec-focus', 'spec-approve']) {
-    assert.match(byName['voidr-spec'].content, new RegExp(id))
-  }
-  for (const id of [
-    'journeys-target',
-    'journeys-destination',
-    'journeys-source',
-    'journeys-coverage',
-    'journeys-volume',
-    'journeys-approve'
-  ]) {
-    assert.match(byName['voidr-journeys'].content, new RegExp(id))
-  }
-  for (const id of [
-    'automate-cases',
-    'automate-scope',
-    'automate-environment',
-    'automate-approve-edit',
-    'automate-promote',
-    'automate-promote-live',
-    'automate-publish'
-  ]) {
-    assert.match(byName['voidr-automate'].content, new RegExp(id))
-  }
+  assert.match(byName['voidr-spec'].content, /Somente a escolha de\s+persistir autoriza a escrita/)
+  assert.match(byName['voidr-journeys'].content, /Somente persistir autoriza as\s+escritas/)
+  assert.match(byName['voidr-automate'].content, /Sem aprovação, preserve os arquivos e não publique/)
+  assert.match(byName['voidr-automate'].content, /Credenciais\s+ausentes seguem o formulário seguro/)
+  assert.match(byName['voidr-journeys'].content, /Se o pedido já\s+incluiu automatizar os casos, continue/)
 
   const prompt = interactiveTestDevelopmentPrompt()
-  assert.match(prompt, /mandatory interactive intake/)
-  assert.match(prompt, /ask_user_question/)
+  assert.match(prompt, /For ordinary choices and confirmations, ask in plain chat/)
+  assert.match(prompt, /Do not use ask_user_question by default/)
+  assert.match(prompt, /A request for the full generation-to-deployment workflow already states the next stage/)
 })
 
 test('automate separates code publication, case tags and Git delivery', () => {

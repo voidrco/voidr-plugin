@@ -8,36 +8,33 @@ description: Conduz uma entrevista e implementa casos aprovados no workspace iso
 O DSH escreve e corrige os testes. Nunca use `agent_jobs_trigger_automation` ou
 `agent_jobs_trigger_hive_automation`.
 
-Use `ask_user_question` quando precisar perguntar sobre escolhas, confirmações
-ou informações ainda ausentes que não tenham um widget próprio. Quando a
-evidência necessária ainda precisa ser gravada, use `session_coverage_picker`;
-para arquivos, use `document_input`. Agrupe em uma única chamada as perguntas
-que já puder fazer, sempre com IDs estáveis. A ferramenta define como perguntar
-e pausar o runtime; ela não invalida informações ou diretivas explícitas já
-fornecidas no chat ou em uma resposta customizada. Não repita uma pergunta que
-a pessoa já respondeu claramente.
-
-Se qualquer opção da entrevista ainda estiver aberta, a próxima ação deve ser
-uma única chamada de `ask_user_question` agrupando todas as perguntas que já
-podem ser feitas. Não liste nem faça essas perguntas em uma resposta comum do
-chat. Só continue depois da resposta da ferramenta.
+Pergunte em uma mensagem normal do chat quando faltar uma decisão, confirmação
+ou informação. Termine a mensagem e espere a resposta antes de agir. Não use
+`ask_user_question` como padrão nem abra um formulário para escolhas que a
+pessoa consegue responder em texto. Faça somente as perguntas necessárias,
+agrupando as que dependem do mesmo contexto; não repita o que a pessoa já
+respondeu claramente. Reserve `ask_user_question` para uma escolha estruturada
+que realmente não possa ser resolvida com clareza no chat ou para a pausa
+obrigatória do host descrita abaixo. Quando a evidência precisa ser gravada, use
+`session_coverage_picker`; para arquivos, use `document_input`. Credenciais
+ausentes seguem o formulário seguro descrito abaixo, nunca o chat.
 
 ## 0. Entrevista da skill
 
 Antes de preparar o workspace, resolva com ferramentas de leitura as opções
-reais e pergunte tudo que ainda estiver aberto:
+reais e pergunte apenas o que ainda impedir uma decisão segura:
 
-1. `automate-cases`: casos, suite ou jornada exatos a implementar, renderizando
-   a árvore do Test Plan como opções quando a pessoa não tiver selecionado;
-2. `automate-scope`: somente preparar e revisar o diff, ou também iterar a
-   validação remota em SHADOW;
-3. `automate-environment`: ambiente existente onde validar, quando houver mais
-   de um e a validação tiver sido escolhida.
+1. Resolva os casos, suite ou jornada exatos a implementar. Se o pedido não
+   identificar o alvo, apresente as opções reais do Test Plan no chat;
+2. Pergunte se deve apenas preparar o código ou também validar em SHADOW
+   somente quando o pedido não definir o alcance;
+3. Pergunte qual ambiente existente usar somente quando houver mais de um
+   plausível para a validação escolhida.
 
 Depois de ler o repositório, mostre quais casos e arquivos pretende alterar.
 Se o pedido atual ainda não autorizou explicitamente a implementação desses
-casos, use `ask_user_question` com o ID `automate-approve-edit` antes da primeira
-edição. A autorização cobre somente o escopo mostrado.
+casos, peça confirmação no chat antes da primeira edição. Espere a resposta.
+A autorização cobre somente o escopo mostrado.
 
 ## 1. Vincular e preparar
 
@@ -221,8 +218,8 @@ risco restante, versão executada e diff atual. Diferencie `PASSED`, `FAILED` e
 Se houve edição após a execução, o resultado anterior não vale para esse código.
 Nunca invente nem altere o veredito da execução para liberar publicação.
 
-Chame `ask_user_question` com `automate-promote` para oferecer publicar com o
-risco informado ou manter o trabalho sem publicar. Não espere a pessoa pedir
+Pergunte no chat se deve publicar com o risco informado ou manter o trabalho
+sem publicar, e espere a resposta. Não espere a pessoa pedir
 deploy e não encerre apenas reportando falha. Se ela já recusou mais tentativas,
 não ofereça outra nem execute novamente. Parar tentativas não autoriza upload,
 publicação, LIVE ou Git. Sem aprovação, preserve os arquivos e não publique.
@@ -232,8 +229,9 @@ publicação, LIVE ou Git. Sem aprovação, preserve os arquivos e não publique
 Publicar código, promover tags e publicar no Git são três decisões separadas:
 
 1. **Publicar o código:** ofereça `assistant_workspace_deploy_latest` ao encerrar
-   as tentativas, mesmo com falha, usando `ask_user_question` com `automate-promote`.
-   Mostre a versão e o diff final antes de perguntar. Para o candidato exato que
+   as tentativas, mesmo com falha, perguntando no chat se deve publicar.
+   Mostre a versão e o diff final antes de perguntar. Espere a resposta. Para o
+   candidato exato que
    passou ou falhou, informe `confirm: true`, `executionId` e, se falhou,
    `failureDiagnosis`. Não exija verde nem outra execução só para publicar.
    Se o código mudou depois da execução, não publique o candidato antigo como se
@@ -266,8 +264,8 @@ Publicar código, promover tags e publicar no Git são três decisões separadas
    isso inclui `FAILED` e `NOT_VALIDATED`. Exclua apenas stubs deliberadamente
    incompletos, pulados ou não executáveis.
 
-   Se algum caso implementado não estiver LIVE, é obrigatório chamar
-   `ask_user_question` com o ID `automate-promote-live` antes de encerrar a entrega.
+   Se algum caso implementado não estiver LIVE, é obrigatório perguntar no
+   chat e esperar a resposta antes de encerrar a entrega.
    Falha ou ausência de validação muda o alerta de risco, não a elegibilidade para
    LIVE. Nunca promova silenciosamente apenas os aprovados, diga que reprovados são
    “não elegíveis”, nem deixe reprovados em DEV sem a escolha explícita da pessoa.
@@ -290,7 +288,7 @@ Publicar código, promover tags e publicar no Git são três decisões separadas
    ou a mudança falhar, informe quais
    casos não mudaram; não repita o deploy nem reconstrua o candidato para corrigir tags.
 3. **Publicar no Git:** faça commit e push com `assistant_workspace_publish`
-   somente após confirmação separada com o ID `automate-publish`.
+   somente após confirmação separada no chat.
    Esta é a etapa final: publique sempre na branch principal (default) do
    repositório vinculado, resolvida pela ferramenta, nunca em `voidr/assistant/...`.
    A geração continua no workspace e na branch local isolados; não mude esse fluxo.

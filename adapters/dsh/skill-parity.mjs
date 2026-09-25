@@ -93,12 +93,20 @@ canWrite: true and the confirmation required below.`)
     content = content.replace(/^\| Check authentication \| `voidr_auth_status` \|\n/m, '')
     content = content.replace('## Reach the diagnosis', `## Visual execution analysis
 
-For this DSH adaptation, render_widget and playwright_analyze_frames_vision extend the tool routing
-below only for the deep analysis of one exact execution and test. Do not use this viewer for trends,
-multiple executions, or before executionId and testCaseSlug are authoritative.
+Visual analysis is optional. Do not render execution_analysis_viewer or call
+playwright_analyze_frames_vision merely because this skill is loaded or Monitor supplies an
+executionId and testCaseSlug. Use them only when the user explicitly requests visual/frame
+inspection of one exact execution and test, or when initial read-only evidence leaves a specific
+UI rendering, layout, occlusion, or selector question unresolved after timeline, DOM, console,
+and network reads. Do not use the viewer for status checks, trends, or multiple executions.
+A PASSED execution alone does not justify it. Do not add it to a diagnosis already supported by
+the non-visual evidence.
+If visual analysis is not warranted, call neither tool and continue the text diagnosis.
+When it is warranted, first validate the exact executionId and testCaseSlug with read tools.
 
-1. Before the evidence deep-dive, emit render_widget with preset execution_analysis_viewer, a stable
-   id of execution-analysis-{executionId}-{testCaseSlug}, and data containing executionId,
+1. After deciding visual analysis is warranted, emit render_widget with preset
+   execution_analysis_viewer, a stable id of execution-analysis-{executionId}-{testCaseSlug},
+   and data containing executionId,
    testCaseSlug, optional label/status/environment/applicationName, and analyzing: true. The widget
    fetches its own frames and evidence; never place frames in the widget payload.
 2. Call playwright_analyze_frames_vision with executionId, testCaseSlug and locale, without
@@ -206,7 +214,9 @@ Preserve credential placeholders and all evidence/provenance requirements below.
   const failureAnalysisRules = `DSH HOST CONTRACT (replaces host-specific commands, never the original evidence requirements):
 - The Service supplies the organization Service Account. Never run interactive login or request credentials from the user.
 - Treat Monitor and Home context as lookup hints. Validate execution, application, Test Plan and case with Voidr read tools in this turn.
-- For one exact execution and test, show execution_analysis_viewer while the ClickHouse-backed visual analysis runs, then always settle the same widget id with results or the evidence-only fallback.
+- Visual analysis is optional, even for one exact execution and test.
+- Open execution_analysis_viewer only for an explicit visual request or a specific visual question unresolved by initial read tools.
+- If opened, always settle the same widget id with results or the evidence-only fallback.
 - This skill diagnoses only. Do not bind a workspace, edit files, deploy, run tests, or trigger self-healing while it is active.
 - If the user explicitly asks to correct the test, finish the diagnosis and load voidr-automate, voidr-generate and voidr-execute before binding or editing.
 - Correction validation runs only on Voidr infrastructure through assistant_workspace tools, after the confirmations owned by the authoring skills. Never run Playwright in the DSH pod.

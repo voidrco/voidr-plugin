@@ -226,6 +226,10 @@ test('DSH failure analysis stays specialized and hands explicit corrections to r
   const analysis = loadDshPluginSkills().find(skill => skill.name === 'voidr-failure-analysis').content
   for (const text of [
     'organization Service Account',
+    'Visual analysis is optional',
+    'If visual analysis is not warranted, call neither tool',
+    'UI rendering, layout, occlusion, or selector question unresolved',
+    'A PASSED execution alone does not justify it',
     'execution_analysis_viewer',
     'playwright_analyze_frames_vision',
     'analyzing: true',
@@ -237,6 +241,8 @@ test('DSH failure analysis stays specialized and hands explicit corrections to r
     'Correction validation runs only on Voidr infrastructure',
     'Never run Playwright in the DSH pod'
   ]) assert.ok(analysis.includes(text), text)
+  assert.doesNotMatch(analysis, /Before the evidence deep-dive, emit render_widget/)
+  assert.doesNotMatch(analysis, /For one exact execution and test, show execution_analysis_viewer/)
   assert.doesNotMatch(analysis, /Execute `\/copilot voidr-setup`/)
   assert.doesNotMatch(analysis, /GitHub Copilot CLI|Claude Code/)
 })
@@ -536,6 +542,9 @@ test('the backend preloads the selected surface skill into the system prompt', (
   assert.match(home, /Load voidr-failure-analysis/)
   const monitor = interactiveTestDevelopmentPrompt({ hint: { surface: 'monitor' } })
   assert.match(monitor, /Diagnose with read-only Voidr tools first/)
+  const monitorSystemPrompt = variables.get('voidr_interactive_test_development')({ agent: { session: { events: [{ type: 'voidr/project-context-hint', data: { surface: 'monitor', executionId: 'exec-1', testCaseSlug: 'case-1' } }] } } })
+  assert.match(monitorSystemPrompt, /Visual analysis is optional/)
+  assert.match(monitorSystemPrompt, /merely because this skill is loaded or Monitor supplies an/)
   const overview = variables.get('voidr_interactive_test_development')({ agent: { session: { events: [{ type: 'voidr/project-context-hint', data: { surface: 'journey-overview', testPlanId: 'plan-1' } }] } } })
   assert.match(overview, /general Assistant for a Journeys page/)
   assert.match(overview, /write or revise a spec, create a journey, create test scenarios, or automate approved tests/)

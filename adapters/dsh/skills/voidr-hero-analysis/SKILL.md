@@ -61,8 +61,10 @@ re-run or reprocess an existing defect or ticket. An ambiguous request such as
 
 A successful dispatch means the workflow started, not that a PR was created.
 After `hero_reprocess_ticket` succeeds and returns a `runId`, discover
-`render_widget` and render `HeroRunProgress` with that exact `runId` and the
-ticket id. The widget follows the execution and any chained phases; do not
+`render_widget` and call it with
+`{ preset: "hero_run_progress", data: { runId: "<exact returned runId>", ticketId: "<ticket id>" } }`.
+Do not send `type: "HeroRunProgress"` or put those ids in `props`: the preset
+builds the Platform-compatible widget spec. The widget follows the execution and any chained phases; do not
 manually poll merely to narrate progress. Never render it if dispatch failed or
 no run id was returned. For platform defects, report the returned session id;
 this Hero ticket widget does not track defect triage.

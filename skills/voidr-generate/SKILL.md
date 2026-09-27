@@ -464,6 +464,17 @@ at least three different defects, and the one that looks most like slowness is
 usually a locator the test can never act on: present in the DOM but hidden,
 disabled, or covered. Raising a timeout there buys the same failure later.
 
+Read the failure attachments as well as the summary. Empty `stdout` or empty
+artifact arrays in an execution response do not prove that the Playwright HTML
+report has no attachments. Inspect its test detail and the associated structured
+evidence, screenshot, or trace through the available report tools. If those
+tools cannot retrieve the evidence, report that gap instead of inferring the
+cause from elapsed time. Match the actual obstructing element: a generic error
+dialog and a search modal are different states. Check whether the test's own
+network guard rejected a request before blaming the application or changing the
+navigation. A guard-induced failure is controlled test behavior, not evidence
+of a naturally occurring backend error.
+
 When the diagnosis points at a selector, take the replacement from the recorded
 evidence (step 3), not from a guess about the markup. A selector the recording
 never proves is a second guess stacked on the first.

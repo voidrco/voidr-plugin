@@ -447,6 +447,24 @@ with no-op functions or extract declarations in a different initialization order
 just to get a check to pass. Offline checks prove preparation or helper behavior,
 not the customer outcome. The platform run must still demonstrate that outcome.
 
+For network-sensitive helpers, register request observation before the UI
+gesture and correlate completion to that exact request. Playwright emits
+`requestfailed` and `response` on the page/context, not on the Request object.
+`await request.response()` plus `request.failure()` can distinguish a response
+from a transport failure without missing an event that already happened. An
+aborted request has no HTTP response: do not wait for one and then call the
+timeout proof of the intended fault. Where an authorized browser runtime is
+available, a local HTTP fixture can check the test driver against both immediate
+success and immediate abort. This is a helper check, never customer validation.
+
+Before arming a controlled fault, verify that record loading and its automatic
+calculation completed successfully. For baseline/candidate comparisons, reuse
+the same inputs and identify which successful real response establishes their
+validity. Capture expected input values after the deliberate edit and before
+submission, then assert their preservation before retry. Keep computed outputs
+separate from input invariants. Capture diagnostic evidence even when setup
+fails before the main scenario starts.
+
 For HTML table readers, use fixtures shaped like the observed response: encoded
 headings, hidden columns, empty cells, and the application's empty-result row.
 Decode entities and preserve cell positions before mapping column names. Keep

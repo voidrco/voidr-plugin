@@ -1,6 +1,7 @@
 import { platformExecutionDenial } from '../../core/policies/platform-execution.mjs'
 import { agentOwnedAuthoringDenial } from '../../core/policies/agent-owned-authoring.mjs'
 import { interactiveTestDevelopmentPrompt } from '../../core/workflow/interactive-test-development.mjs'
+import { issueResolutionPrompt } from '../../core/workflow/issue-resolution.mjs'
 import { loadDshPluginSkills } from './plugin-skills.mjs'
 import { qualifyDshVoidrTools } from './skill-parity.mjs'
 import { registerEchoActor } from './echo-actor.mjs'
@@ -21,7 +22,8 @@ const SPEND_ACTION_BY_SURFACE = {
   monitor: 'voidr_dsh_failure_analysis',
   'context-graph': 'voidr_dsh_general',
   performance: 'voidr_dsh_performance_analysis',
-  echo: 'voidr_dsh_echo'
+  echo: 'voidr_dsh_echo',
+  hero: 'voidr_dsh_issue_resolution'
 }
 
 const SPEND_ACTION_BY_INTENT = {
@@ -31,7 +33,8 @@ const SPEND_ACTION_BY_INTENT = {
   plan_from_single_session: 'voidr_dsh_journeys',
   coverage_from_sessions: 'voidr_dsh_journeys',
   automation: 'voidr_dsh_automate',
-  automate_single_case: 'voidr_dsh_automate'
+  automate_single_case: 'voidr_dsh_automate',
+  issue_resolution: 'voidr_dsh_issue_resolution'
 }
 
 function registerSpendContext(sessionId, hint) {
@@ -68,6 +71,11 @@ export function apply(ctx) {
   ctx.systemPrompt.variable('voidr_interactive_test_development', context => {
     const events = context.agent?.session?.events ?? []
     const hint = contextHint(events)
+    // Rehydrate attribution from persisted context when a runtime restarts.
+    if (context.agent?.id) registerSpendContext(context.agent.id, hint)
+    if (hint?.surface === 'hero' || hint?.intent === 'issue_resolution') {
+      return issueResolutionPrompt({ hint })
+    }
     const skillName = {
       spec: 'voidr-spec',
       journeys: 'voidr-journeys',
@@ -103,7 +111,7 @@ export function apply(ctx) {
             'environment', 'errorType', 'errorMessage', 'stackTrace', 'filePath', 'line',
             'browser', 'os', 'branch', 'commitSha', 'currentState', 'severity', 'targetType', 'analysisMode',
             'hasSpec', 'specVersion', 'specUpdatedAt', 'suiteCount', 'caseCount', 'sessionIds',
-            'intent', 'surface', 'signature', 'causalChain', 'echoContext', 'gateContext'
+            'intent', 'surface', 'signature', 'causalChain', 'echoContext', 'gateContext', 'connectorContextId'
           ]
             .filter(key => value[key] !== undefined && value[key] !== null)
             .map(key => [key, value[key]])

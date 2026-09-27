@@ -447,6 +447,18 @@ with no-op functions or extract declarations in a different initialization order
 just to get a check to pass. Offline checks prove preparation or helper behavior,
 not the customer outcome. The platform run must still demonstrate that outcome.
 
+When adding prechecks, execute the complete compiled test callback with real
+assertions up to an explicit browser-creation sentinel. This catches mismatched
+report shapes and initialization errors that helper-only tests miss. Preserve
+specialized prechecks instead of weakening a generic loop to silence a failure.
+For detailed runtime evidence beyond the stdout limit, discover
+`executions_list_evidence` / `executions_read_evidence` and read the exact
+test/attempt attachment in bounded pages. Persist the report hash and next offset
+instead of repeatedly injecting full reports into the conversation. A video file
+signature is only a preliminary container check, not proof of decoding or of
+the scenario shown; retain actual recordings and distinguish visual review from
+metadata inspection.
+
 For network-sensitive helpers, register request observation before the UI
 gesture and correlate completion to that exact request. Playwright emits
 `requestfailed` and `response` on the page/context, not on the Request object.

@@ -433,6 +433,27 @@ returned `codebaseVersion`). On a build failure, report the exact error and
 wait for the user's authorization before touching the specs. Never weaken an
 assertion just to make the validation pass.
 
+Rebuild after the last source edit before inspecting or checking the compiled
+module. Record which source and bundle were checked; a passing check against an
+older bundle says nothing about the new source. Bundling does not detect every
+undefined variable. When changing branch logic, remove obsolete blocks and
+check references in the entire spec, including paths that execute only when a
+query returns a record. Exercise both an empty result and a usable result in
+focused offline helper checks. A preparation check that stops before browser
+creation does not cover those later branches.
+
+Use real assertion implementations in offline checks. Never replace matchers
+with no-op functions or extract declarations in a different initialization order
+just to get a check to pass. Offline checks prove preparation or helper behavior,
+not the customer outcome. The platform run must still demonstrate that outcome.
+
+For HTML table readers, use fixtures shaped like the observed response: encoded
+headings, hidden columns, empty cells, and the application's empty-result row.
+Decode entities and preserve cell positions before mapping column names. Keep
+only the fields needed for the investigation. Validate a returned record's
+identity and confirm the corresponding application selection before loading it;
+recording nonempty fields alone does not prove that the correct record loaded.
+
 ## 6b. Correcting a case the validation run failed
 
 A failed run arrives here already diagnosed — `/voidr-execute` names the cause

@@ -163,6 +163,30 @@ different data source.
 
 ## 4. Exploration probes — inspect before asserting
 
+When the authorized investigation is read-only, classify a request by its
+effect in the application, not just its HTTP method. A POST can load an
+existing record; a GET can change state. Trace the relevant UI handler and
+server operation before allowing it. For a confirmed lookup, allow only its
+exact origin, path and method within the selected environment. Keep saves,
+deletes and other operations outside the authorized scope blocked. Opening
+or clearing a form does not itself prove that anything was persisted. Do not
+ask again for an already authorized lookup solely because it uses POST.
+
+Make the next probe answer the unresolved question. If the evidence already
+shows an empty form and the source identifies the lookup needed to populate
+it, merely opening the empty form again adds no evidence. Exercise the
+confirmed lookup and inspect its result. A successful navigation, HTTP 200,
+or green probe is not proof of valid test data or business success: check the
+application's result code, required fields and applicable outcome. Preserve
+an observed absence of data as a finding instead of inventing a fixture.
+
+When checking a deployed script against a repository revision, record its raw
+hash before any transformation. A hash mismatch requires a content comparison;
+line-ending differences alone need not mean different logic. If normalization
+proves equivalence, retain both raw and normalized hashes and the exact
+normalization used. Never silently replace the baseline or accept an unknown
+revision because it looks similar.
+
 A probe is the LAST resort, never the first — with the one exception named in
 4b: read the action timeline AND the screen map first, and only probe what
 neither answered. State which question is still open before writing one — if

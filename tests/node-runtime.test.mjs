@@ -261,6 +261,50 @@ test('runs on a compatible installed toolchain instead of stopping the flow', as
   assert.match(described.note, /shell resolves v20\.20\.0[\s\S]*ran on v22\.23\.2/)
 })
 
+test('uses bundled Node 20 for a repository pinned to Node 20', async () => {
+  const repositoryPath = repositoryWith(JSON.stringify({
+    engines: { node: '>=20.20.0' },
+    volta: { node: '20.20.0' }
+  }))
+  const bundledNodeExecutable = '/opt/voidr/node20/bin/node'
+  const measured = []
+  const result = await assertSupportedNodeRuntime({
+    repositoryPath,
+    bundledNodeExecutable,
+    run: async file => {
+      measured.push(file)
+      return {
+        stdout: file === bundledNodeExecutable ? 'v20.20.0\n' : 'v22.23.3\n',
+        stderr: '',
+        exitCode: 0
+      }
+    }
+  })
+
+  assert.deepEqual(measured, ['node', bundledNodeExecutable])
+  assert.equal(result.version, 'v20.20.0')
+  assert.equal(result.shellVersion, 'v22.23.3')
+  assert.equal(result.toolchain.manager, 'Hive image')
+  assert.equal(result.toolchain.version, '20.20.0')
+  assert.equal(withToolchainPath({ PATH: '/usr/local/bin' }, result.toolchain).PATH,
+    '/opt/voidr/node20/bin:/usr/local/bin')
+  assert.match(describeNodeRuntime(result).note, /bundled in the Hive image/)
+})
+
+test('rejects an invalid bundled runtime without claiming Node 22 is unsupported', async () => {
+  const repositoryPath = repositoryWith(JSON.stringify({ volta: { node: '20.20.0' } }))
+  await assert.rejects(
+    assertSupportedNodeRuntime({
+      repositoryPath,
+      bundledNodeExecutable: '/opt/voidr/node20/bin/node',
+      run: async () => ({ stdout: 'v22.23.3\n', stderr: '', exitCode: 0 })
+    }),
+    error => /pins Node 20\.20\.0/.test(error.message) &&
+      /Rebuild the Hive image with Node 20/.test(error.message) &&
+      !/Playwright 1\.48 hangs/.test(error.message)
+  )
+})
+
 test('skips a broken newest install and falls back to an older one', async () => {
   const repositoryPath = repositoryWith(JSON.stringify({ name: 'tests' }))
   const broken = {

@@ -121,6 +121,20 @@ const localTools = [
     inputSchema: { type: 'object', properties: {} }
   },
   {
+    name: 'voidr_select_test_plan',
+    description:
+      'Select the exact Test Plan the user named for this session. Pass its exact name or ID; the MCP reads it from the platform before switching. This changes only the local session context and clears plan-specific environment, repository, and validation state. Use only when the user has explicitly identified the target; do not infer or silently substitute a plan.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        planId: { type: 'string', pattern: '^[a-fA-F0-9]{24}$' },
+        planName: { type: 'string', minLength: 1 }
+      },
+      anyOf: [{ required: ['planId'] }, { required: ['planName'] }],
+      additionalProperties: false
+    }
+  },
+  {
     name: 'voidr_auth_select_organization',
     description:
       'Select one organization from the existing local Voidr Service Account store. Requires the user to choose first.',
@@ -1251,6 +1265,8 @@ function enforcePreparedRepository(repositoryPath) {
 }
 
 function enforceBridgeTestPlanIdentity(name, args) {
+  if (name === 'voidr_select_test_plan') return
+
   if (name === 'test_plans_list_test_plans' && planCreationFailed) {
     throw new Error(
       'Blocked by Voidr workflow: test_plans_create_test_plan failed in this session. Stop, show the user the exact creation error, and offer to retry or cancel. Never list existing Test Plans to silently replace the new plan the user asked for.'
@@ -1282,6 +1298,74 @@ function enforceBridgeTestPlanIdentity(name, args) {
       `Blocked by Voidr workflow: the selected Test Plan is ${selectedTestPlanId}. Do not substitute ${requestedId}. Ask the user for a new explicit selection first.`
     )
   }
+}
+
+async function selectTestPlan(args) {
+  const planId = String(args.planId || '').trim()
+  const planName = String(args.planName || '').trim()
+  if (Boolean(planId) === Boolean(planName)) {
+    throw new Error('Pass exactly one of planId or planName.')
+  }
+  if (planId && !/^[a-f0-9]{24}$/i.test(planId)) {
+    throw new Error('planId must be the exact 24-character Test Plan ID.')
+  }
+
+  const lookupArgs = planId ? { planId } : { planName }
+  const result = await remote.callTool('test_plans_get_test_plan', lookupArgs)
+  if (result?.isError) return withActiveOrganization(result)
+
+  const data = remoteResultData(result)
+  const selectedId = [
+    data?._id,
+    data?.testPlanId,
+    data?.planId,
+    data?.id,
+    data?.testPlan?._id,
+    data?.testPlan?.testPlanId,
+    data?.testPlan?.id,
+    ...collectStringsByKey(data, ['_id', 'testPlanId', 'planId', 'id'])
+  ]
+    .map(value => String(value || '').trim())
+    .find(value => /^[a-f0-9]{24}$/i.test(value))
+  const selectedName = String(
+    data?.name ||
+      data?.testPlanName ||
+      data?.testPlan?.name ||
+      collectStringsByKey(data, ['name', 'testPlanName'])[0] ||
+      ''
+  ).trim()
+  if (!selectedId || !selectedName) {
+    throw new Error(
+      'The platform did not return a Test Plan ID and name, so the selected session context was left unchanged.'
+    )
+  }
+  if (
+    planName &&
+    selectedName.toLowerCase() !== planName.toLowerCase()
+  ) {
+    throw new Error(
+      `The platform resolved “${planName}” to “${selectedName}”. The selected session context was left unchanged.`
+    )
+  }
+
+  const nextId = selectedId.toLowerCase()
+  const changed = selectedTestPlanId !== nextId
+  if (changed) {
+    selectedTestPlanId = nextId
+    resetStructureTracking()
+    planCreationFailed = false
+    lastFailedCreateArgs = null
+    creationIdempotency = null
+  }
+  recordProvenance('test_plans_get_test_plan', { planId: nextId }, result)
+  planReadAt = Date.now()
+
+  return textResult({
+    selected: true,
+    changed,
+    selectedTestPlanId: nextId,
+    selectedTestPlanName: selectedName
+  })
 }
 
 function bridgeTestPlanId(args) {
@@ -1685,6 +1769,8 @@ async function callLocal(name, args) {
       )
     case 'voidr_auth_status':
       return textResult(await validatedAuthStatus())
+    case 'voidr_select_test_plan':
+      return selectTestPlan(args)
     case 'voidr_auth_select_organization': {
       const selected = selectOrganization(String(args.organizationId || ''))
       selectedTestPlanId = null

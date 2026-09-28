@@ -30,6 +30,45 @@ recordAskUserSelections(payload, {
   toolInput: toolArgs,
   toolResult
 })
+if (toolName === 'voidr_select_test_plan') {
+  const selection = selectedTestPlanSelection(toolResult)
+  if (selection) {
+    updateSessionState(payload, current => {
+      const changed =
+        String(current.selectedTestPlanId || '').toLowerCase() !==
+        selection.id
+      return {
+        ...current,
+        selectedTestPlanId: selection.id,
+        selectedTestPlanAt: Date.now(),
+        selectedTestPlanSource: 'explicit-mcp-selection',
+        planMode: 'existing',
+        workflowActive: true,
+        ...(changed
+          ? {
+              selectedEnvironmentSlug: null,
+              selectedEnvironmentAt: null,
+              environmentSelectionRequestedAt: null,
+              environmentApplicationId: null,
+              selectedRepository: null,
+              linkedRepositoryUrl: null,
+              planContextConfirmed: false,
+              planContextConfirmedAt: null,
+              planWriteApproved: false,
+              planWriteApprovedAt: null,
+              smokeAttemptedAt: null,
+              smokeRemediationAt: null,
+              lastValidationExecutionAt: null,
+              latestEvidenceExecutionIds: [],
+              latestEvidenceTestCaseSlugs: [],
+              requiredExecutionIds: [],
+              executionLinkBlocks: 0
+            }
+          : {})
+      }
+    })
+  }
+}
 // The post-build stop exists to keep a FAILED build from being silently
 // diagnosed and retried. A build that completed has nothing to remediate, and
 // leaving the stop armed blocked the very next step of the flow — the
@@ -110,6 +149,39 @@ function buildSucceeded(result) {
   }
   const text = typeof result === 'string' ? result : JSON.stringify(result)
   return /"buildCompleted"\s*:\s*true/.test(text)
+}
+
+function selectedTestPlanSelection(value, depth = 0) {
+  if (depth > 8 || value == null) return null
+  if (typeof value === 'string') {
+    try {
+      return selectedTestPlanSelection(JSON.parse(value), depth + 1)
+    } catch {
+      return null
+    }
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const selection = selectedTestPlanSelection(item, depth + 1)
+      if (selection) return selection
+    }
+    return null
+  }
+  if (typeof value !== 'object') return null
+  const id = String(value.selectedTestPlanId || '').trim().toLowerCase()
+  if (value.selected === true && /^[a-f0-9]{24}$/.test(id)) return { id }
+  for (const key of [
+    'structuredContent',
+    'content',
+    'data',
+    'result',
+    'output',
+    'text'
+  ]) {
+    const selection = selectedTestPlanSelection(value[key], depth + 1)
+    if (selection) return selection
+  }
+  return null
 }
 
 async function readPayload() {

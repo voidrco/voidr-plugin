@@ -16,15 +16,19 @@ Plan content.
 
 ## 1. Resolve the Test Plan
 
-- If the user pasted a 24-hex ID, use it VERBATIM: copy it character by
-  character from their message. Never retype it from memory — dropping one
-  character produces an id that is rejected, and the mistake looks like theirs.
-- Otherwise, resolve it in two steps, because listing plans requires an
-  application: call `applications_list_applications`, render the choice with
-  `ask_user`, then call `test_plans_list_test_plans` with the selected
+- If the user named the target Test Plan or pasted its 24-hex ID, call
+  `voidr_select_test_plan` with that exact name or ID. This MCP call verifies
+  the target against the platform and updates the bridge and session selection;
+  no separate UI widget or repeated confirmation is needed.
+- If the current user message does not identify a target, resolve it in two
+  steps: call `applications_list_applications`, render the application choice
+  with `ask_user`, then call `test_plans_list_test_plans` with the selected
   `applicationId` and render the plan choice with `ask_user` (name + status +
-  case count). Listing plans without an `applicationId` is refused.
-- Never ask the user to type an ID.
+  case count). Listing plans without an `applicationId` is refused. Pass the
+  selected plan's returned ID to `voidr_select_test_plan`.
+- Never ask the user to type an ID. A failed name lookup or ID validation leaves
+  the current plan selected; report the MCP error before offering another
+  choice.
 
 ### When the bootstrap rejects the id
 
@@ -93,6 +97,9 @@ automated).
   listing plans, since the bridge refuses a listing without an `applicationId`.
 - `test_plans_list_test_plans` — plan selection listing for the selected
   application (read-only).
+- `voidr_select_test_plan` — verify and bind the exact target named by the user
+  to this session. A successful switch clears environment, repository, and
+  validation state associated with the previous plan.
 - `voidr_context_bootstrap` — the atomic context + preparation gate. It is
   the ONLY setup path: never call prepare/scaffold tools separately from this
   skill.

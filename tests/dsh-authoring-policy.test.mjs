@@ -362,6 +362,33 @@ test('DSH authoring asks in chat by default and keeps write gates', () => {
   assert.match(prompt, /A request for the full generation-to-deployment workflow already states the next stage/)
 })
 
+test('Journeys surface leaves optional transitions in prose without skipping required approvals', () => {
+  const skills = Object.fromEntries(loadDshPluginSkills().map(skill => [skill.name, skill.content]))
+  const overview = interactiveTestDevelopmentPrompt({ hint: { surface: 'journey-overview' } })
+
+  assert.match(overview, /one natural-language question/)
+  assert.match(overview, /Markdown bullet list/)
+  assert.match(overview, /Do not force a form merely to offer optional paths/)
+  assert.match(overview, /ask only for the missing choice/)
+
+  for (const surface of ['spec', 'journeys', 'automate']) {
+    const prompt = interactiveTestDevelopmentPrompt({ hint: { surface } })
+    assert.match(prompt, /Answer read-only questions directly/)
+    assert.match(prompt, /required inputs still missing/)
+    assert.match(prompt, /Optional follow-up after a completed stage/)
+  }
+
+  for (const name of ['voidr-spec', 'voidr-journeys', 'voidr-automate']) {
+    assert.match(skills[name], /Pergunte em uma mensagem normal do chat/)
+    assert.match(skills[name], /Não use formulário para essas sugestões|Não chame `ask_user_question` nem renderize widget apenas para essa sugestão/)
+    assert.match(skills[name], /pergunte[\s\S]*sem lista/)
+    assert.match(skills[name], /bullets/)
+  }
+  assert.match(skills['voidr-spec'], /Somente a escolha de\s+persistir autoriza a escrita/)
+  assert.match(skills['voidr-journeys'], /Somente persistir autoriza as\s+escritas/)
+  assert.match(skills['voidr-automate'], /Se o pedido atual ainda não autorizou explicitamente a implementação/)
+})
+
 test('automate separates code publication, case tags and Git delivery', () => {
   const automate = loadDshPluginSkills().find(skill => skill.name === 'voidr-automate').content
   for (const text of ['alreadyPublished: true', 'caseTagsChanged: false',
@@ -401,27 +428,33 @@ test('DSH cannot finish after publishing while implemented failed cases remain s
   assert.match(automate, /reprovados são[\s\S]*“não elegíveis”/)
 })
 
-test('DSH offers schedule or Monitor navigation after confirmed LIVE delivery', () => {
+test('DSH suggests optional next steps in prose after confirmed LIVE delivery', () => {
   const skills = Object.fromEntries(loadDshPluginSkills().map(skill => [skill.name, skill.content]))
   const entryPoints = [skills['voidr-automate'], skills['voidr-generate'], skills['voidr-execute'],
     interactiveTestDevelopmentPrompt()]
 
   for (const content of entryPoints) {
     for (const required of [
-      'automate-live-next-step',
-      'Habilitar cron job',
-      'Ir ao Monitor',
       '/schedules/',
       '/monitor?view=products'
     ]) assert.ok(content.includes(required), required)
     assert.match(content, /at least one implemented case is confirmed LIVE|ao menos um caso implementado[\s\S]*como `LIVE`/)
-    assert.match(content, /only navigates|somente para navegar/)
+    assert.doesNotMatch(content, /automate-live-next-step/)
+    assert.match(content, /optional|opcionais/i)
   }
 
   const automate = skills['voidr-automate']
   assert.match(automate, /depois que a decisão de Git estiver resolvida/)
-  assert.match(automate, /Não mostre a pergunta se[\s\S]*publicação falhou ou foi recusada/)
+  assert.match(automate, /Quer configurar um[\s\S]*agendamento para executar esses testes periodicamente/)
+  assert.match(automate, /Não chame `ask_user_question` nem renderize widget apenas para essa sugestão/)
+  assert.match(automate, /não como uma[\s\S]*escolha obrigatória entre cron e Monitor/)
+  assert.match(automate, /pessoa pode pedir outro ajuste\s+ou análise no chat/)
   assert.match(automate, /não inicie[\s\S]*execução/)
+  assert.match(interactiveTestDevelopmentPrompt(), /Do not show a cron-versus-Monitor menu/)
+  assert.match(interactiveTestDevelopmentPrompt(), /"\(recomendado\)" only when justified/)
+  assert.match(interactiveTestDevelopmentPrompt(), /no fixed option count/)
+  assert.match(interactiveTestDevelopmentPrompt(), /one next action is clearly recommended/)
+  assert.match(interactiveTestDevelopmentPrompt(), /do not create an artificial list/)
 })
 
 test('DSH uses product widgets for recording and file evidence', () => {

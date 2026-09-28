@@ -18,6 +18,12 @@ que realmente não possa ser resolvida com clareza no chat. Para gravar ou
 selecionar sessões reais, use o widget `session_coverage_picker`; para enviar
 documentos, use `document_input`.
 
+Se a pessoa pedir apenas uma explicação ou leitura, responda sem iniciar a entrevista.
+Depois de concluir a etapa pedida, se houver um próximo passo claramente
+recomendado, pergunte em texto livre se a pessoa quer segui-lo, sem lista. Se
+houver vários caminhos úteis, apresente-os em bullets e marque **(recomendado)**
+somente quando houver fundamento. Não use formulário para essas sugestões.
+
 Para aplicação ainda não confirmada, use `app_target_picker` com
 `includeNewOption: true`, incluindo **Nova aplicação**. Se a pessoa escolher
 `__new_app__`, pedir um produto novo ou não houver aplicações, use
@@ -115,3 +121,6 @@ lida no passo 1.
 Finalize informando a jornada, a nova versão e quais fontes sustentaram a spec.
 Se o pedido também incluiu criar cenários e automatizá-los, continue com
 `voidr-journeys`; não peça de novo qual é o próximo passo.
+Se a pessoa não pediu a próxima etapa, você pode sugerir criar cenários ou revisar
+a spec, sem usar `ask_user_question` só para oferecer essas opções. Ela pode pedir
+qualquer outro ajuste ou análise no chat.

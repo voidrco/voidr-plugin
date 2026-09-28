@@ -8,14 +8,15 @@ description: Conduz uma entrevista e cria jornadas e cenários AAA no Test Plan 
 O DSH infere e classifica os cenários. Nunca use `coverage_*`,
 `test_plan_generation_*` ou um job de geração externo.
 
-Use `ask_user_question` quando precisar perguntar sobre escolhas, confirmações
-ou informações ainda ausentes que não tenham um widget próprio. Para gravar ou
+Pergunte em uma mensagem normal do chat quando faltar uma decisão, confirmação
+ou informação. Termine a mensagem e espere a resposta antes de agir. Não use
+`ask_user_question` como padrão nem abra um formulário para escolhas que a
+pessoa consegue responder em texto. Faça somente as perguntas necessárias,
+agrupando as que dependem do mesmo contexto; não repita o que a pessoa já
+respondeu claramente. Reserve `ask_user_question` para uma escolha estruturada
+que realmente não possa ser resolvida com clareza no chat. Para gravar ou
 selecionar sessões reais, use o widget `session_coverage_picker`; para enviar
-documentos, use `document_input`. Agrupe em uma única chamada as perguntas que
-já puder fazer, sempre com IDs estáveis. A ferramenta define como perguntar e
-pausar o runtime; ela não invalida informações ou diretivas explícitas já
-fornecidas no chat ou em uma resposta customizada. Não repita uma pergunta que
-a pessoa já respondeu claramente.
+documentos, use `document_input`.
 
 Para aplicação ainda não confirmada, use `app_target_picker` com
 `includeNewOption: true`, incluindo **Nova aplicação**. Se a pessoa escolher
@@ -26,25 +27,28 @@ retornado antes de continuar. Não substitua esses widgets por `ask_user_questio
 ## 0. Entrevista da skill
 
 Antes de inferir qualquer cenário, resolva com ferramentas de leitura as opções
-reais e pergunte tudo que ainda estiver aberto:
+reais e pergunte apenas o que ainda impedir uma decisão segura:
 
-1. `journeys-target`: criar uma jornada ou trabalhar em uma existente;
-2. `journeys-destination`: aplicação, Test Plan e jornada exatos, usando opções
+1. Decida se o pedido cria uma jornada ou trabalha em uma existente; pergunte
+   no chat somente se as duas opções continuarem plausíveis;
+2. Resolva aplicação, Test Plan e jornada exatos, usando opções
    retornadas pela plataforma; nunca peça IDs. Quando o contexto da UI já
    trouxer o Test Plan e a jornada abertos, valide-os e use-os como destino;
    não repita essa pergunta;
-3. `journeys-source`: uma escolha obrigatória e de seleção múltipla das fontes.
-   Sempre ofereça **Gravar nova sessão**, **Usar sessões gravadas** e **Enviar
-   documentação**, mesmo quando ainda não houver sessão ou documento
-   disponível. Inclua **Spec atual** somente quando ela tiver conteúdo válido;
-4. `journeys-coverage`: fluxo principal, erros/alternativas, limites ou todos
-   os comportamentos sustentados pelas fontes;
-5. `journeys-volume`: proposta focada, intermediária ou ampla, salvo quando a
-   pessoa já tiver definido um limite.
+3. Confirme as fontes quando o pedido e o contexto não as definirem. Ofereça
+   **Gravar nova sessão**, **Usar sessões gravadas** e **Enviar documentação**;
+   inclua **Spec atual** somente quando ela tiver conteúdo válido. Não inicie
+   gravação nem use uma fonte não escolhida silenciosamente;
+4. Pergunte sobre cobertura somente se não estiver claro se a pessoa quer
+   fluxo principal, erros/alternativas, limites ou tudo que as fontes sustentam;
+5. Pergunte sobre volume somente se um limite fizer diferença material para a
+   proposta e não puder ser inferido do pedido.
 
-Para uma jornada nova, pergunte também nome, objetivo e severidade. Fonte é um
-contrato de produto, não uma inferência do modelo: nunca escolha nem omita uma
-dessas alternativas por conta própria. Depois da resposta:
+Para uma jornada nova, obtenha nome, objetivo e severidade; pergunte no chat
+somente o que o pedido e o contexto não resolverem. Fonte é um contrato de
+produto: use apenas as fontes indicadas pela pessoa ou já fixadas no contexto
+da página. Se não houver escolha, pergunte; não invente nem omita uma fonte.
+Depois da resposta:
 
 - para **Gravar nova sessão**, renderize `session_coverage_picker` com a
   aplicação, URL, plano e jornada; ele inicia a captura real pela extensão.
@@ -101,10 +105,10 @@ Para cada cenário, produza:
 acrescenta passos necessários ao mesmo comportamento. `NEW` representa um
 comportamento ainda não coberto.
 
-Mostre a proposta inteira e use `ask_user_question` com o ID
-`journeys-approve` para perguntar se deve persistir tudo, revisar a seleção ou
-cancelar. Se a pessoa escolher revisar, aplique as mudanças na proposta e peça
-nova confirmação. Somente persistir autoriza as escritas abaixo.
+Mostre a proposta inteira e pergunte no chat se deve persistir tudo, revisar a
+seleção ou cancelar. Espere a resposta. Se a pessoa escolher revisar, aplique
+as mudanças na proposta e peça nova confirmação. Somente persistir autoriza as
+escritas abaixo.
 
 ## 4. Persistir sem job
 
@@ -122,5 +126,7 @@ Não use `coverage_apply_inferred_cases`: ele depende de uma proposta produzida
 por um job externo. Se uma gravação em lote exigir muitas escritas, faça as
 operações determinísticas acima uma a uma e reporte qualquer falha parcial.
 
-Ao final, liste o que foi criado, atualizado e complementado. Não inicie a
-automação sem um pedido separado ou aprovação explícita para continuar.
+Ao final, liste o que foi criado, atualizado e complementado. Se o pedido já
+incluiu automatizar os casos, continue com `voidr-automate`; não peça de novo
+qual é o próximo passo. Caso contrário, pergunte no chat se a pessoa quer
+automatizá-los antes de iniciar essa etapa.

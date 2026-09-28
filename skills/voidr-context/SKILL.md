@@ -16,11 +16,12 @@ Plan content.
 
 ## 1. Resolve the Test Plan
 
-- If the user named the target Test Plan or pasted its 24-hex ID, call
+- If the user has named the target Test Plan or pasted its 24-hex ID in the
+  current conversation, and has not changed that choice, call
   `voidr_select_test_plan` with that exact name or ID. This MCP call verifies
   the target against the platform and updates the bridge and session selection;
   no separate UI widget or repeated confirmation is needed.
-- If the current user message does not identify a target, resolve it in two
+- If the conversation does not identify a clear target, resolve it in two
   steps: call `applications_list_applications`, render the application choice
   with `ask_user`, then call `test_plans_list_test_plans` with the selected
   `applicationId` and render the plan choice with `ask_user` (name + status +

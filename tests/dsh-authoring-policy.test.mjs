@@ -343,12 +343,19 @@ test('final Git delivery targets the default branch without changing isolated ge
 test('DSH authoring asks in chat by default and keeps write gates', () => {
   const byName = Object.fromEntries(loadDshPluginSkills().map(skill => [skill.name, skill]))
 
-  for (const skill of ['voidr-spec', 'voidr-journeys', 'voidr-automate'].map(name => byName[name])) {
+  for (const skill of ['voidr-journeys', 'voidr-automate'].map(name => byName[name])) {
     assert.match(skill.content, /Pergunte em uma mensagem normal do chat/)
     assert.match(skill.content, /Termine a mensagem e espere a resposta/)
     assert.match(skill.content, /Não use\s+`ask_user_question` como padrão/)
     assert.match(skill.content, /não repita/i)
   }
+
+  assert.match(byName['voidr-spec'].content, /Use `ask_user_question` para a entrevista estruturada/)
+  assert.match(byName['voidr-spec'].content, /uma\s+chamada de `ask_user_question`/)
+  assert.match(byName['voidr-spec'].content, /`spec-source`[\s\S]*`spec-scope`[\s\S]*`spec-coverage`/)
+  assert.match(byName['voidr-spec'].content, /Inclua somente os campos ainda não resolvidos/)
+  assert.match(byName['voidr-spec'].content, /As fontes podem ser\s+combinadas/)
+  assert.match(byName['voidr-spec'].content, /Mostre a proposta completa e pergunte no chat/)
 
   assert.match(byName['voidr-spec'].content, /Somente a escolha de\s+persistir autoriza a escrita/)
   assert.match(byName['voidr-journeys'].content, /Somente persistir autoriza as\s+escritas/)
@@ -360,6 +367,13 @@ test('DSH authoring asks in chat by default and keeps write gates', () => {
   assert.match(prompt, /For ordinary choices and confirmations, ask in plain chat/)
   assert.match(prompt, /Do not use ask_user_question by default/)
   assert.match(prompt, /A request for the full generation-to-deployment workflow already states the next stage/)
+})
+
+test('spec surface groups dense intake in a form without changing ordinary next steps', () => {
+  const prompt = interactiveTestDevelopmentPrompt({ hint: { surface: 'spec' } })
+  assert.match(prompt, /single structured ask_user_question form for unresolved evidence source, scope and coverage/)
+  assert.match(prompt, /Optional follow-up after a completed stage has three branches/)
+  assert.match(prompt, /ask in plain chat/)
 })
 
 test('Journeys surface leaves optional transitions in prose without skipping required approvals', () => {

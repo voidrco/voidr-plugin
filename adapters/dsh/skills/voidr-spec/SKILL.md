@@ -8,15 +8,13 @@ description: Conduz uma entrevista e gera ou atualiza a especificação técnica
 O DSH faz toda a análise e redação. Nunca use `recording_interpret_journey`,
 `coverage_*` ou `test_plan_generation_*`.
 
-Pergunte em uma mensagem normal do chat quando faltar uma decisão, confirmação
-ou informação. Termine a mensagem e espere a resposta antes de agir. Não use
-`ask_user_question` como padrão nem abra um formulário para escolhas que a
-pessoa consegue responder em texto. Faça somente as perguntas necessárias,
-agrupando as que dependem do mesmo contexto; não repita o que a pessoa já
-respondeu claramente. Reserve `ask_user_question` para uma escolha estruturada
-que realmente não possa ser resolvida com clareza no chat. Para gravar ou
-selecionar sessões reais, use o widget `session_coverage_picker`; para enviar
-documentos, use `document_input`.
+Use `ask_user_question` para a entrevista estruturada de **fonte, escopo e
+cobertura** antes de gerar a spec. Pergunte em uma mensagem normal do chat
+quando faltar outra decisão, confirmação ou informação; termine a mensagem e
+espere a resposta antes de agir. Não use `ask_user_question` como padrão fora
+dessa entrevista. Faça somente as perguntas necessárias; não repita o que a
+pessoa já respondeu claramente. Para gravar ou selecionar sessões reais, use
+o widget `session_coverage_picker`; para enviar documentos, use `document_input`.
 
 Se a pessoa pedir apenas uma explicação ou leitura, responda sem iniciar a entrevista.
 Depois de concluir a etapa pedida, se houver um próximo passo claramente
@@ -47,6 +45,20 @@ reais e pergunte apenas o que ainda impedir uma decisão segura:
    quando o pedido não permitir decidir;
 4. Pergunte se deve cobrir fluxo principal, erros/alternativas ou ambos somente
    quando essa escolha mudar materialmente a resposta.
+
+Se uma ou mais escolhas dos itens 2–4 ainda estiverem abertas, faça **uma
+chamada de `ask_user_question`**, agrupando até três perguntas no mesmo
+formulário: `spec-source` (fontes de evidência), `spec-scope` (jornada inteira
+ou fluxo específico) e `spec-coverage` (principal, erros/alternativas ou
+ambos). Inclua somente os campos ainda não resolvidos; não replique as
+perguntas nem as opções em uma resposta longa no chat. Use títulos e descrições
+curtos; indique quando uma fonte exige anexar ou gravar algo. As fontes podem ser
+combinadas: aceite múltiplas seleções quando a ferramenta permitir e também
+uma resposta personalizada que indique uma combinação. Não apresente sessões
+inexistentes como gravadas nem um documento citado como já anexado; se recomendar
+reenviá-lo, diga isso na opção. Se a pessoa escolher um fluxo específico sem
+identificá-lo, peça somente esse detalhe depois da resposta. Uma resposta válida ao formulário
+continua a entrevista na mesma solicitação; não peça para reenviar o prompt.
 
 Fonte é um contrato de produto: use apenas as fontes indicadas pela pessoa ou
 já fixadas no contexto da página. Se não houver escolha, pergunte; não invente

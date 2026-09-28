@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { delimiter, join } from 'node:path'
+import { delimiter, dirname, join } from 'node:path'
 import { nodeExecutableForToolchain, runCommand } from './command.mjs'
 
 // Playwright 1.48, pinned by the published Voidr framework, hangs before
@@ -67,14 +67,20 @@ export async function assertSupportedNodeRuntime(options) {
     repositoryPath,
     run = runCommand,
     guidance,
-    nodeExecutable = nodeExecutableForToolchain()
+    nodeExecutable = nodeExecutableForToolchain(),
+    bundledNodeExecutable = process.env.VOIDR_BUNDLED_NODE_BIN
   } = options
   const declared = declaredNodeVersion(repositoryPath)
   const required = declared.major || SUPPORTED_NODE_MAJOR
   // Scanned only when the runtime is rejected: the happy path never touches the
   // version-manager directories.
-  const howToGetIt = () =>
-    guidance === undefined ? nodeVersionGuidance(required) : guidance
+  const howToGetIt = () => {
+    if (guidance !== undefined) return guidance
+    if (bundledNodeExecutable) {
+      return `The bundled Node runtime at ${bundledNodeExecutable} is unavailable or incompatible. Rebuild the Hive image with Node ${required}.`
+    }
+    return nodeVersionGuidance(required)
+  }
   let result
   try {
     result = await run(nodeExecutable, ['--version'], {
@@ -101,6 +107,7 @@ export async function assertSupportedNodeRuntime(options) {
       required,
       repositoryPath,
       run,
+      bundledNodeExecutable,
       declared: options.compatibleToolchain
     })
     // The PATH is wrong, not necessarily the machine: when the required major is
@@ -110,11 +117,14 @@ export async function assertSupportedNodeRuntime(options) {
     if (compatible) return { ...compatible, shellVersion: version }
   }
   if (declared.major && major !== declared.major) {
+    const activate = bundledNodeExecutable
+      ? ''
+      : `Activate Node ${declared.major} and retry. `
     throw new Error(
       `The repository pins Node ${declared.raw} (${declared.source}) but this ` +
-        `shell resolves ${version}. Playwright 1.48 hangs indefinitely on ` +
-        `unsupported Node versions. Activate Node ${declared.major} and ` +
-        `retry. ${howToGetIt()} Do not install dependencies or run Playwright ` +
+        `shell resolves ${version}. Preparation requires the repository's pinned ` +
+        `Node major. ${activate}` +
+        `${howToGetIt()} Do not install dependencies or run Playwright ` +
         `on ${version}.`
     )
   }
@@ -137,11 +147,23 @@ async function compatibleToolchainRuntime({
   required,
   repositoryPath,
   run,
+  bundledNodeExecutable,
   declared
 }) {
   const candidates =
     declared === undefined
-      ? listCompatibleToolchains(required)
+      ? [
+          ...(bundledNodeExecutable
+            ? [
+                {
+                  node: bundledNodeExecutable,
+                  directory: dirname(bundledNodeExecutable),
+                  manager: 'Hive image'
+                }
+              ]
+            : []),
+          ...listCompatibleToolchains(required)
+        ]
       : [declared].flat().filter(Boolean)
   for (const toolchain of candidates) {
     let version
@@ -156,7 +178,14 @@ async function compatibleToolchainRuntime({
       continue
     }
     if (Number.parseInt(version.replace(/^v/i, ''), 10) !== required) continue
-    return { version, major: required, toolchain }
+    return {
+      version,
+      major: required,
+      toolchain: {
+        ...toolchain,
+        version: toolchain.version || version.replace(/^v/i, '')
+      }
+    }
   }
   return null
 }
@@ -208,7 +237,9 @@ export function describeNodeRuntime(runtime) {
     ...(toolchain ? { toolchain } : {}),
     ...(runtime.shellVersion && runtime.shellVersion !== runtime.version
       ? {
-          note: `This shell resolves ${runtime.shellVersion}; the flow ran on ${runtime.version} from ${toolchain?.manager}. Activate that version in your terminal before running Playwright there by hand.`
+          note: toolchain?.manager === 'Hive image'
+            ? `This shell resolves ${runtime.shellVersion}; the flow ran on ${runtime.version} bundled in the Hive image.`
+            : `This shell resolves ${runtime.shellVersion}; the flow ran on ${runtime.version} from ${toolchain?.manager}. Activate that version in your terminal before running Playwright there by hand.`
         }
       : {})
   }

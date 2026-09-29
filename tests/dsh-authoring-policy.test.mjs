@@ -86,19 +86,36 @@ test('DSH proactively offers delivery at the attempt limit or user stop across e
       : qualifyDshVoidrTools(DSH_VALIDATION_DELIVERY)
     assert.ok(content.includes(expectedDelivery))
     for (const text of ['at most three runs', 'including resumed turns',
-      'In that same turn', 'automate-promote', 'automate-promote-live',
+      'In that same turn', 'normal chat', 'automate-promote-live',
       'If the user already declined extra attempts', 'NOT_VALIDATED',
       'unvalidatedApproval', 'budget_exhausted', 'user_stopped',
       'Never reuse a previous version', 'Without informed approval']) assert.ok(content.includes(text), text)
     assert.doesNotMatch(content, /No test verdict means no code publication|Do not offer LIVE from it|no executed tests is not eligible|canceled runs or no test verdict are not/)
   }
   for (const text of ['Ao encerrar as tentativas', 'NOT_VALIDATED', 'unvalidatedApproval',
-    'Nunca invente nem altere o veredito', 'não ofereça outra nem execute novamente',
+    'Nunca invente nem altere o veredito', 'nem execute novamente',
     'Não espere a pessoa pedir', 'reason: "user_stopped"', 'Nunca reutilize o ID']) {
     assert.ok(skills['voidr-automate'].includes(text), text)
   }
   assert.doesNotMatch(skills['voidr-automate'], /sem veredito não permite publicação/)
   assert.doesNotMatch(skills['voidr-execute'], /produced a PASSED or diagnosed FAILED validation verdict, only/)
+})
+
+test('DSH asks inline after validation attempts without weakening publication consent', () => {
+  const skills = Object.fromEntries(loadDshPluginSkills().map(skill => [skill.name, skill.content]))
+  const entryPoints = [skills['voidr-automate'], skills['voidr-generate'],
+    skills['voidr-execute'], interactiveTestDevelopmentPrompt()]
+
+  for (const content of entryPoints) {
+    assert.match(content, /normal chat|própria mensagem do chat/)
+    assert.match(content, /additional validation attempt|tentativa adicional limitada/)
+    assert.match(content, /keep the work unpublished|manter o trabalho sem publicar/)
+    assert.match(content, /explicit reply|resposta explícita/)
+    assert.doesNotMatch(content, /call ask_user_question with id automate-promote(?!-)/)
+  }
+  assert.match(DSH_VALIDATION_DELIVERY, /never preselect publication of a failing candidate/)
+  assert.match(skills['voidr-automate'], /nunca pré-selecione a publicação de\s+um candidato com falha/)
+  assert.match(DSH_VALIDATION_DELIVERY, /Declining extra attempts is NOT consent/)
 })
 
 test('DSH reports automatic plan activation only after latest publication', () => {

@@ -232,11 +232,17 @@ risco restante, versão executada e diff atual. Diferencie `PASSED`, `FAILED` e
 Se houve edição após a execução, o resultado anterior não vale para esse código.
 Nunca invente nem altere o veredito da execução para liberar publicação.
 
-Pergunte no chat se deve publicar com o risco informado ou manter o trabalho
-sem publicar, e espere a resposta. Não espere a pessoa pedir
-deploy e não encerre apenas reportando falha. Se ela já recusou mais tentativas,
-não ofereça outra nem execute novamente. Parar tentativas não autoriza upload,
-publicação, LIVE ou Git. Sem aprovação, preserve os arquivos e não publique.
+Na própria mensagem do chat, após o resumo, liste de forma curta as ações
+disponíveis: publicar a versão exata com o risco informado; autorizar uma
+tentativa adicional limitada, somente se a pessoa ainda não recusou mais
+tentativas e ela for possível; ou manter o trabalho sem publicar. Não use
+`ask_user_question` nem formulário para essa escolha. Só marque uma ação como
+recomendada quando a evidência justificar; nunca pré-selecione a publicação de
+um candidato com falha. Encerre o turno e espere uma resposta explícita antes
+de publicar ou executar novamente. Não espere a pessoa pedir deploy e não
+encerre apenas reportando falha. Se ela já recusou mais tentativas, não ofereça
+outra nem execute novamente. Parar tentativas não autoriza upload, publicação,
+LIVE ou Git. Sem aprovação, preserve os arquivos e não publique.
 
 ## 4. Entregar
 

@@ -8,15 +8,13 @@ description: Conduz uma entrevista e cria jornadas e cenários AAA no Test Plan 
 O DSH infere e classifica os cenários. Nunca use `coverage_*`,
 `test_plan_generation_*` ou um job de geração externo.
 
-Pergunte em uma mensagem normal do chat quando faltar uma decisão, confirmação
-ou informação. Termine a mensagem e espere a resposta antes de agir. Não use
-`ask_user_question` como padrão nem abra um formulário para escolhas que a
-pessoa consegue responder em texto. Faça somente as perguntas necessárias,
-agrupando as que dependem do mesmo contexto; não repita o que a pessoa já
-respondeu claramente. Reserve `ask_user_question` para uma escolha estruturada
-que realmente não possa ser resolvida com clareza no chat. Para gravar ou
-selecionar sessões reais, use o widget `session_coverage_picker`; para enviar
-documentos, use `document_input`.
+Use `ask_user_question` para a entrevista estruturada de **fonte e cobertura**
+antes de inferir cenários. Pergunte em uma mensagem normal do chat quando
+faltar outra decisão, confirmação ou informação; termine a mensagem e espere
+a resposta antes de agir. Não use `ask_user_question` como padrão fora dessa
+entrevista. Faça somente as perguntas necessárias; não repita o que a pessoa
+já respondeu claramente. Para gravar ou selecionar sessões reais, use o
+widget `session_coverage_picker`; para enviar documentos, use `document_input`.
 
 Se a pessoa pedir apenas uma explicação ou leitura, responda sem iniciar a entrevista.
 Depois de concluir a etapa pedida, se houver um próximo passo claramente
@@ -49,6 +47,20 @@ reais e pergunte apenas o que ainda impedir uma decisão segura:
    fluxo principal, erros/alternativas, limites ou tudo que as fontes sustentam;
 5. Pergunte sobre volume somente se um limite fizer diferença material para a
    proposta e não puder ser inferido do pedido.
+
+Se fonte ou cobertura ainda estiverem abertas, faça **uma chamada de
+`ask_user_question`** agrupando `journeys-source` e `journeys-coverage` no
+mesmo formulário. Inclua `journeys-volume` na mesma chamada somente se o item
+5 também estiver materialmente aberto. Omita qualquer campo já resolvido pelo
+pedido ou pelo contexto validado; não replique as opções em uma resposta longa
+no chat. As fontes podem ser combinadas: aceite múltiplas seleções quando a
+ferramenta permitir e uma resposta personalizada que indique uma combinação.
+Use opções curtas e concretas; indique quando uma fonte exige anexar ou gravar
+algo. Não apresente sessões inexistentes como gravadas nem um documento citado
+como já anexado. Se houver lacunas relevantes, explique em uma frase curta
+quais comportamentos não podem virar cenário sem evidência, sem transformar a
+ressalva em outra pergunta. Uma resposta válida ao formulário continua a
+solicitação original; não peça para reenviar o prompt.
 
 Para uma jornada nova, obtenha nome, objetivo e severidade; pergunte no chat
 somente o que o pedido e o contexto não resolverem. Fonte é um contrato de

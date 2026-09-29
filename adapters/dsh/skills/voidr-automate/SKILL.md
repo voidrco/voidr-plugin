@@ -8,36 +8,47 @@ description: Conduz uma entrevista e implementa casos aprovados no workspace iso
 O DSH escreve e corrige os testes. Nunca use `agent_jobs_trigger_automation` ou
 `agent_jobs_trigger_hive_automation`.
 
-Use `ask_user_question` quando precisar perguntar sobre escolhas, confirmações
-ou informações ainda ausentes que não tenham um widget próprio. Quando a
-evidência necessária ainda precisa ser gravada, use `session_coverage_picker`;
-para arquivos, use `document_input`. Agrupe em uma única chamada as perguntas
-que já puder fazer, sempre com IDs estáveis. A ferramenta define como perguntar
-e pausar o runtime; ela não invalida informações ou diretivas explícitas já
-fornecidas no chat ou em uma resposta customizada. Não repita uma pergunta que
-a pessoa já respondeu claramente.
+Pergunte em uma mensagem normal do chat quando faltar uma decisão, confirmação
+ou informação. Termine a mensagem e espere a resposta antes de agir. Não use
+`ask_user_question` como padrão nem abra um formulário para escolhas que a
+pessoa consegue responder em texto. Faça somente as perguntas necessárias,
+agrupando as que dependem do mesmo contexto; não repita o que a pessoa já
+respondeu claramente. Reserve `ask_user_question` para uma escolha estruturada
+que realmente não possa ser resolvida com clareza no chat ou para a pausa
+obrigatória do host descrita abaixo. Quando a evidência precisa ser gravada, use
+`session_coverage_picker`; para arquivos, use `document_input`. Credenciais
+ausentes seguem o formulário seguro descrito abaixo, nunca o chat.
 
-Se qualquer opção da entrevista ainda estiver aberta, a próxima ação deve ser
-uma única chamada de `ask_user_question` agrupando todas as perguntas que já
-podem ser feitas. Não liste nem faça essas perguntas em uma resposta comum do
-chat. Só continue depois da resposta da ferramenta.
+Próximos passos opcionais depois de concluir a etapa pedida não exigem formulário:
+conclua o resultado e, se houver um único passo claramente recomendado, pergunte
+em texto livre se a pessoa quer segui-lo, sem lista. Se houver vários caminhos
+úteis, liste-os em bullets e marque **(recomendado)** só quando houver fundamento.
+Deixe a pessoa responder livremente no chat.
 
 ## 0. Entrevista da skill
 
 Antes de preparar o workspace, resolva com ferramentas de leitura as opções
-reais e pergunte tudo que ainda estiver aberto:
+reais e pergunte apenas o que ainda impedir uma decisão segura:
 
-1. `automate-cases`: casos, suite ou jornada exatos a implementar, renderizando
-   a árvore do Test Plan como opções quando a pessoa não tiver selecionado;
-2. `automate-scope`: somente preparar e revisar o diff, ou também iterar a
-   validação remota em SHADOW;
-3. `automate-environment`: ambiente existente onde validar, quando houver mais
-   de um e a validação tiver sido escolhida.
+1. Resolva os casos, suite ou jornada exatos a implementar. Se o pedido não
+   identificar o alvo, apresente as opções reais do Test Plan no chat;
+2. Se o pedido disser apenas "automatizar" sem limitar o alcance, proponha
+   implementar os casos e validá-los em SHADOW na plataforma. Faça uma única
+   confirmação direta no chat, como "Posso implementar os 10 casos e validá-los
+   em SHADOW usando o ambiente take-hmg?". Não ofereça "só implementar agora e
+   validar depois" como alternativa padrão. Não repita essa pergunta se a
+   pessoa já definiu o alcance;
+3. Se houver vários ambientes, inclua o recomendado nessa confirmação somente
+   quando a evidência indicar claramente qual usar. Caso contrário, pergunte
+   qual ambiente existente a pessoa prefere, sem escolher por ela. Se ela
+   recusar a proposta ou pedir apenas o código, respeite esse limite e esclareça
+   somente o que ainda estiver pendente. Essa confirmação inicial não substitui
+   as aprovações separadas para upload e execução da validação.
 
 Depois de ler o repositório, mostre quais casos e arquivos pretende alterar.
 Se o pedido atual ainda não autorizou explicitamente a implementação desses
-casos, use `ask_user_question` com o ID `automate-approve-edit` antes da primeira
-edição. A autorização cobre somente o escopo mostrado.
+casos, peça confirmação no chat antes da primeira edição. Espere a resposta.
+A autorização cobre somente o escopo mostrado.
 
 ## 1. Vincular e preparar
 
@@ -221,19 +232,28 @@ risco restante, versão executada e diff atual. Diferencie `PASSED`, `FAILED` e
 Se houve edição após a execução, o resultado anterior não vale para esse código.
 Nunca invente nem altere o veredito da execução para liberar publicação.
 
-Chame `ask_user_question` com `automate-promote` para oferecer publicar com o
-risco informado ou manter o trabalho sem publicar. Não espere a pessoa pedir
-deploy e não encerre apenas reportando falha. Se ela já recusou mais tentativas,
-não ofereça outra nem execute novamente. Parar tentativas não autoriza upload,
-publicação, LIVE ou Git. Sem aprovação, preserve os arquivos e não publique.
+Na própria mensagem do chat, após o resumo, liste de forma curta as ações
+disponíveis: publicar a versão exata com o risco informado; autorizar uma
+tentativa adicional limitada, somente se a pessoa ainda não recusou mais
+tentativas e ela for possível; ou manter o trabalho sem publicar. Não use
+`ask_user_question` nem formulário para essa escolha. Só marque uma ação como
+recomendada quando a evidência justificar; nunca pré-selecione a publicação de
+um candidato com falha. Encerre o turno e espere uma resposta explícita antes
+de publicar ou executar novamente. Não espere a pessoa pedir deploy e não
+encerre apenas reportando falha. Se ela já recusou mais tentativas, não ofereça
+outra nem execute novamente. Parar tentativas não autoriza upload, publicação,
+LIVE ou Git. Sem aprovação, preserve os arquivos e não publique.
 
 ## 4. Entregar
 
-Publicar código, promover tags e publicar no Git são três decisões separadas:
+Publicar código, promover tags e publicar no Git são operações distintas.
+Cada escrita exige consentimento explícito; no caso totalmente aprovado, a
+pergunta direta pode autorizar LIVE e Git juntas:
 
 1. **Publicar o código:** ofereça `assistant_workspace_deploy_latest` ao encerrar
-   as tentativas, mesmo com falha, usando `ask_user_question` com `automate-promote`.
-   Mostre a versão e o diff final antes de perguntar. Para o candidato exato que
+   as tentativas, mesmo com falha, perguntando no chat se deve publicar.
+   Mostre a versão e o diff final antes de perguntar. Espere a resposta. Para o
+   candidato exato que
    passou ou falhou, informe `confirm: true`, `executionId` e, se falhou,
    `failureDiagnosis`. Não exija verde nem outra execução só para publicar.
    Se o código mudou depois da execução, não publique o candidato antigo como se
@@ -266,18 +286,31 @@ Publicar código, promover tags e publicar no Git são três decisões separadas
    isso inclui `FAILED` e `NOT_VALIDATED`. Exclua apenas stubs deliberadamente
    incompletos, pulados ou não executáveis.
 
-   Se algum caso implementado não estiver LIVE, é obrigatório chamar
-   `ask_user_question` com o ID `automate-promote-live` antes de encerrar a entrega.
+   Se algum caso implementado não estiver LIVE, é obrigatório perguntar e
+   esperar a resposta antes de encerrar a entrega.
    Falha ou ausência de validação muda o alerta de risco, não a elegibilidade para
    LIVE. Nunca promova silenciosamente apenas os aprovados, diga que reprovados são
    “não elegíveis”, nem deixe reprovados em DEV sem a escolha explícita da pessoa.
    Aprovação para publicar código, inclusive “pode finalizar publicando”, não aprova
    tags LIVE.
 
-   Nomeie os casos falhando ou não validados e ofereça exatamente estes três caminhos:
-   promover todos os casos implementados para LIVE; promover somente os `PASSED`;
-   ou manter todas as tags atuais. Explique que LIVE os torna monitorados e elegíveis
-   para self-healing sem mudar o veredito. Confirme `canWrite: true`, use
+   Se todos os casos implementados passaram, não apresente lista de escolhas nem
+   formulário. Diga quantos ainda não estão LIVE e pergunte diretamente no chat:
+   “Os 10 testes passaram. Deseja promover os 10 para LIVE e publicar o código no
+   Git do repositório vinculado?” Explique em uma frase que LIVE inicia monitoramento
+   e elegibilidade para self-healing sem mudar o veredito; Git envia o commit para
+   a branch principal. Ajuste a quantidade real e, se não houver mudança para Git,
+   pergunte somente sobre LIVE. Um “sim” a essa pergunta específica autoriza as
+   duas ações nomeadas, não outras; um “não” não autoriza nenhuma. Se a pessoa
+   escolher apenas uma, execute somente essa ação e pergunte sobre a outra apenas
+   se ainda fizer sentido. Não trate aprovação genérica para publicar código como
+   autorização para LIVE ou Git.
+
+   Se houver casos `FAILED` ou `NOT_VALIDATED`, nomeie-os e use
+   `ask_user_question` com ID `automate-promote-live` para oferecer exatamente
+   três caminhos: promover todos os casos implementados para LIVE;
+   promover somente os `PASSED`; ou manter todas as tags atuais. Mostre o risco e peça
+   a decisão de Git separadamente depois. Confirme `canWrite: true`, use
    `test_plans_update_test_case_tag` somente nos casos da opção escolhida e releia o
    plano. Informe o `current_tag` persistido de cada caso afetado.
    Nunca anuncie LIVE sem essa leitura.
@@ -290,7 +323,10 @@ Publicar código, promover tags e publicar no Git são três decisões separadas
    ou a mudança falhar, informe quais
    casos não mudaram; não repita o deploy nem reconstrua o candidato para corrigir tags.
 3. **Publicar no Git:** faça commit e push com `assistant_workspace_publish`
-   somente após confirmação separada com o ID `automate-publish`.
+   somente após confirmação explícita para Git, seja na pergunta combinada do
+   caso totalmente aprovado ou numa pergunta separada. Execute depois da
+   releitura das tags; se a promoção falhar parcialmente, pare e informe o
+   resultado antes de tentar Git.
    Esta é a etapa final: publique sempre na branch principal (default) do
    repositório vinculado, resolvida pela ferramenta, nunca em `voidr/assistant/...`.
    A geração continua no workspace e na branch local isolados; não mude esse fluxo.
@@ -300,18 +336,21 @@ Publicar código, promover tags e publicar no Git são três decisões separadas
    nova publicação. Se houver proteção contra push direto, informe o impedimento;
    nunca force o push, contorne proteções ou publique numa branch alternativa.
    Falha no Git não desfaz a publicação do código nem as tags já confirmadas.
-4. **Escolher o próximo passo:** depois que a decisão de Git estiver resolvida,
-   se o código foi publicado e a releitura confirmou ao menos um caso implementado
-   como `LIVE`, chame `ask_user_question` com o ID `automate-live-next-step` antes
-   da entrega final. Faça exatamente uma pergunta de seleção única: “O teste está
-   publicado e LIVE. O que você deseja fazer agora?”. Ofereça exatamente, nesta
-   ordem, `Habilitar cron job` e `Ir ao Monitor`. A Platform abre `/schedules/`
-   para a primeira opção e `/monitor?view=products` para a segunda.
+4. **Sugerir sem bloquear:** depois que a decisão de Git estiver resolvida,
+   conclua a entrega com o resultado confirmado. Se o código foi publicado e a
+   releitura confirmou ao menos um caso implementado como `LIVE` e execuções
+   recorrentes fizerem sentido, pergunte inline no texto: “Quer configurar um
+   agendamento para executar esses testes periodicamente?”. O link
+   `/schedules/` pode acompanhar essa sugestão. O Monitor
+   (`/monitor?view=products`) pode aparecer como referência, mas não como uma
+   escolha obrigatória entre cron e Monitor. A pessoa pode pedir outro ajuste
+   ou análise no chat.
 
-   Essa escolha serve somente para navegar. Não crie um agendamento, não inicie
-   uma execução e não faça outra mutação a partir dela. Não mostre a pergunta se
-   a publicação falhou ou foi recusada, se nenhum caso implementado foi confirmado
-   como `LIVE` ou se ainda houver outra decisão de entrega pendente.
+   Não chame `ask_user_question` nem renderize widget apenas para essa sugestão.
+   Não crie agendamento, não inicie execução, não navegue nem faça outra mutação
+   antes de um pedido posterior da pessoa. Não apresente próximos passos de `LIVE` se a publicação
+   falhou ou foi recusada, se nenhum caso implementado foi confirmado como `LIVE`
+   ou se ainda houver outra decisão de entrega pendente.
 
 Se a publicação de código falhar, não avance para a promoção de tags. Consulte o
 estado antes de propor uma nova tentativa. Se retornar `alreadyPublished: true`,

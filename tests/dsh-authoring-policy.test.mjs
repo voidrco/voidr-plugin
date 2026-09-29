@@ -86,19 +86,36 @@ test('DSH proactively offers delivery at the attempt limit or user stop across e
       : qualifyDshVoidrTools(DSH_VALIDATION_DELIVERY)
     assert.ok(content.includes(expectedDelivery))
     for (const text of ['at most three runs', 'including resumed turns',
-      'In that same turn', 'automate-promote', 'automate-promote-live',
+      'In that same turn', 'normal chat', 'automate-promote-live',
       'If the user already declined extra attempts', 'NOT_VALIDATED',
       'unvalidatedApproval', 'budget_exhausted', 'user_stopped',
       'Never reuse a previous version', 'Without informed approval']) assert.ok(content.includes(text), text)
     assert.doesNotMatch(content, /No test verdict means no code publication|Do not offer LIVE from it|no executed tests is not eligible|canceled runs or no test verdict are not/)
   }
   for (const text of ['Ao encerrar as tentativas', 'NOT_VALIDATED', 'unvalidatedApproval',
-    'Nunca invente nem altere o veredito', 'não ofereça outra nem execute novamente',
+    'Nunca invente nem altere o veredito', 'nem execute novamente',
     'Não espere a pessoa pedir', 'reason: "user_stopped"', 'Nunca reutilize o ID']) {
     assert.ok(skills['voidr-automate'].includes(text), text)
   }
   assert.doesNotMatch(skills['voidr-automate'], /sem veredito não permite publicação/)
   assert.doesNotMatch(skills['voidr-execute'], /produced a PASSED or diagnosed FAILED validation verdict, only/)
+})
+
+test('DSH asks inline after validation attempts without weakening publication consent', () => {
+  const skills = Object.fromEntries(loadDshPluginSkills().map(skill => [skill.name, skill.content]))
+  const entryPoints = [skills['voidr-automate'], skills['voidr-generate'],
+    skills['voidr-execute'], interactiveTestDevelopmentPrompt()]
+
+  for (const content of entryPoints) {
+    assert.match(content, /normal chat|própria mensagem do chat/)
+    assert.match(content, /additional validation attempt|tentativa adicional limitada/)
+    assert.match(content, /keep the work unpublished|manter o trabalho sem publicar/)
+    assert.match(content, /explicit reply|resposta explícita/)
+    assert.doesNotMatch(content, /call ask_user_question with id automate-promote(?!-)/)
+  }
+  assert.match(DSH_VALIDATION_DELIVERY, /never preselect publication of a failing candidate/)
+  assert.match(skills['voidr-automate'], /nunca pré-selecione a publicação de\s+um candidato com falha/)
+  assert.match(DSH_VALIDATION_DELIVERY, /Declining extra attempts is NOT consent/)
 })
 
 test('DSH reports automatic plan activation only after latest publication', () => {
@@ -149,7 +166,7 @@ test('composer and form directives outrank assistant hypotheses without rewritin
     assert.match(skills[name], /Runtime evidence defines what happened/)
   }
 
-  assert.match(skills['voidr-automate'], /não invalida informações ou diretivas explícitas/)
+  assert.match(skills['voidr-automate'], /não repita o que a pessoa já\s+respondeu claramente/)
   assert.match(skills['voidr-automate'], /sem\s+reescrever o que a pessoa declarou que deveria ocorrer/)
   assert.match(skills['voidr-generate'], /latest directive and\s+approved AAA define the intended behavior/)
   assert.doesNotMatch(skills['voidr-generate'], /code and observed runtime behavior\s+are authoritative/)
@@ -340,43 +357,79 @@ test('final Git delivery targets the default branch without changing isolated ge
   }
 })
 
-test('each DSH authoring skill owns an interactive intake and write gate', () => {
+test('DSH authoring asks in chat by default and keeps write gates', () => {
   const byName = Object.fromEntries(loadDshPluginSkills().map(skill => [skill.name, skill]))
 
-  for (const skill of ['voidr-spec', 'voidr-journeys', 'voidr-automate'].map(name => byName[name])) {
-    assert.match(skill.content, /ask_user_question/)
-    assert.match(skill.content, /IDs?\s+estáve(?:l|is)/)
-    assert.match(skill.content, /não repita/i)
-  }
+  const automate = byName['voidr-automate'].content
+  assert.match(automate, /Pergunte em uma mensagem normal do chat/)
+  assert.match(automate, /Termine a mensagem e espere a resposta/)
+  assert.match(automate, /Não use\s+`ask_user_question` como padrão/)
+  assert.match(automate, /não repita/i)
 
-  for (const id of ['spec-destination', 'spec-source', 'spec-scope', 'spec-focus', 'spec-approve']) {
-    assert.match(byName['voidr-spec'].content, new RegExp(id))
-  }
-  for (const id of [
-    'journeys-target',
-    'journeys-destination',
-    'journeys-source',
-    'journeys-coverage',
-    'journeys-volume',
-    'journeys-approve'
-  ]) {
-    assert.match(byName['voidr-journeys'].content, new RegExp(id))
-  }
-  for (const id of [
-    'automate-cases',
-    'automate-scope',
-    'automate-environment',
-    'automate-approve-edit',
-    'automate-promote',
-    'automate-promote-live',
-    'automate-publish'
-  ]) {
-    assert.match(byName['voidr-automate'].content, new RegExp(id))
-  }
+  assert.match(byName['voidr-spec'].content, /Use `ask_user_question` para a entrevista estruturada/)
+  assert.match(byName['voidr-spec'].content, /uma\s+chamada de `ask_user_question`/)
+  assert.match(byName['voidr-spec'].content, /`spec-source`[\s\S]*`spec-scope`[\s\S]*`spec-coverage`/)
+  assert.match(byName['voidr-spec'].content, /Inclua somente os campos ainda não resolvidos/)
+  assert.match(byName['voidr-spec'].content, /As fontes podem ser\s+combinadas/)
+  assert.match(byName['voidr-spec'].content, /Mostre a proposta completa e pergunte no chat/)
+  assert.match(byName['voidr-journeys'].content, /Use `ask_user_question` para a entrevista estruturada/)
+  assert.match(byName['voidr-journeys'].content, /uma chamada de\s+`ask_user_question`/)
+  assert.match(byName['voidr-journeys'].content, /`journeys-source`[\s\S]*`journeys-coverage`/)
+  assert.match(byName['voidr-journeys'].content, /Inclua `journeys-volume`[\s\S]*somente se o item/)
+  assert.match(byName['voidr-journeys'].content, /As fontes podem ser combinadas/)
+  assert.match(byName['voidr-journeys'].content, /Mostre a proposta inteira e pergunte no chat/)
+
+  assert.match(byName['voidr-spec'].content, /Somente a escolha de\s+persistir autoriza a escrita/)
+  assert.match(byName['voidr-journeys'].content, /Somente persistir autoriza as\s+escritas/)
+  assert.match(byName['voidr-automate'].content, /Sem aprovação, preserve os arquivos e não publique/)
+  assert.match(byName['voidr-automate'].content, /Credenciais\s+ausentes seguem o formulário seguro/)
+  assert.match(byName['voidr-journeys'].content, /Se o pedido já\s+incluiu automatizar os casos, continue/)
 
   const prompt = interactiveTestDevelopmentPrompt()
-  assert.match(prompt, /mandatory interactive intake/)
-  assert.match(prompt, /ask_user_question/)
+  assert.match(prompt, /For ordinary choices and confirmations, ask in plain chat/)
+  assert.match(prompt, /Do not use ask_user_question by default/)
+  assert.match(prompt, /A request for the full generation-to-deployment workflow already states the next stage/)
+})
+
+test('spec surface groups dense intake in a form without changing ordinary next steps', () => {
+  const prompt = interactiveTestDevelopmentPrompt({ hint: { surface: 'spec' } })
+  assert.match(prompt, /single structured ask_user_question form for unresolved evidence source, scope and coverage/)
+  assert.match(prompt, /Optional follow-up after a completed stage has three branches/)
+  assert.match(prompt, /ask in plain chat/)
+})
+
+test('journeys surface groups evidence and coverage choices in a form', () => {
+  const prompt = interactiveTestDevelopmentPrompt({ hint: { surface: 'journeys' } })
+  assert.match(prompt, /single structured ask_user_question form for unresolved evidence source and scenario coverage/)
+  assert.match(prompt, /Optional follow-up after a completed stage has three branches/)
+  assert.match(prompt, /ask in plain chat/)
+})
+
+test('Journeys surface leaves optional transitions in prose without skipping required approvals', () => {
+  const skills = Object.fromEntries(loadDshPluginSkills().map(skill => [skill.name, skill.content]))
+  const overview = interactiveTestDevelopmentPrompt({ hint: { surface: 'journey-overview' } })
+
+  assert.match(overview, /one natural-language question/)
+  assert.match(overview, /Markdown bullet list/)
+  assert.match(overview, /Do not force a form merely to offer optional paths/)
+  assert.match(overview, /ask only for the missing choice/)
+
+  for (const surface of ['spec', 'journeys', 'automate']) {
+    const prompt = interactiveTestDevelopmentPrompt({ hint: { surface } })
+    assert.match(prompt, /Answer read-only questions directly/)
+    assert.match(prompt, /required inputs still missing/)
+    assert.match(prompt, /Optional follow-up after a completed stage/)
+  }
+
+  for (const name of ['voidr-spec', 'voidr-journeys', 'voidr-automate']) {
+    assert.match(skills[name], /Pergunte em uma mensagem normal do chat/)
+    assert.match(skills[name], /Não use formulário para essas sugestões|Não chame `ask_user_question` nem renderize widget apenas para essa sugestão/)
+    assert.match(skills[name], /pergunte[\s\S]*sem lista/)
+    assert.match(skills[name], /bullets/)
+  }
+  assert.match(skills['voidr-spec'], /Somente a escolha de\s+persistir autoriza a escrita/)
+  assert.match(skills['voidr-journeys'], /Somente persistir autoriza as\s+escritas/)
+  assert.match(skills['voidr-automate'], /Se o pedido atual ainda não autorizou explicitamente a implementação/)
 })
 
 test('automate separates code publication, case tags and Git delivery', () => {
@@ -401,8 +454,8 @@ test('DSH cannot finish after publishing while implemented failed cases remain s
       'implemented case', 'FAILED', 'NOT_VALIDATED', 'automate-promote-live',
       'promote all implemented cases', 'promote only PASSED cases', 'keep every current tag'
     ]) assert.ok(content.toLowerCase().includes(required.toLowerCase()), required)
-    assert.match(content, /before (?:it can emit a final delivery|final delivery)|antes de encerrar a entrega/)
-    assert.match(content, /generic approval to publish code does not approve LIVE|Aprovação para publicar código[\s\S]*não aprova[\s\S]*LIVE/)
+    assert.match(content, /Do not finish delivery without resolving this choice|antes de encerrar a entrega/)
+    assert.match(content, /Generic consent to publish code does not approve LIVE or Git|Aprovação para publicar código[\s\S]*não aprova[\s\S]*LIVE/)
     assert.match(content, /Never silently promote only PASSED cases|Nunca promova silenciosamente apenas os aprovados/)
     assert.match(content, /failed cases as ineligible/)
   }
@@ -418,27 +471,54 @@ test('DSH cannot finish after publishing while implemented failed cases remain s
   assert.match(automate, /reprovados são[\s\S]*“não elegíveis”/)
 })
 
-test('DSH offers schedule or Monitor navigation after confirmed LIVE delivery', () => {
+test('DSH offers one direct inline LIVE and Git confirmation when every case passed', () => {
+  const skills = Object.fromEntries(loadDshPluginSkills().map(skill => [skill.name, skill.content]))
+  const entryPoints = [skills['voidr-generate'], skills['voidr-execute'], interactiveTestDevelopmentPrompt()]
+
+  for (const content of entryPoints) {
+    assert.match(content, /all implemented cases PASSED/)
+    assert.match(content, /one direct question in normal chat/)
+    assert.match(content, /default Git branch/)
+    assert.match(content, /without a menu, form, or ask_user_question/)
+    assert.match(content, /partial answer authorizes only the named action/)
+    assert.match(content, /If any implemented case FAILED or is NOT_VALIDATED/)
+  }
+
+  const automate = skills['voidr-automate']
+  assert.match(automate, /Se todos os casos implementados passaram/)
+  assert.match(automate, /Deseja promover os 10 para LIVE e publicar o código no/)
+  assert.match(automate, /não apresente lista de escolhas nem\s+formulário/)
+  assert.match(automate, /Se houver casos `FAILED` ou `NOT_VALIDATED`/)
+  assert.match(automate, /Um “sim” a essa pergunta específica autoriza as\s+duas ações/)
+})
+
+test('DSH suggests optional next steps in prose after confirmed LIVE delivery', () => {
   const skills = Object.fromEntries(loadDshPluginSkills().map(skill => [skill.name, skill.content]))
   const entryPoints = [skills['voidr-automate'], skills['voidr-generate'], skills['voidr-execute'],
     interactiveTestDevelopmentPrompt()]
 
   for (const content of entryPoints) {
     for (const required of [
-      'automate-live-next-step',
-      'Habilitar cron job',
-      'Ir ao Monitor',
       '/schedules/',
       '/monitor?view=products'
     ]) assert.ok(content.includes(required), required)
     assert.match(content, /at least one implemented case is confirmed LIVE|ao menos um caso implementado[\s\S]*como `LIVE`/)
-    assert.match(content, /only navigates|somente para navegar/)
+    assert.doesNotMatch(content, /automate-live-next-step/)
+    assert.match(content, /optional|opcionais/i)
   }
 
   const automate = skills['voidr-automate']
   assert.match(automate, /depois que a decisão de Git estiver resolvida/)
-  assert.match(automate, /Não mostre a pergunta se[\s\S]*publicação falhou ou foi recusada/)
+  assert.match(automate, /Quer configurar um[\s\S]*agendamento para executar esses testes periodicamente/)
+  assert.match(automate, /Não chame `ask_user_question` nem renderize widget apenas para essa sugestão/)
+  assert.match(automate, /não como uma[\s\S]*escolha obrigatória entre cron e Monitor/)
+  assert.match(automate, /pessoa pode pedir outro ajuste\s+ou análise no chat/)
   assert.match(automate, /não inicie[\s\S]*execução/)
+  assert.match(interactiveTestDevelopmentPrompt(), /Do not show a cron-versus-Monitor menu/)
+  assert.match(interactiveTestDevelopmentPrompt(), /"\(recomendado\)" only when justified/)
+  assert.match(interactiveTestDevelopmentPrompt(), /no fixed option count/)
+  assert.match(interactiveTestDevelopmentPrompt(), /one next action is clearly recommended/)
+  assert.match(interactiveTestDevelopmentPrompt(), /do not create an artificial list/)
 })
 
 test('DSH uses product widgets for recording and file evidence', () => {

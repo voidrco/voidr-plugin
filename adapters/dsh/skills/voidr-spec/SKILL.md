@@ -8,14 +8,19 @@ description: Conduz uma entrevista e gera ou atualiza a especificação técnica
 O DSH faz toda a análise e redação. Nunca use `recording_interpret_journey`,
 `coverage_*` ou `test_plan_generation_*`.
 
-Use `ask_user_question` quando precisar perguntar sobre escolhas, confirmações
-ou informações ainda ausentes que não tenham um widget próprio. Para gravar ou
-selecionar sessões reais, use o widget `session_coverage_picker`; para enviar
-documentos, use `document_input`. Agrupe em uma única chamada as perguntas que
-já puder fazer, sempre com IDs estáveis. A ferramenta define como perguntar e
-pausar o runtime; ela não invalida informações ou diretivas explícitas já
-fornecidas no chat ou em uma resposta customizada. Não repita uma pergunta que
-a pessoa já respondeu claramente.
+Use `ask_user_question` para a entrevista estruturada de **fonte, escopo e
+cobertura** antes de gerar a spec. Pergunte em uma mensagem normal do chat
+quando faltar outra decisão, confirmação ou informação; termine a mensagem e
+espere a resposta antes de agir. Não use `ask_user_question` como padrão fora
+dessa entrevista. Faça somente as perguntas necessárias; não repita o que a
+pessoa já respondeu claramente. Para gravar ou selecionar sessões reais, use
+o widget `session_coverage_picker`; para enviar documentos, use `document_input`.
+
+Se a pessoa pedir apenas uma explicação ou leitura, responda sem iniciar a entrevista.
+Depois de concluir a etapa pedida, se houver um próximo passo claramente
+recomendado, pergunte em texto livre se a pessoa quer segui-lo, sem lista. Se
+houver vários caminhos úteis, apresente-os em bullets e marque **(recomendado)**
+somente quando houver fundamento. Não use formulário para essas sugestões.
 
 Para aplicação ainda não confirmada, use `app_target_picker` com
 `includeNewOption: true`, incluindo **Nova aplicação**. Se a pessoa escolher
@@ -26,21 +31,38 @@ retornado antes de continuar. Não substitua esses widgets por `ask_user_questio
 ## 0. Entrevista da skill
 
 Antes de analisar as evidências, resolva com ferramentas de leitura as opções
-reais e pergunte tudo que ainda estiver aberto:
+reais e pergunte apenas o que ainda impedir uma decisão segura:
 
-1. `spec-destination`: aplicação, Test Plan e jornada exatos, usando opções
+1. Resolva aplicação, Test Plan e jornada exatos, usando opções
    retornadas pela plataforma; nunca peça IDs. Quando o contexto da UI já
    trouxer o Test Plan e a jornada abertos, valide-os e use-os como destino;
    não repita essa pergunta;
-2. `spec-source`: uma escolha obrigatória e de seleção múltipla das fontes. A
-   pergunta sempre oferece **Gravar nova sessão**, **Usar sessões gravadas** e
-   **Enviar documentação**, mesmo quando ainda não houver sessão ou documento
-   disponível. Inclua **Spec atual** somente quando ela tiver conteúdo válido;
-3. `spec-scope`: jornada inteira ou fluxo específico que a pessoa quer cobrir;
-4. `spec-focus`: fluxo principal, erros/alternativas ou ambos.
+2. Confirme as fontes quando o pedido e o contexto não as definirem. Ofereça
+   **Gravar nova sessão**, **Usar sessões gravadas** e **Enviar documentação**;
+   inclua **Spec atual** somente quando ela tiver conteúdo válido. Não inicie
+   gravação nem use uma fonte não escolhida silenciosamente;
+3. Pergunte se o escopo é a jornada inteira ou um fluxo específico somente
+   quando o pedido não permitir decidir;
+4. Pergunte se deve cobrir fluxo principal, erros/alternativas ou ambos somente
+   quando essa escolha mudar materialmente a resposta.
 
-Fonte é um contrato de produto, não uma inferência do modelo: nunca escolha
-nem omita uma dessas alternativas por conta própria. Depois da resposta:
+Se uma ou mais escolhas dos itens 2–4 ainda estiverem abertas, faça **uma
+chamada de `ask_user_question`**, agrupando até três perguntas no mesmo
+formulário: `spec-source` (fontes de evidência), `spec-scope` (jornada inteira
+ou fluxo específico) e `spec-coverage` (principal, erros/alternativas ou
+ambos). Inclua somente os campos ainda não resolvidos; não replique as
+perguntas nem as opções em uma resposta longa no chat. Use títulos e descrições
+curtos; indique quando uma fonte exige anexar ou gravar algo. As fontes podem ser
+combinadas: aceite múltiplas seleções quando a ferramenta permitir e também
+uma resposta personalizada que indique uma combinação. Não apresente sessões
+inexistentes como gravadas nem um documento citado como já anexado; se recomendar
+reenviá-lo, diga isso na opção. Se a pessoa escolher um fluxo específico sem
+identificá-lo, peça somente esse detalhe depois da resposta. Uma resposta válida ao formulário
+continua a entrevista na mesma solicitação; não peça para reenviar o prompt.
+
+Fonte é um contrato de produto: use apenas as fontes indicadas pela pessoa ou
+já fixadas no contexto da página. Se não houver escolha, pergunte; não invente
+nem omita uma fonte. Depois da resposta:
 
 - para **Gravar nova sessão**, renderize `session_coverage_picker` com a
   aplicação, URL, plano e jornada; ele inicia a captura real pela extensão.
@@ -64,7 +86,7 @@ ou documento em nome da pessoa.
    módulo da plataforma é uma jornada neste fluxo.
 3. Leia a versão atual com `test_plans_get_module_spec`.
 4. Quando o plano ou a jornada ainda estiverem ambíguos, use
-   `ask_user_question`; a aplicação usa os widgets acima. Nunca invente IDs
+   uma pergunta no chat; a aplicação usa os widgets acima. Nunca invente IDs
    ou peça para a pessoa digitá-los.
 
 ## 2. Reunir evidência
@@ -99,8 +121,8 @@ afirmação necessária, pergunte ou registre a lacuna explicitamente.
 
 ## 4. Revisar e persistir
 
-Mostre a proposta completa e use `ask_user_question` com o ID `spec-approve`
-para perguntar se deve persistir, revisar ou cancelar. Somente a escolha de
+Mostre a proposta completa e pergunte no chat se deve persistir, revisar ou
+cancelar. Espere a resposta. Somente a escolha de
 persistir autoriza a escrita; um pedido de revisão volta à proposta e exige
 nova confirmação. Depois chame
 `test_plans_update_module_spec` com o documento Markdown completo e os
@@ -109,3 +131,8 @@ para uma atualização, preserve deliberadamente o conteúdo válido da versão
 lida no passo 1.
 
 Finalize informando a jornada, a nova versão e quais fontes sustentaram a spec.
+Se o pedido também incluiu criar cenários e automatizá-los, continue com
+`voidr-journeys`; não peça de novo qual é o próximo passo.
+Se a pessoa não pediu a próxima etapa, você pode sugerir criar cenários ou revisar
+a spec, sem usar `ask_user_question` só para oferecer essas opções. Ela pode pedir
+qualquer outro ajuste ou análise no chat.

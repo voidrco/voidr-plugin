@@ -67,13 +67,15 @@ read tool first.
 
 ## Selections
 
-Every choice — application, environment, Test Plan, cases, repository — is
-rendered with the native `ask_user` selectable options whenever that control
-is available. Never ask the user to type an organization ID, application ID,
-Test Plan ID, case slug, or repository path when a platform listing can be
-rendered instead; a pasted ID volunteered by the user is acceptable. The
-question UI rejects a question with a single option: when exactly one
-candidate exists, confirm it with two options — `Usar <nome>` and `Cancelar`.
+Every unresolved choice — application, environment, Test Plan, cases,
+repository — is rendered with the native `ask_user` selectable options when
+that control is available. A target the user already named clearly in chat is
+already selected: validate it through the matching MCP selector and do not ask
+again. Never ask the user to type an organization ID, application ID, Test Plan
+ID, case slug, or repository path when a platform listing can be rendered
+instead; a pasted ID volunteered by the user is acceptable. The question UI
+rejects a question with a single option: when exactly one candidate exists,
+confirm it with two options — `Usar <nome>` and `Cancelar`.
 
 ## User directives
 

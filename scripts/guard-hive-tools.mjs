@@ -845,6 +845,8 @@ function enforcePlanModeGate(hookPayload, rawName, canonicalName) {
 }
 
 function enforceSelectedTestPlanIdentity(hookPayload, canonicalName, args) {
+  if (canonicalName === 'voidr_select_test_plan') return
+
   const state = readSessionState(hookPayload)
   const selectedId = String(state.selectedTestPlanId || '').trim().toLowerCase()
   if (!selectedId) return

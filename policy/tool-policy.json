@@ -101,6 +101,7 @@
   "localTools": [
     "voidr_environment_doctor",
     "voidr_auth_status",
+    "voidr_select_test_plan",
     "voidr_auth_select_organization",
     "voidr_auth_login",
     "voidr_workspace_inspect",

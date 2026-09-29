@@ -78,6 +78,17 @@ test('DSH treats unknown tools as a terminal branch error instead of looping', (
   assert.doesNotMatch(skills['voidr-failure-analysis'], /\bvoidr_auth_status\b/)
 })
 
+test('DSH spec reads documents uploaded by its widget instead of searching the application index', () => {
+  const spec = loadDshPluginSkills().find(skill => skill.name === 'voidr-spec').content
+
+  assert.match(spec, /\[Widget Submission\][\s\S]*action:"upload"/)
+  assert.match(spec, /data\.files[\s\S]*data\.fileKey/)
+  assert.match(spec, /mcp__voidr__files_analyze_uploaded_file/)
+  assert.match(spec, /chat_uploads[\s\S]*não[\s\S]*indexa/)
+  assert.match(spec, /file_embeddings_search_documents` somente para documentação já\s+indexada/)
+  assert.doesNotMatch(spec, /`file_embeddings_search_documents` quando a pessoa escolher documentação/)
+})
+
 test('DSH proactively offers delivery at the attempt limit or user stop across every entry point', () => {
   const skills = Object.fromEntries(loadDshPluginSkills().map(skill => [skill.name, skill.content]))
   for (const content of [skills['voidr-generate'], skills['voidr-execute'], interactiveTestDevelopmentPrompt()]) {

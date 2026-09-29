@@ -246,7 +246,9 @@ LIVE ou Git. Sem aprovação, preserve os arquivos e não publique.
 
 ## 4. Entregar
 
-Publicar código, promover tags e publicar no Git são três decisões separadas:
+Publicar código, promover tags e publicar no Git são operações distintas.
+Cada escrita exige consentimento explícito; no caso totalmente aprovado, a
+pergunta direta pode autorizar LIVE e Git juntas:
 
 1. **Publicar o código:** ofereça `assistant_workspace_deploy_latest` ao encerrar
    as tentativas, mesmo com falha, perguntando no chat se deve publicar.
@@ -284,18 +286,31 @@ Publicar código, promover tags e publicar no Git são três decisões separadas
    isso inclui `FAILED` e `NOT_VALIDATED`. Exclua apenas stubs deliberadamente
    incompletos, pulados ou não executáveis.
 
-   Se algum caso implementado não estiver LIVE, é obrigatório perguntar no
-   chat e esperar a resposta antes de encerrar a entrega.
+   Se algum caso implementado não estiver LIVE, é obrigatório perguntar e
+   esperar a resposta antes de encerrar a entrega.
    Falha ou ausência de validação muda o alerta de risco, não a elegibilidade para
    LIVE. Nunca promova silenciosamente apenas os aprovados, diga que reprovados são
    “não elegíveis”, nem deixe reprovados em DEV sem a escolha explícita da pessoa.
    Aprovação para publicar código, inclusive “pode finalizar publicando”, não aprova
    tags LIVE.
 
-   Nomeie os casos falhando ou não validados e ofereça exatamente estes três caminhos:
-   promover todos os casos implementados para LIVE; promover somente os `PASSED`;
-   ou manter todas as tags atuais. Explique que LIVE os torna monitorados e elegíveis
-   para self-healing sem mudar o veredito. Confirme `canWrite: true`, use
+   Se todos os casos implementados passaram, não apresente lista de escolhas nem
+   formulário. Diga quantos ainda não estão LIVE e pergunte diretamente no chat:
+   “Os 10 testes passaram. Deseja promover os 10 para LIVE e publicar o código no
+   Git do repositório vinculado?” Explique em uma frase que LIVE inicia monitoramento
+   e elegibilidade para self-healing sem mudar o veredito; Git envia o commit para
+   a branch principal. Ajuste a quantidade real e, se não houver mudança para Git,
+   pergunte somente sobre LIVE. Um “sim” a essa pergunta específica autoriza as
+   duas ações nomeadas, não outras; um “não” não autoriza nenhuma. Se a pessoa
+   escolher apenas uma, execute somente essa ação e pergunte sobre a outra apenas
+   se ainda fizer sentido. Não trate aprovação genérica para publicar código como
+   autorização para LIVE ou Git.
+
+   Se houver casos `FAILED` ou `NOT_VALIDATED`, nomeie-os e use
+   `ask_user_question` com ID `automate-promote-live` para oferecer exatamente
+   três caminhos: promover todos os casos implementados para LIVE;
+   promover somente os `PASSED`; ou manter todas as tags atuais. Mostre o risco e peça
+   a decisão de Git separadamente depois. Confirme `canWrite: true`, use
    `test_plans_update_test_case_tag` somente nos casos da opção escolhida e releia o
    plano. Informe o `current_tag` persistido de cada caso afetado.
    Nunca anuncie LIVE sem essa leitura.
@@ -308,7 +323,10 @@ Publicar código, promover tags e publicar no Git são três decisões separadas
    ou a mudança falhar, informe quais
    casos não mudaram; não repita o deploy nem reconstrua o candidato para corrigir tags.
 3. **Publicar no Git:** faça commit e push com `assistant_workspace_publish`
-   somente após confirmação separada no chat.
+   somente após confirmação explícita para Git, seja na pergunta combinada do
+   caso totalmente aprovado ou numa pergunta separada. Execute depois da
+   releitura das tags; se a promoção falhar parcialmente, pare e informe o
+   resultado antes de tentar Git.
    Esta é a etapa final: publique sempre na branch principal (default) do
    repositório vinculado, resolvida pela ferramenta, nunca em `voidr/assistant/...`.
    A geração continua no workspace e na branch local isolados; não mude esse fluxo.

@@ -454,8 +454,8 @@ test('DSH cannot finish after publishing while implemented failed cases remain s
       'implemented case', 'FAILED', 'NOT_VALIDATED', 'automate-promote-live',
       'promote all implemented cases', 'promote only PASSED cases', 'keep every current tag'
     ]) assert.ok(content.toLowerCase().includes(required.toLowerCase()), required)
-    assert.match(content, /before (?:it can emit a final delivery|final delivery)|antes de encerrar a entrega/)
-    assert.match(content, /generic approval to publish code does not approve LIVE|Aprovação para publicar código[\s\S]*não aprova[\s\S]*LIVE/)
+    assert.match(content, /Do not finish delivery without resolving this choice|antes de encerrar a entrega/)
+    assert.match(content, /Generic consent to publish code does not approve LIVE or Git|Aprovação para publicar código[\s\S]*não aprova[\s\S]*LIVE/)
     assert.match(content, /Never silently promote only PASSED cases|Nunca promova silenciosamente apenas os aprovados/)
     assert.match(content, /failed cases as ineligible/)
   }
@@ -469,6 +469,27 @@ test('DSH cannot finish after publishing while implemented failed cases remain s
   assert.match(automate, /Aprovação para publicar código[\s\S]*não aprova[\s\S]*LIVE/)
   assert.match(automate, /Nunca promova silenciosamente apenas os aprovados/)
   assert.match(automate, /reprovados são[\s\S]*“não elegíveis”/)
+})
+
+test('DSH offers one direct inline LIVE and Git confirmation when every case passed', () => {
+  const skills = Object.fromEntries(loadDshPluginSkills().map(skill => [skill.name, skill.content]))
+  const entryPoints = [skills['voidr-generate'], skills['voidr-execute'], interactiveTestDevelopmentPrompt()]
+
+  for (const content of entryPoints) {
+    assert.match(content, /all implemented cases PASSED/)
+    assert.match(content, /one direct question in normal chat/)
+    assert.match(content, /default Git branch/)
+    assert.match(content, /without a menu, form, or ask_user_question/)
+    assert.match(content, /partial answer authorizes only the named action/)
+    assert.match(content, /If any implemented case FAILED or is NOT_VALIDATED/)
+  }
+
+  const automate = skills['voidr-automate']
+  assert.match(automate, /Se todos os casos implementados passaram/)
+  assert.match(automate, /Deseja promover os 10 para LIVE e publicar o código no/)
+  assert.match(automate, /não apresente lista de escolhas nem\s+formulário/)
+  assert.match(automate, /Se houver casos `FAILED` ou `NOT_VALIDATED`/)
+  assert.match(automate, /Um “sim” a essa pergunta específica autoriza as\s+duas ações/)
 })
 
 test('DSH suggests optional next steps in prose after confirmed LIVE delivery', () => {

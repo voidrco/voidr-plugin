@@ -20,10 +20,9 @@ obrigatória do host descrita abaixo. Quando a evidência precisa ser gravada, u
 ausentes seguem o formulário seguro descrito abaixo, nunca o chat.
 
 Próximos passos opcionais depois de concluir a etapa pedida não exigem formulário:
-conclua o resultado e, se houver um único passo claramente recomendado, pergunte
-em texto livre se a pessoa quer segui-lo, sem lista. Se houver vários caminhos
-úteis, liste-os em bullets e marque **(recomendado)** só quando houver fundamento.
-Deixe a pessoa responder livremente no chat.
+conclua o resultado e sugira somente o passo mais bem fundamentado em uma
+pergunta curta no chat, sem lista de alternativas. Se não houver passo
+recomendado, encerre com o resultado. Deixe a pessoa responder livremente.
 
 ## 0. Entrevista da skill
 

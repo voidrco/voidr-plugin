@@ -17,10 +17,9 @@ pessoa já respondeu claramente. Para gravar ou selecionar sessões reais, use
 o widget `session_coverage_picker`; para enviar documentos, use `document_input`.
 
 Se a pessoa pedir apenas uma explicação ou leitura, responda sem iniciar a entrevista.
-Depois de concluir a etapa pedida, se houver um próximo passo claramente
-recomendado, pergunte em texto livre se a pessoa quer segui-lo, sem lista. Se
-houver vários caminhos úteis, apresente-os em bullets e marque **(recomendado)**
-somente quando houver fundamento. Não use formulário para essas sugestões.
+Depois de concluir a etapa pedida, sugira somente o próximo passo recomendado
+em uma pergunta curta no chat. Não liste alternativas nem use formulário para
+essa sugestão. Se não houver passo recomendado, encerre com o resultado.
 
 Para aplicação ainda não confirmada, use `app_target_picker` com
 `includeNewOption: true`, incluindo **Nova aplicação**. Se a pessoa escolher
@@ -121,18 +120,20 @@ afirmação necessária, pergunte ou registre a lacuna explicitamente.
 
 ## 4. Revisar e persistir
 
-Mostre a proposta completa e pergunte no chat se deve persistir, revisar ou
-cancelar. Espere a resposta. Somente a escolha de
-persistir autoriza a escrita; um pedido de revisão volta à proposta e exige
-nova confirmação. Depois chame
+Mostre a proposta completa e pergunte apenas se a pessoa quer salvá-la como
+nova versão da spec da jornada. Não apresente uma lista de persistir, revisar
+ou cancelar. Espere a resposta. Somente uma confirmação explícita para salvar
+autoriza a escrita. Se a pessoa pedir ajustes, revise a proposta e peça nova
+confirmação; se recusar ou cancelar, não grave. Depois chame
 `test_plans_update_module_spec` com o documento Markdown completo e os
 `sessionIds` efetivamente usados. Essa operação substitui a spec inteira;
 para uma atualização, preserve deliberadamente o conteúdo válido da versão
 lida no passo 1.
 
-Finalize informando a jornada, a nova versão e quais fontes sustentaram a spec.
-Se o pedido também incluiu criar cenários e automatizá-los, continue com
-`voidr-journeys`; não peça de novo qual é o próximo passo.
-Se a pessoa não pediu a próxima etapa, você pode sugerir criar cenários ou revisar
-a spec, sem usar `ask_user_question` só para oferecer essas opções. Ela pode pedir
-qualquer outro ajuste ou análise no chat.
+Após salvar, informe a jornada, a nova versão e quais fontes sustentaram a spec.
+Se o pedido já incluiu criar cenários, continue com `voidr-journeys` sem pedir
+nova autorização para essa etapa. Caso contrário, pergunte somente: "Quer que
+eu crie os cenários AAA desta jornada?" Não ofereça gravação, revisão ou
+outros caminhos como lista de próximos passos. A pessoa pode pedir qualquer
+outro ajuste ou análise no chat. Se a spec não foi salva, não sugira a criação
+de cenários como se a etapa tivesse sido concluída.

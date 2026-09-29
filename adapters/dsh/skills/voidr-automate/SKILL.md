@@ -32,10 +32,18 @@ reais e pergunte apenas o que ainda impedir uma decisão segura:
 
 1. Resolva os casos, suite ou jornada exatos a implementar. Se o pedido não
    identificar o alvo, apresente as opções reais do Test Plan no chat;
-2. Pergunte se deve apenas preparar o código ou também validar em SHADOW
-   somente quando o pedido não definir o alcance;
-3. Pergunte qual ambiente existente usar somente quando houver mais de um
-   plausível para a validação escolhida.
+2. Se o pedido disser apenas "automatizar" sem limitar o alcance, proponha
+   implementar os casos e validá-los em SHADOW na plataforma. Faça uma única
+   confirmação direta no chat, como "Posso implementar os 10 casos e validá-los
+   em SHADOW usando o ambiente take-hmg?". Não ofereça "só implementar agora e
+   validar depois" como alternativa padrão. Não repita essa pergunta se a
+   pessoa já definiu o alcance;
+3. Se houver vários ambientes, inclua o recomendado nessa confirmação somente
+   quando a evidência indicar claramente qual usar. Caso contrário, pergunte
+   qual ambiente existente a pessoa prefere, sem escolher por ela. Se ela
+   recusar a proposta ou pedir apenas o código, respeite esse limite e esclareça
+   somente o que ainda estiver pendente. Essa confirmação inicial não substitui
+   as aprovações separadas para upload e execução da validação.
 
 Depois de ler o repositório, mostre quais casos e arquivos pretende alterar.
 Se o pedido atual ainda não autorizou explicitamente a implementação desses

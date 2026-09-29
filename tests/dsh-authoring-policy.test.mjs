@@ -371,7 +371,7 @@ test('DSH authoring asks in chat by default and keeps write gates', () => {
   assert.match(byName['voidr-spec'].content, /`spec-source`[\s\S]*`spec-scope`[\s\S]*`spec-coverage`/)
   assert.match(byName['voidr-spec'].content, /Inclua somente os campos ainda não resolvidos/)
   assert.match(byName['voidr-spec'].content, /As fontes podem ser\s+combinadas/)
-  assert.match(byName['voidr-spec'].content, /Mostre a proposta completa e pergunte no chat/)
+  assert.match(byName['voidr-spec'].content, /Mostre a proposta completa e pergunte apenas se a pessoa quer salvá-la/)
   assert.match(byName['voidr-journeys'].content, /Use `ask_user_question` para a entrevista estruturada/)
   assert.match(byName['voidr-journeys'].content, /uma chamada de\s+`ask_user_question`/)
   assert.match(byName['voidr-journeys'].content, /`journeys-source`[\s\S]*`journeys-coverage`/)
@@ -379,7 +379,7 @@ test('DSH authoring asks in chat by default and keeps write gates', () => {
   assert.match(byName['voidr-journeys'].content, /As fontes podem ser combinadas/)
   assert.match(byName['voidr-journeys'].content, /Mostre a proposta inteira e pergunte no chat/)
 
-  assert.match(byName['voidr-spec'].content, /Somente a escolha de\s+persistir autoriza a escrita/)
+  assert.match(byName['voidr-spec'].content, /Somente uma confirmação explícita para salvar\s+autoriza a escrita/)
   assert.match(byName['voidr-journeys'].content, /Somente persistir autoriza as\s+escritas/)
   assert.match(byName['voidr-automate'].content, /Sem aprovação, preserve os arquivos e não publique/)
   assert.match(byName['voidr-automate'].content, /Credenciais\s+ausentes seguem o formulário seguro/)
@@ -394,15 +394,16 @@ test('DSH authoring asks in chat by default and keeps write gates', () => {
 test('spec surface groups dense intake in a form without changing ordinary next steps', () => {
   const prompt = interactiveTestDevelopmentPrompt({ hint: { surface: 'spec' } })
   assert.match(prompt, /single structured ask_user_question form for unresolved evidence source, scope and coverage/)
-  assert.match(prompt, /Optional follow-up after a completed stage has three branches/)
-  assert.match(prompt, /ask in plain chat/)
+  assert.match(prompt, /Optional follow-up after a completed authoring stage/)
+  assert.match(prompt, /suggest only the single best-supported next skill step/)
+  assert.match(prompt, /Do not list alternatives, use ask_user_question/)
 })
 
 test('journeys surface groups evidence and coverage choices in a form', () => {
   const prompt = interactiveTestDevelopmentPrompt({ hint: { surface: 'journeys' } })
   assert.match(prompt, /single structured ask_user_question form for unresolved evidence source and scenario coverage/)
-  assert.match(prompt, /Optional follow-up after a completed stage has three branches/)
-  assert.match(prompt, /ask in plain chat/)
+  assert.match(prompt, /Optional follow-up after a completed authoring stage/)
+  assert.match(prompt, /suggest only the single best-supported next skill step/)
 })
 
 test('Journeys surface leaves optional transitions in prose without skipping required approvals', () => {
@@ -418,16 +419,18 @@ test('Journeys surface leaves optional transitions in prose without skipping req
     const prompt = interactiveTestDevelopmentPrompt({ hint: { surface } })
     assert.match(prompt, /Answer read-only questions directly/)
     assert.match(prompt, /required inputs still missing/)
-    assert.match(prompt, /Optional follow-up after a completed stage/)
+    assert.match(prompt, /Optional follow-up after a completed authoring stage/)
   }
 
   for (const name of ['voidr-spec', 'voidr-journeys', 'voidr-automate']) {
     assert.match(skills[name], /Pergunte em uma mensagem normal do chat/)
-    assert.match(skills[name], /Não use formulário para essas sugestões|Não chame `ask_user_question` nem renderize widget apenas para essa sugestão/)
-    assert.match(skills[name], /pergunte[\s\S]*sem lista/)
-    assert.match(skills[name], /bullets/)
+    assert.match(skills[name], /sem lista|Não liste alternativas/)
+    assert.doesNotMatch(skills[name], /Se houver vários caminhos úteis|Se houver vários caminhos\s+úteis/)
   }
-  assert.match(skills['voidr-spec'], /Somente a escolha de\s+persistir autoriza a escrita/)
+  assert.match(skills['voidr-spec'], /Somente uma confirmação explícita para salvar\s+autoriza a escrita/)
+  assert.match(skills['voidr-spec'], /pergunte somente: "Quer que\s+eu crie os cenários AAA desta jornada\?"/)
+  assert.doesNotMatch(skills['voidr-spec'], /você pode sugerir criar cenários ou revisar/)
+  assert.match(skills['voidr-spec'], /Se a spec não foi salva, não sugira a criação/)
   assert.match(skills['voidr-journeys'], /Somente persistir autoriza as\s+escritas/)
   assert.match(skills['voidr-automate'], /Se o pedido atual ainda não autorizou explicitamente a implementação/)
 })
@@ -515,10 +518,9 @@ test('DSH suggests optional next steps in prose after confirmed LIVE delivery', 
   assert.match(automate, /pessoa pode pedir outro ajuste\s+ou análise no chat/)
   assert.match(automate, /não inicie[\s\S]*execução/)
   assert.match(interactiveTestDevelopmentPrompt(), /Do not show a cron-versus-Monitor menu/)
-  assert.match(interactiveTestDevelopmentPrompt(), /"\(recomendado\)" only when justified/)
-  assert.match(interactiveTestDevelopmentPrompt(), /no fixed option count/)
-  assert.match(interactiveTestDevelopmentPrompt(), /one next action is clearly recommended/)
-  assert.match(interactiveTestDevelopmentPrompt(), /do not create an artificial list/)
+  assert.match(interactiveTestDevelopmentPrompt(), /suggest only the single best-supported next skill step/)
+  assert.match(interactiveTestDevelopmentPrompt(), /Do not list alternatives/)
+  assert.match(interactiveTestDevelopmentPrompt(), /If no next step is clearly recommended, stop/)
 })
 
 test('DSH uses product widgets for recording and file evidence', () => {

@@ -383,15 +383,24 @@ test('DSH authoring asks in chat by default and keeps write gates', () => {
   assert.match(byName['voidr-spec'].content, /Inclua somente os campos ainda não resolvidos/)
   assert.match(byName['voidr-spec'].content, /As fontes podem ser\s+combinadas/)
   assert.match(byName['voidr-spec'].content, /Mostre a proposta completa e pergunte apenas se a pessoa quer salvá-la/)
-  assert.match(byName['voidr-journeys'].content, /Use `ask_user_question` para a entrevista estruturada/)
-  assert.match(byName['voidr-journeys'].content, /uma chamada de\s+`ask_user_question`/)
-  assert.match(byName['voidr-journeys'].content, /`journeys-source`[\s\S]*`journeys-coverage`/)
-  assert.match(byName['voidr-journeys'].content, /Inclua `journeys-volume`[\s\S]*somente se o item/)
-  assert.match(byName['voidr-journeys'].content, /As fontes podem ser combinadas/)
-  assert.match(byName['voidr-journeys'].content, /Mostre a proposta inteira e pergunte no chat/)
+  assert.match(byName['voidr-journeys'].content, /faça \*\*uma chamada de\s+`ask_user_question` somente com `journeys-source`/)
+  assert.match(byName['voidr-journeys'].content, /somente com `journeys-source`/)
+  assert.match(byName['voidr-journeys'].content, /`multi_select: true`/)
+  assert.doesNotMatch(byName['voidr-journeys'].content, /`journeys-scope`|`journeys-plan-name`/)
+  assert.match(byName['voidr-journeys'].content, /pergunte \*\*inline em um turno\*\*/)
+  assert.match(byName['voidr-journeys'].content, /pergunte \*\*inline no turno seguinte\*\*/)
+  assert.match(byName['voidr-journeys'].content, /Nunca reúna essas duas perguntas no mesmo turno/)
+  assert.doesNotMatch(byName['voidr-journeys'].content, /`journeys-coverage`|`journeys-volume`/)
+  assert.match(byName['voidr-journeys'].content, /As\s+fontes podem ser combinadas/)
+  assert.match(byName['voidr-journeys'].content, /tudo o que as fontes escolhidas sustentarem/)
+  assert.match(byName['voidr-journeys'].content, /Respeite um recorte menor se a pessoa o pedir explicitamente/)
+  assert.match(byName['voidr-journeys'].content, /pergunte \*\*inline, no fim do turno\*\*/)
+  assert.match(byName['voidr-journeys'].content, /Mostre a proposta inteira e termine com \*\*uma pergunta direta no chat\*\*/)
+  assert.match(byName['voidr-journeys'].content, /Deseja salvar o Test Plan \[nome\]/)
+  assert.match(byName['voidr-journeys'].content, /Não apresente opções de persistir\/revisar\/cancelar e não\s+chame `ask_user_question`/)
 
   assert.match(byName['voidr-spec'].content, /Somente uma confirmação explícita para salvar\s+autoriza a escrita/)
-  assert.match(byName['voidr-journeys'].content, /Somente persistir autoriza as\s+escritas/)
+  assert.match(byName['voidr-journeys'].content, /Somente uma aprovação inequívoca\s+para salvar a proposta exibida autoriza as escritas/)
   assert.match(byName['voidr-automate'].content, /Sem aprovação, preserve os arquivos e não publique/)
   assert.match(byName['voidr-automate'].content, /Credenciais\s+ausentes seguem o formulário seguro/)
   assert.match(byName['voidr-journeys'].content, /Se o pedido já\s+incluiu automatizar os casos, continue/)
@@ -399,6 +408,7 @@ test('DSH authoring asks in chat by default and keeps write gates', () => {
   const prompt = interactiveTestDevelopmentPrompt()
   assert.match(prompt, /For ordinary choices and confirmations, ask in plain chat/)
   assert.match(prompt, /Do not use ask_user_question by default/)
+  assert.match(prompt, /Never use ask_user_question, a form, or a persist\/revise\/cancel menu for this confirmation/)
   assert.match(prompt, /A request for the full generation-to-deployment workflow already states the next stage/)
 })
 
@@ -410,11 +420,35 @@ test('spec surface groups dense intake in a form without changing ordinary next 
   assert.match(prompt, /Do not list alternatives, use ask_user_question/)
 })
 
-test('journeys surface groups evidence and coverage choices in a form', () => {
+test('journeys surface keeps the plan picker and separates source form from inline naming', () => {
   const prompt = interactiveTestDevelopmentPrompt({ hint: { surface: 'journeys' } })
-  assert.match(prompt, /single structured ask_user_question form for unresolved evidence source and scenario coverage/)
+  assert.match(prompt, /Use plan_target_picker for an unresolved Test Plan destination/)
+  assert.match(prompt, /one ask_user_question form containing only the multi-select source question/)
+  assert.match(prompt, /Ask for a missing new journey name and objective inline in one turn/)
+  assert.match(prompt, /new Test Plan name inline in a separate later turn/)
+  assert.match(prompt, /never combine those two questions or put either in a form/)
+  assert.match(prompt, /default scenario coverage to everything the chosen sources support/i)
+  assert.match(prompt, /ask for a missing recording environment inline at the end of the turn/)
+  assert.match(prompt, /Do not put coverage or environment in the intake form/)
   assert.match(prompt, /Optional follow-up after a completed authoring stage/)
   assert.match(prompt, /suggest only the single best-supported next skill step/)
+})
+
+test('unresolved Test Plan destination always uses the plan picker after application selection', () => {
+  for (const surface of ['home', 'journeys', 'journey-overview']) {
+    const prompt = interactiveTestDevelopmentPrompt({ hint: { surface } })
+    assert.match(prompt, /Load voidr-journeys to create a Test Plan/)
+    for (const required of [
+      'test_plans_list_test_plans', 'plan_target_picker', 'includeNewOption: true',
+      'zero or one existing plans', '__new_plan__', 'Stop and wait for its submission',
+      'Do not repeat the picker when the exact plan is already resolved'
+    ]) assert.ok(prompt.includes(required), `${surface}: ${required}`)
+  }
+  const journeys = loadDshPluginSkills().find(skill => skill.name === 'voidr-journeys').content
+  assert.match(journeys, /renderize `plan_target_picker`/)
+  assert.match(journeys, /mesmo com zero ou um plano existente/)
+  assert.match(journeys, /`__new_plan__` não é um `testPlanId`/)
+  assert.match(journeys, /não substitua o widget por texto ou formulário/)
 })
 
 test('Journeys surface leaves optional transitions in prose without skipping required approvals', () => {
@@ -442,7 +476,7 @@ test('Journeys surface leaves optional transitions in prose without skipping req
   assert.match(skills['voidr-spec'], /pergunte somente: "Quer que\s+eu crie os cenários AAA desta jornada\?"/)
   assert.doesNotMatch(skills['voidr-spec'], /você pode sugerir criar cenários ou revisar/)
   assert.match(skills['voidr-spec'], /Se a spec não foi salva, não sugira a criação/)
-  assert.match(skills['voidr-journeys'], /Somente persistir autoriza as\s+escritas/)
+  assert.match(skills['voidr-journeys'], /Somente uma aprovação inequívoca\s+para salvar a proposta exibida autoriza as escritas/)
   assert.match(skills['voidr-automate'], /Se o pedido atual ainda não autorizou explicitamente a implementação/)
 })
 

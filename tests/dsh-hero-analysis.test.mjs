@@ -15,6 +15,10 @@ test('Hero analysis is bundled globally with qualified reads and controlled writ
   assert.match(skill.content, /mcp__voidr__hero_reprocess_ticket/)
   assert.match(skill.content, /mode: "restart"/)
   assert.match(skill.content, /supersedeActive: true/)
+  assert.match(skill.content, /Ask one\s+short question in normal chat/)
+  assert.match(skill.content, /Do not present a menu of restart, resume and publication/)
+  assert.match(skill.content, /Do not suggest resuming `analyze-bug`/)
+  assert.match(skill.content, /For `superseded`,\s+investigate the changed snapshot and phase events first/)
   assert.equal(qualifyDshVoidrTools('hero_list_triaged'), 'mcp__voidr__hero_list_triaged')
 })
 

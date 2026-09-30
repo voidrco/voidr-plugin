@@ -13,6 +13,9 @@ test('Gate skill is bundled with the stored-verdict and governance reads', () =>
   assert.match(skill.content, /declare_journey/)
   assert.match(skill.content, /confirmed: true/)
   assert.match(skill.content, /MatchJobProgress/)
+  assert.match(skill.content, /one specific, evidence-backed next action/)
+  assert.match(skill.content, /not a menu or `ask_user_question` form/)
+  assert.match(skill.content, /not consent to create a journey, decide governance/)
 })
 
 test('Gate screen loads its skill and preserves the scoped navigation hint', () => {

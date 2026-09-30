@@ -8,13 +8,12 @@ description: Cria Test Plans (conjuntos de jornadas), jornadas e cenários AAA c
 O DSH infere e classifica os cenários. Nunca use `coverage_*`,
 `test_plan_generation_*` ou um job de geração externo.
 
-Não use `ask_user_question` nem um formulário para a entrevista de jornadas
-e cenários. Pergunte em uma mensagem normal do chat quando faltar uma fonte,
-decisão, confirmação ou informação; termine a mensagem e espere a resposta
-antes de agir. Faça somente as perguntas necessárias; não repita o que a
-pessoa já respondeu claramente. Para gravar ou selecionar sessões reais,
-use o widget `session_coverage_picker`; para enviar documentos, use
-`document_input`.
+Use `ask_user_question` somente para escolher fontes de evidência quando elas
+ainda estiverem abertas. Pergunte em uma mensagem normal do chat o nome e o
+objetivo da jornada e, depois, o nome do Test Plan novo, uma pergunta por turno.
+Termine cada turno e espere a resposta. Faça somente as perguntas necessárias; não repita
+o que a pessoa já respondeu claramente. Para gravar ou selecionar sessões
+reais, use `session_coverage_picker`; para enviar documentos, `document_input`.
 
 Se a pessoa pedir apenas uma explicação ou leitura, responda sem iniciar a entrevista.
 Depois de concluir a etapa pedida, sugira somente o próximo passo recomendado
@@ -39,8 +38,9 @@ antes de escrever. Não escolha o primeiro plano automaticamente, não peça IDs
 não substitua o widget por texto ou formulário e não repita a escolha quando
 o destino exato já tiver sido informado e validado.
 Se a pessoa escolher `__new_plan__`, peça no chat o nome do novo conjunto
-somente se ele ainda não tiver sido informado. A escolha do widget define o
-destino, mas não autoriza criar o conjunto antes da aprovação da proposta.
+somente se ele ainda não tiver sido informado, depois de resolver o escopo da
+jornada. A escolha do widget define o destino, mas
+não autoriza criar o conjunto antes da aprovação da proposta.
 
 ## 0. Entrevista da skill
 
@@ -66,18 +66,29 @@ reais e pergunte apenas o que ainda impedir uma decisão segura:
    plataforma que impeça cobrir as fontes, explique-o e pergunte no chat qual
    parte priorizar.
 
-Se a fonte ainda estiver aberta, pergunte no chat em uma frase curta quais
-fontes usar: **Gravar nova sessão**, **Usar sessões gravadas**, **Enviar
-documentação** e, somente se houver conteúdo válido, **Spec atual**. As
-fontes podem ser combinadas. Indique brevemente quando uma escolha exige
-gravação ou anexo; não apresente sessões inexistentes como gravadas nem um
-documento citado como já anexado. Termine o turno e aguarde a resposta, sem
-formulário, sem pergunta de cobertura e sem pedir o prompt novamente. Se
-houver lacunas relevantes, diga em uma frase curta quais comportamentos não
-podem virar cenário sem evidência.
+Se as fontes ainda estiverem abertas, faça **uma chamada de
+`ask_user_question` somente com `journeys-source`**, usando
+`multi_select: true` entre **Gravar nova sessão**, **Usar sessões gravadas**,
+**Enviar documentação** e **Spec atual** somente se ela tiver conteúdo
+válido. As fontes podem ser combinadas; indique brevemente quando uma escolha
+exige gravação ou anexo. Não apresente sessões inexistentes como gravadas nem
+um documento citado como já anexado. Não inclua escopo, nome do plano,
+cobertura, volume ou ambiente nesse formulário.
 
-Para uma jornada nova, obtenha nome, objetivo e severidade; pergunte no chat
-somente o que o pedido e o contexto não resolverem. Fonte é um contrato de
+Após a escolha das fontes, se nome ou objetivo da primeira jornada ainda
+faltarem, pergunte **inline em um turno**: "Qual é o nome e o objetivo da
+primeira jornada?" Espere a resposta. Se o destino for `__new_plan__` e o
+nome do conjunto ainda faltar, pergunte **inline no turno seguinte**:
+"Qual nome você quer dar ao novo conjunto de jornadas?" Espere a resposta.
+Nunca reúna essas duas perguntas no mesmo turno, nem as converta em
+`ask_user_question` ou formulário. Pule qualquer pergunta já resolvida pelo
+pedido ou pelo contexto validado. A resposta a cada etapa continua o pedido
+original, sem pedir o prompt novamente; se houver lacunas de evidência,
+explique-as brevemente após a escolha.
+
+Para uma jornada nova, obtenha nome e objetivo. Use `MEDIUM` como severidade
+quando a pessoa não a indicar; respeite `LOW`, `MEDIUM`, `HIGH` ou `CRITICAL`
+quando ela indicar. Fonte é um contrato de
 produto: use apenas as fontes indicadas pela pessoa ou já fixadas no contexto
 da página. Se não houver escolha, pergunte; não invente nem omita uma fonte.
 Depois da resposta:
@@ -109,8 +120,8 @@ de outra skill silenciosamente.
    jornada existente.
 3. Para uma jornada existente, leia `test_plans_get_module_spec`, suites e
    casos atuais antes de propor mudanças.
-4. Para uma jornada nova, obtenha o nome, objetivo e severidade antes de criar
-   qualquer estrutura.
+4. Para uma jornada nova, obtenha nome e objetivo antes de criar qualquer
+   estrutura; use severidade `MEDIUM` se a pessoa não indicar outra.
 
 Nunca substitua silenciosamente o plano escolhido e nunca invente IDs, slugs
 ou uma aplicação a partir do diretório local.
@@ -142,10 +153,15 @@ Para cada cenário, produza:
 acrescenta passos necessários ao mesmo comportamento. `NEW` representa um
 comportamento ainda não coberto.
 
-Mostre a proposta inteira e pergunte no chat se deve persistir tudo, revisar a
-seleção ou cancelar. Espere a resposta. Se a pessoa escolher revisar, aplique
-as mudanças na proposta e peça nova confirmação. Somente persistir autoriza as
-escritas abaixo.
+Mostre a proposta inteira e termine com **uma pergunta direta no chat**:
+"Deseja salvar o Test Plan [nome] com a jornada [nome] e os [N] cenários
+propostos?" Para um plano existente, pergunte se deseja salvar nele as
+alterações propostas, indicando quantos cenários serão criados, atualizados
+ou complementados. Não apresente opções de persistir/revisar/cancelar e não
+chame `ask_user_question` nem renderize formulário para essa aprovação.
+Espere a resposta. Se a pessoa pedir ajustes, revise a proposta e faça a
+pergunta novamente; se recusar, não escreva. Somente uma aprovação inequívoca
+para salvar a proposta exibida autoriza as escritas abaixo.
 
 ## 4. Persistir sem job
 

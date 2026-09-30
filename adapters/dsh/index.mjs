@@ -7,6 +7,7 @@ import { registerEchoActor } from './echo-actor.mjs'
 import { registerEchoRenderDeviations } from './echo-render-deviations.mjs'
 import { registerEchoRenderRegulatoryControls } from './echo-render-regulatory-controls.mjs'
 import { registerEchoRenderDeviationGroup } from './echo-render-deviation-group.mjs'
+import { registerObservabilityWidgets } from './observability-widgets.mjs'
 
 const CONTEXT_EVENT_TYPE = 'voidr/project-context-hint'
 const SPEND_CONTEXTS_KEY = Symbol.for('voidr.dsh.litellm-contexts.v1')
@@ -56,6 +57,7 @@ export const name = 'voidr-agent-plugin-dsh'
 export const inject = ['commands', 'skills', 'systemPrompt', 'tools']
 
 export function apply(ctx) {
+  registerObservabilityWidgets(ctx)
   const callEchoTool = registerEchoActor(ctx)
   registerEchoRenderDeviations(ctx, callEchoTool)
   registerEchoRenderRegulatoryControls(ctx, callEchoTool)

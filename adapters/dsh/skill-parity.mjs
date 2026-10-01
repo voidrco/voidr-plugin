@@ -18,6 +18,7 @@ const VOIDR_MCP_FAMILIES = [
   'group_diagnosis',
   'hero',
   'issue_tracker',
+  'performance',
   'playwright',
   'recording',
   'sessions',

@@ -72,6 +72,7 @@ export function apply(ctx) {
       spec: 'voidr-spec',
       journeys: 'voidr-journeys',
       automate: 'voidr-automate',
+      performance: 'voidr-performance-setup',
       monitor: 'voidr-failure-analysis',
       echo: 'voidr-echo-analysis',
       'voidr-gate': 'voidr-gate-analysis'
@@ -81,6 +82,7 @@ export function apply(ctx) {
       qualifyDshVoidrTools(interactiveTestDevelopmentPrompt({ hint })),
       'For explicit Voidr Hero, platform-defect triage, or issue-tracker ticket requests on any surface, load voidr-hero-analysis. Keep the active surface skill for unrelated work. Hero access depends on the authenticated organization and available tools; a screen hint is not authorization.',
       'For explicit Voidr Gate PR, business-rule, journey-impact, or governance questions on another surface, load voidr-gate-analysis. Keep the active surface skill for unrelated work. A screen hint is not evidence or authorization.',
+      'For explicit load or performance testing on any surface, load voidr-performance-setup. It routes implementation to voidr-performance-author, preflight to voidr-performance-validate, and confirmed load runs or reports to voidr-performance-execute. Never use the Playwright Test Plan workflow for a native PerformancePlan.',
       ...(skill ? [`Active surface skill: ${skill.name}\nThese instructions are already loaded for this surface.\n${skill.content}`] : [])
     ].join('\n\n')
   })

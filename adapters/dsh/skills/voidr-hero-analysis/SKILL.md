@@ -38,6 +38,23 @@ Never infer that a ticket was analyzed merely because it appears in the issue
 tracker. When a read is empty, denied or unavailable, state that limit and stop;
 do not reconstruct customer data from a prior turn or another organization.
 
+## Optional next step
+
+After a read-only Hero answer, suggest a follow-up only when the verified ticket
+or defect state supports one clear action available through this skill. Ask one
+short question in normal chat, such as "Quer que eu reanalise o ticket #123
+desde o início?" Do not present a menu of restart, resume and publication,
+or use `ask_user_question` merely to offer the action. If no action is clearly
+supported, finish with the answer. The user's reply must explicitly authorize
+the exact action before dispatch.
+
+Do not suggest resuming `analyze-bug`: this skill exposes no such action.
+Suggest an `open-pr` retry only when that phase was reached. For an active run,
+show its status instead of proposing a competing run. For `superseded`,
+investigate the changed snapshot and phase events first; do not present another
+dispatch as the default next step. A required issue-tracker connection choice
+is intake, not an optional follow-up.
+
 ## Controlled Hero actions
 
 Only dispatch when the current user message explicitly asks to analyze, fix,

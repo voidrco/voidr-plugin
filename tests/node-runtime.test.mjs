@@ -291,6 +291,40 @@ test('uses bundled Node 20 for a repository pinned to Node 20', async () => {
   assert.match(describeNodeRuntime(result).note, /bundled in the Hive image/)
 })
 
+test('uses bundled Node 18 for a repository pinned to Node 18', async () => {
+  const repositoryPath = repositoryWith(JSON.stringify({ volta: { node: '18.19.0' } }))
+  const bundledNodeExecutable = '/opt/voidr/node18/bin/node'
+  const previousNode18 = process.env.VOIDR_BUNDLED_NODE18_BIN
+  const previousNode20 = process.env.VOIDR_BUNDLED_NODE_BIN
+  const measured = []
+  process.env.VOIDR_BUNDLED_NODE18_BIN = bundledNodeExecutable
+  process.env.VOIDR_BUNDLED_NODE_BIN = '/opt/voidr/node20/bin/node'
+  try {
+    const result = await assertSupportedNodeRuntime({
+      repositoryPath,
+      run: async file => {
+        measured.push(file)
+        return {
+          stdout: file === bundledNodeExecutable ? 'v18.19.0\n' : 'v22.23.3\n',
+          stderr: '',
+          exitCode: 0
+        }
+      }
+    })
+
+    assert.deepEqual(measured, ['node', bundledNodeExecutable])
+    assert.equal(result.version, 'v18.19.0')
+    assert.equal(result.toolchain.manager, 'Hive image')
+    assert.equal(withToolchainPath({ PATH: '/usr/local/bin' }, result.toolchain).PATH,
+      '/opt/voidr/node18/bin:/usr/local/bin')
+  } finally {
+    if (previousNode18 === undefined) delete process.env.VOIDR_BUNDLED_NODE18_BIN
+    else process.env.VOIDR_BUNDLED_NODE18_BIN = previousNode18
+    if (previousNode20 === undefined) delete process.env.VOIDR_BUNDLED_NODE_BIN
+    else process.env.VOIDR_BUNDLED_NODE_BIN = previousNode20
+  }
+})
+
 test('rejects an invalid bundled runtime without claiming Node 22 is unsupported', async () => {
   const repositoryPath = repositoryWith(JSON.stringify({ volta: { node: '20.20.0' } }))
   await assert.rejects(

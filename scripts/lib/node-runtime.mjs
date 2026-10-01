@@ -68,10 +68,14 @@ export async function assertSupportedNodeRuntime(options) {
     run = runCommand,
     guidance,
     nodeExecutable = nodeExecutableForToolchain(),
-    bundledNodeExecutable = process.env.VOIDR_BUNDLED_NODE_BIN
+    bundledNodeExecutable: explicitBundledNodeExecutable
   } = options
   const declared = declaredNodeVersion(repositoryPath)
   const required = declared.major || SUPPORTED_NODE_MAJOR
+  const bundledNodeExecutable = explicitBundledNodeExecutable === undefined
+    ? process.env[`VOIDR_BUNDLED_NODE${required}_BIN`] ||
+      (required === 20 ? process.env.VOIDR_BUNDLED_NODE_BIN : undefined)
+    : explicitBundledNodeExecutable
   // Scanned only when the runtime is rejected: the happy path never touches the
   // version-manager directories.
   const howToGetIt = () => {

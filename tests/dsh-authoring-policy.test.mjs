@@ -203,7 +203,7 @@ test('DSH exposes material progress without narrating every tool call', () => {
   assert.match(automate, /alterar o comportamento pretendido[\s\S]*pare e peça confirmação/)
 })
 
-test('DSH keeps active validation polling inside the turn', () => {
+test('DSH keeps active validation monitored with durable continuation or polling', () => {
   const skills = Object.fromEntries(loadDshPluginSkills().map(skill => [skill.name, skill.content]))
   const prompt = interactiveTestDevelopmentPrompt()
 
@@ -211,10 +211,14 @@ test('DSH keeps active validation polling inside the turn', () => {
     assert.match(content, /QUEUED/)
     assert.match(content, /RUNNING/)
     assert.match(content, /30 seconds|30 segundos/)
-    assert.match(content, /automate-validation-running/)
-    assert.match(content, /Continuar acompanhando/)
-    assert.match(content, /Encerrar acompanhamento/)
-    assert.match(content, /verifica/)
+    if (content.includes('assistant_workspace_watch_validation')) {
+      assert.match(content, /assistant_workspace_validation_watch_status/)
+      assert.match(content, /Never redispatch|Nunca repita/)
+    } else {
+      assert.match(content, /automate-validation-running/)
+      assert.match(content, /Continuar acompanhando/)
+      assert.match(content, /Encerrar acompanhamento/)
+    }
   }
 })
 

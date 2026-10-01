@@ -10,7 +10,7 @@ function harness() {
     skills: { register() {} },
     systemPrompt: { section() {}, variable: (name, provider) => variables.set(name, provider) },
     commands: { register: command => commands.set(command.name, command) },
-    tools: {}, on() {},
+    tools: { register() {} }, on() {},
   })
   const agent = { id: 'resolution-test', session: { events, append: (type, data) => events.push({ type, data }) } }
   return { commands, variables, agent }

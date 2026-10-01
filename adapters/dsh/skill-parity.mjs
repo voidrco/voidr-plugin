@@ -26,7 +26,7 @@ const VOIDR_MCP_FAMILIES = [
   'test_plan_generation',
   'test_plans'
 ]
-const DSH_NATIVE_FAMILY_TOOLS = new Set(['echo_execution_confirmation', 'echo_render_deviations', 'echo_render_regulatory_controls'])
+const DSH_UNQUALIFIED_NAMES = new Set(['echo_execution_confirmation', 'echo_render_deviations', 'echo_render_regulatory_controls', 'hero_run_progress'])
 const voidrMcpToolPattern = new RegExp(
   `(?<!${VOIDR_MCP_PREFIX})\\b(?:${VOIDR_MCP_FAMILIES.join('|')})_[a-z0-9_]*[a-z0-9]\\b`,
   'g'
@@ -34,7 +34,7 @@ const voidrMcpToolPattern = new RegExp(
 
 export function qualifyDshVoidrTools(content) {
   return content.replace(voidrMcpToolPattern, tool =>
-    DSH_NATIVE_FAMILY_TOOLS.has(tool) ? tool : `${VOIDR_MCP_PREFIX}${tool}`)
+    DSH_UNQUALIFIED_NAMES.has(tool) ? tool : `${VOIDR_MCP_PREFIX}${tool}`)
 }
 
 const replacements = {

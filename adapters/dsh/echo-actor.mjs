@@ -4,6 +4,22 @@ import { createEchoAnalysisGuard } from './echo-analysis-guard.mjs'
 
 const PREFIX = 'mcp__voidr__'
 
+class EchoAccessError extends Error {
+  /** @param {number} status */
+  constructor(status) {
+    super('Echo access request failed')
+    this.status = status
+  }
+}
+
+/** @param {unknown} error */
+function describeEchoFailure(error) {
+  const denied = error instanceof EchoAccessError && error.status === 403
+  const status = error instanceof EchoAccessError ? ' (HTTP ' + error.status + ')' : ''
+  return { kind: 'error', text: denied ? 'Echo actor authorization failed [ECHO_ACTOR_FORBIDDEN]'
+    : 'Echo actor integration unavailable [ECHO_ACTOR_UNAVAILABLE]' + status }
+}
+
 function publicName(raw) {
   const name = PREFIX + raw
   return name.length <= 64 ? name : name.slice(0, 51) + '_' +
@@ -27,7 +43,7 @@ export function registerEchoActor(ctx, { fetchImpl = fetch, env = process.env } 
       ...(body ? { body: JSON.stringify(body) } : {}),
       signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(60_000)]) : AbortSignal.timeout(60_000)
     })
-    if (!response.ok) throw new Error('Echo access request failed (HTTP ' + response.status + ')')
+    if (!response.ok) throw new EchoAccessError(response.status)
     return response.json()
   }
   ctx.commands.register({
@@ -60,8 +76,8 @@ export function registerEchoActor(ctx, { fetchImpl = fetch, env = process.env } 
         }
         assertions.set(agent.id, assertion)
         return { kind: 'success', text: 'Echo actor registered' }
-      } catch {
-        return { kind: 'error', text: 'Echo actor authorization failed' }
+      } catch (error) {
+        return describeEchoFailure(error)
       }
     }
   })

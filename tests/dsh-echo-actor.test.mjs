@@ -5,6 +5,31 @@ import { interactiveTestDevelopmentPrompt } from '../core/workflow/interactive-t
 import { loadDshPluginSkills } from '../adapters/dsh/plugin-skills.mjs'
 import { apply } from '../adapters/dsh/index.mjs'
 
+test('Echo distinguishes upstream denial from integration failures without exposing credentials', async () => {
+  for (const status of [401, 403, 404, 500, 503]) {
+    let handler
+    registerEchoActor({ on() {}, tools: { register() {} }, commands: { register(command) { handler = command.handler } } }, {
+      env: { DSH_VOIDR_MCP_URL: 'http://fixture.invalid', DSH_VOIDR_MCP_AUTHORIZATION: 'Bearer private' },
+      fetchImpl: async () => ({ ok: false, status })
+    })
+    const result = await handler({ agent: { id: 'one' }, rawInput: 'private-signed-actor' })
+    assert.equal(result.kind, 'error')
+    assert.match(result.text, status === 403 ? /ECHO_ACTOR_FORBIDDEN/ : /ECHO_ACTOR_UNAVAILABLE/)
+    assert.doesNotMatch(JSON.stringify(result), /private/)
+  }
+})
+
+test('Echo reports network failure safely and leaves the actor unregistered', async () => {
+  let handler
+  registerEchoActor({ on() {}, tools: { register() {} }, commands: { register(command) { handler = command.handler } } }, {
+    env: { DSH_VOIDR_MCP_URL: 'http://fixture.invalid', DSH_VOIDR_MCP_AUTHORIZATION: 'Bearer private' },
+    fetchImpl: async () => { throw new Error('private upstream details') }
+  })
+  const result = await handler({ agent: { id: 'one' }, rawInput: 'private-signed-actor' })
+  assert.match(result.text, /ECHO_ACTOR_UNAVAILABLE/)
+  assert.doesNotMatch(JSON.stringify(result), /private/)
+})
+
 test('Echo calls keep the signed actor isolated per session and expire on disposal', async () => {
   const hooks = new Map()
   const calls = []

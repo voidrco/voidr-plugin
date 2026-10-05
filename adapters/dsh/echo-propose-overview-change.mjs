@@ -63,6 +63,7 @@ const operationSchema = {
     sort: { type: 'string', enum: ['desc', 'asc'] },
     journey: { type: 'string', maxLength: 200, description: 'Journey key from mcp__voidr__echo_get_overview_view entities; an empty string clears the filter.' },
     persona: { type: 'string', maxLength: 200, description: 'Persona key from mcp__voidr__echo_get_overview_view entities; an empty string clears the filter.' },
+    picker: { type: 'string', enum: ['journey', 'persona', 'none'], description: 'Selector in the block header that lets the reader choose ONE journey (or persona) at a time. Use it instead of one block per journey. journey/persona above becomes the starting choice. none removes it. A chart or ranking cannot also break down by the picked dimension.' },
     color: { type: 'string', enum: COLOR_CHOICES, description: 'Palette color of a KPI number, ranking bars or a single-series chart. default removes the override.' },
     seriesColors: {
       type: 'array',
@@ -135,6 +136,7 @@ export function pendingAssumptions(args) {
 function serviceOperation(operation) {
   const cleared = { ...operation }
   for (const key of ['journey', 'persona']) if (cleared[key] === '') cleared[key] = null
+  if (cleared.picker === 'none') cleared.picker = null
   if (Array.isArray(cleared.seriesColors)) cleared.seriesColors = Object.fromEntries(cleared.seriesColors.map(entry => [entry.key, entry.color]))
   return cleared
 }

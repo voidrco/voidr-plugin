@@ -1,3 +1,4 @@
+import { resolveAnalysisWindow, validateAnalysisInterval } from './echo-analysis-windows.mjs'
 const RESOLVE = 'echo_resolve_analysis_window'
 const EXACT = new Set(['echo_analyze_session_cohort', 'echo_analyze_judge_criterion', 'echo_summarize_regulatory_controls', 'echo_summarize_deviation_group'])
 const LISTS = new Set(['echo_list_sessions', 'echo_list_deviations'])
@@ -171,29 +172,10 @@ export function createEchoAnalysisGuard() {
         throw new Error('The exact criterion report already provides counts, Journey totals and verified failed-session examples. Return those results now; inspect judge runs or evidence only after an explicit request to explain a failure or quote its evidence.')
       }
       if ((tool === 'system_call_tool' && args.name?.startsWith('echo_')) ||
-          (state.resolution && ['system_batch_execute', 'system_run_script'].includes(tool))) {
+          (state.resolutions?.size && ['system_batch_execute', 'system_run_script'].includes(tool))) {
         throw new Error('Use the native Echo tools so the analysis interval can be checked; do not route this report through generic execution tools.')
       }
-      if (tool === RESOLVE) {
-        const key = JSON.stringify([args.period?.type, args.period?.days, args.period?.hours,
-          args.period?.from, args.period?.to, args.timezone ?? 'America/Sao_Paulo'])
-        if (state.resolution) {
-          if (state.key !== key) throw new Error('Echo analysis period is fixed until the user supplies a new instruction. Ask for the intended period and continue after the answered form; do not replace an empty result autonomously.')
-          return state.resolution
-        }
-        state.key = key
-        state.resolution = Promise.resolve().then(() => invoke(args)).then(result => {
-          const window = payload(result)
-          if (!window || !Number.isFinite(Date.parse(window.occurredFrom)) ||
-              !Number.isFinite(Date.parse(window.occurredToExclusive))) {
-            state.resolution = undefined
-            return result
-          }
-          state.window = window
-          return result
-        }).catch(error => { state.resolution = undefined; throw error })
-        return state.resolution
-      }
+      if (tool === RESOLVE) return resolveAnalysisWindow(state, args, invoke)
       if (!EXACT.has(tool) && !LISTS.has(tool) && !RELATIVE.has(tool)) return invoke(args)
       const selected = hint.applicationId ?? hint.echoContext?.applicationId
       const moduleSlug = hint.moduleSlug ?? hint.echoContext?.moduleSlug
@@ -208,22 +190,14 @@ export function createEchoAnalysisGuard() {
             (environment && args.environment !== environment))) {
         throw new Error('Keep the selected Echo Journey and environment in the deviation group query.')
       }
-      if (['echo_analyze_session_cohort', 'echo_analyze_judge_criterion', 'echo_summarize_deviation_group'].includes(tool) && !state.resolution) {
+      if (['echo_analyze_session_cohort', 'echo_analyze_judge_criterion', 'echo_summarize_deviation_group'].includes(tool) && !state.resolutions?.size) {
         throw new Error('Resolve the analysis window before querying this cohort; reuse its exact boundaries.')
       }
-      if (state.resolution) {
-        await state.resolution
-        const window = state.window
-        if (!window) throw new Error('Analysis window unavailable; do not invent dates or report an empty cohort.')
+      if (state.resolutions?.size) {
         if (RELATIVE.has(tool)) {
           throw new Error('A relative-window tool cannot reuse the frozen interval. Use echo_analyze_session_cohort for this analysis; do not mix independently timed KPI reads.')
         }
-        const to = LISTS.has(tool) ? args.occurredTo : args.occurredToExclusive
-        const expectedTo = LISTS.has(tool) ? Date.parse(window.occurredToExclusive) - 1 : Date.parse(window.occurredToExclusive)
-        if (Date.parse(args.occurredFrom) !== Date.parse(window.occurredFrom) || Date.parse(to) !== expectedTo ||
-            (args.timezone && args.timezone !== window.timezone)) {
-          throw new Error('Echo interval mismatch. Reuse the resolved occurredFrom/occurredToExclusive; inclusive list occurredTo must be one millisecond before the exclusive end. Do not expand an empty period.')
-        }
+        await validateAnalysisInterval(state, tool, args)
       }
       const regulatoryKey = tool === REGULATORY ? regulatoryQueryKey(args) : null
       if (regulatoryKey && Number(args.page ?? 1) > 1) {
@@ -260,7 +234,7 @@ export function createEchoAnalysisGuard() {
           journeyTotal: evidence.data.journeys?.total,
           journeyHasMore: evidence.data.journeys?.hasMore,
           causalConclusionSupported: false,
-          instruction: 'These samples have FAIL for this exact criterion in their current judge run; they are not generic deviation sessions. Global totals are complete only when completeness.complete is true. Samples and journey rows may be bounded. For counts, Journey split and example links, return this report without more reads. A negative instruction not to infer cause does not request causal investigation. Criterion outcome alone does not show NLU accuracy, causal stage or root cause. Inspect exact judge run and evidence only when explicitly asked to explain an individual failure; do not generalize an example to the population.'
+          instruction: 'These samples have FAIL for this exact criterion in their current judge run; they are not generic deviation sessions. Global totals are complete only when completeness.complete is true. Samples and journey rows may be bounded. For single-period counts, Journey split and example links, return this report without evidence drill-down. For comparisons, query this criterion separately for every requested period before concluding; these totals apply only to this exact interval. A negative instruction not to infer cause does not request causal investigation. Criterion outcome alone does not show NLU accuracy, causal stage or root cause. Inspect exact judge run and evidence only when explicitly asked to explain an individual failure; do not generalize an example to the population.'
         })
       }
       if (tool !== 'echo_analyze_session_cohort') return result
@@ -274,7 +248,7 @@ export function createEchoAnalysisGuard() {
           inconclusiveSessions: data.summary.judgeLifecycle?.officialInconclusive,
         },
         empty: evidence.completeness?.complete === true && data.summary.totalSessions === 0,
-        instruction: 'Use only this reportScope for these counts. Official approvals are not sessionLifecycle.passed. A complete empty cohort must not trigger another period or application.',
+        instruction: 'Use only this reportScope for these counts. Official approvals are not sessionLifecycle.passed. Official conclusive success rate uses officialPass / (officialPass + officialFail); report inconclusive separately. Whole-period criteria and latency cannot be attributed to individual days. Use echo_compare_periods for comparisons; never invent daily latency from a whole-period aggregate. A complete empty cohort must not trigger another period or application.',
       })
     },
   }

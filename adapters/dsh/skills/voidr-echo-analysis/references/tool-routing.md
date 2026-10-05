@@ -39,7 +39,10 @@ uncertainty about newer capabilities; never bypass an access denial.
   threshold or reuse counts from another window.
 - Projection freshness/coverage only when the user asks about data freshness or
   large-scale analytics availability: `echo_get_analytics_status`.
-- Aggregate, trend, comparison, latency, silence, criterion or deviation-cohort
+- Two-period or two-day comparison: `echo_compare_periods` after resolving both
+  labeled periods before data reads. It computes differences from separate cohort
+  and requested criterion queries. Daily latency requires a daily cohort read.
+- Aggregate, trend, latency, silence, criterion or deviation-cohort
   questions: `echo_analyze_session_cohort` with the narrowest exact half-open
   occurrence interval and useful breakdown. Never download session pages to
   reconstruct a cohort in the model. Separate aggregate totals are marginal:

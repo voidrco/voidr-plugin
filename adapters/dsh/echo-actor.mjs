@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto'
 import { regulatoryScopeArguments } from './echo-regulatory-scope.mjs'
 import { createEchoAnalysisGuard } from './echo-analysis-guard.mjs'
+import { addComparisonSchema } from './echo-analysis-windows.mjs'
+import { COMPARISON_TOOL, comparisonSchema, compareEchoPeriods } from './echo-period-comparison.mjs'
 
 const PREFIX = 'mcp__voidr__'
 
@@ -46,6 +48,13 @@ export function registerEchoActor(ctx, { fetchImpl = fetch, env = process.env } 
     if (!response.ok) throw new EchoAccessError(response.status)
     return response.json()
   }
+  async function callEcho(agent, tool, args, hint, assertion, signal) {
+    const read = (name, checked) => analysis.call(agent, name, checked, hint,
+      forwarded => request('/tools/call', assertion, {
+        tool: name, arguments: regulatoryScopeArguments(name, forwarded, hint)
+      }, signal))
+    return tool === COMPARISON_TOOL ? compareEchoPeriods(args, read) : read(tool, args)
+  }
   ctx.commands.register({
     name: 'echo-actor',
     description: 'Attach server-signed Echo actor authorization',
@@ -58,6 +67,12 @@ export function registerEchoActor(ctx, { fetchImpl = fetch, env = process.env } 
         for (const tool of result.tools ?? []) names.set(publicName(tool.name), tool.name)
         const tools = result.tools?.filter(tool => tool.name.startsWith('echo_')) ?? []
         if (!tools.length) throw new Error('Echo access unavailable')
+        if (['echo_resolve_analysis_window', 'echo_analyze_session_cohort', 'echo_analyze_judge_criterion']
+          .every(name => tools.some(tool => tool.name === name))) tools.push({
+            name: COMPARISON_TOOL,
+            description: 'Compare two user-requested Echo periods using separate cohort and criterion reads, exact returned counts and computed percentage-point deltas. Resolve all periods first; contained days are allowed. Prefer this tool for day-versus-day or period-versus-period analysis.',
+            inputSchema: comparisonSchema,
+          })
         for (const tool of tools) {
           const name = publicName(tool.name)
           names.set(name, tool.name)
@@ -65,7 +80,7 @@ export function registerEchoActor(ctx, { fetchImpl = fetch, env = process.env } 
           ctx.tools.register({
             name,
             description: tool.description,
-            parameters: tool.inputSchema,
+            parameters: tool.name === 'echo_resolve_analysis_window' ? addComparisonSchema(tool.inputSchema) : tool.inputSchema,
             output: {
               schema: { type: 'object', properties: { content: { type: 'array', items: {} }, structuredContent: {} }, required: ['content'], additionalProperties: false },
               render: (_args, value) => value.content.filter(item => item.type === 'text')
@@ -88,10 +103,7 @@ export function registerEchoActor(ctx, { fetchImpl = fetch, env = process.env } 
     const assertion = assertions.get(exec.agent?.id)
     if (!assertion) throw new Error('Echo actor authorization required; send a new message to reconnect')
     const tool = names.get(exec.name) ?? exec.name.slice(PREFIX.length)
-    const result = await analysis.call(exec.agent, tool, exec.arguments, hint, args => request('/tools/call', assertion, {
-      tool,
-      arguments: regulatoryScopeArguments(tool, args, hint)
-    }, exec.signal))
+    const result = await callEcho(exec.agent, tool, exec.arguments, hint, assertion, exec.signal)
     if (result.isError) throw new Error('Echo tool rejected: ' +
       (result.content ?? []).filter(item => item.type === 'text').map(item => item.text).join('\n'))
     const value = { content: result.content ?? [], ...(result.structuredContent !== undefined ? { structuredContent: result.structuredContent } : {}) }
@@ -103,7 +115,7 @@ export function registerEchoActor(ctx, { fetchImpl = fetch, env = process.env } 
     if (hint?.surface !== 'echo') throw new Error('This tool requires the Echo surface')
     const assertion = assertions.get(agent?.id)
     if (!assertion) throw new Error('Echo actor authorization required; send a new message to reconnect')
-    const result = await analysis.call(agent, tool, args, hint, checked => request('/tools/call', assertion, { tool, arguments: regulatoryScopeArguments(tool, checked, hint) }, signal))
+    const result = await callEcho(agent, tool, args, hint, assertion, signal)
     if (result.isError) throw new Error('Echo query failed; no report was published')
     return result
   }

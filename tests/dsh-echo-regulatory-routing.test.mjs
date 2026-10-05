@@ -47,8 +47,8 @@ test('the loaded Echo skill routes regulatory counts to canonical control aggreg
   assert.match(text, /top-N `officialCriteria` rows/)
   assert.match(text, /Any definitive claim about the existence, absence or count/)
   assert.match(text, /explicit regulatory\s+request should call the appropriate tool/)
-  assert.match(text, /finish the main answer first and then offer it through\s+`ask_user_question`/)
-  assert.match(text, /continue immediately in the same turn/)
+  assert.match(text, /answer without opening a question form for optional follow-up work/)
+  assert.match(text, /After a valid answer, continue\s+the original task with that choice/)
   assert.match(text, /Never\s+reconstruct or shorten the published table in prose/)
   assert.match(text, /"Most recurrent" means the maximum/)
   assert.match(text, /Never call a control "most relevant"/)
@@ -76,15 +76,15 @@ test('Echo scope preserves root and nested Journey filters and does not widen em
   assert.match(routing, /Samples support examples,\s+not a population-level cause/)
 })
 
-test('Echo does not infer causes from marginal cohort totals and renders next-step choices', () => {
+test('Echo does not infer causes from marginal totals or block optional follow-ups', () => {
   const text = loadDshPluginSkills().find(skill => skill.name === 'voidr-echo-analysis').content
   const routing = readFileSync(new URL('../adapters/dsh/skills/voidr-echo-analysis/references/tool-routing.md', import.meta.url), 'utf8')
   assert.match(text, /Aggregate fields are separate totals unless the tool explicitly returns their\s+intersection/)
   assert.match(text, /do not establish that audio caused silence or a\s+transfer/)
   assert.match(text, /Reading one exact\s+session may establish order in that session only/)
-  assert.match(text, /Whenever the response offers two or more distinct next actions, call\s+`ask_user_question`/)
-  assert.match(text, /do not end with a prose question/)
-  assert.match(text, /After a complete empty cohort, the next tool call must be `ask_user_question`/)
+  assert.match(text, /Do not call `ask_user_question` just to offer several next actions/)
+  assert.match(text, /A new composer message is a new user instruction/)
+  assert.match(text, /After a complete empty cohort, continue only a comparison already requested\s+and resolved before reading data/)
   assert.match(text, /A deviation is an observed classified event or pattern/)
   assert.match(text, /not automatically wrongdoing\s+by the agent or test/)
   assert.match(text, /use only the\s+control-linked `evidenceSamples`/)

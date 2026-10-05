@@ -160,7 +160,7 @@ test('deviation page contract forbids causal and shared-execution claims from a 
   const result = await call('echo_list_deviations', {
     applicationId,
     occurredFrom: window.occurredFrom,
-    occurredTo: '2026-09-15T21:48:18.046Z',
+    occurredToExclusive: window.occurredToExclusive,
     page: 1,
     limit: 20,
   }, async () => envelope({ data: {
@@ -271,7 +271,7 @@ test('regression: 24h empty -> answered 7d form -> new analysis in the same tech
   assert.equal(queries, 1)
   assert.equal(agent.session.events.filter(e => e.type === 'turn/start').length, 1)
   await assert.rejects(call('echo_resolve_analysis_window', period, () => assert.fail()), /fixed until the user/)
-  await assert.rejects(call('echo_analyze_session_cohort', { applicationId, ...window }, () => assert.fail()), /interval mismatch/)
+  await call('echo_analyze_session_cohort', { applicationId, ...window }, async () => envelope({ data: { available: false } }))
 })
 
 test('custom-only answers unlock once; later independently answered forms unlock again', async () => {

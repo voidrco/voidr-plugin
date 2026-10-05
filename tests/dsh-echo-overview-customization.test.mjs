@@ -1,13 +1,13 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { join } from 'node:path'
-import { registerEchoProposeOverviewChange, buildPreviewArguments, echoProposeOverviewChangeSchema } from '../adapters/dsh/echo-propose-overview-change.mjs'
+import { registerEchoProposeOverviewChange, buildPreviewArguments, echoProposeOverviewChangeSchema, echoOverviewQuestionDenial } from '../adapters/dsh/echo-propose-overview-change.mjs'
 import { registerEchoMemberPolicy, echoMemberToolDenial } from '../adapters/dsh/echo-member-policy.mjs'
 import { registerEchoActor } from '../adapters/dsh/echo-actor.mjs'
 import { loadDshPluginSkills } from '../adapters/dsh/plugin-skills.mjs'
 
 const APP = '6a6cfa72d43cf76203eaf843'
-const proposal = { applicationId: APP, intent: 'edit', name: 'Operação', summary: 'Adiciona KPI de transferência', operations: [{ action: 'add_kpi', metric: 'transfer_rate' }] }
+const proposal = { applicationId: APP, intent: 'edit', name: 'Operação', summary: 'Adiciona KPI de transferência', operations: [{ action: 'add_kpi', metric: 'transfer_rate' }], assumptions: [] }
 const ready = { status: 'ready', proposalId: 'p1', applicationId: APP, kind: 'create', name: 'Operação', presetName: null, changes: [{ kind: 'added' }], warnings: [] }
 const envelope = data => ({ structuredContent: { data } })
 
@@ -46,10 +46,12 @@ test('a ready preview calls the service tool once and publishes a card that only
   const { tool, events, calls, exec } = setup()
   const { applicationId, ...withoutApp } = proposal
   const output = await tool.execute(withoutApp, exec)
+  const { assumptions, ...serviceArgs } = withoutApp
   assert.equal(applicationId, APP)
+  assert.deepEqual(assumptions, [])
   assert.equal(calls.length, 1)
   assert.equal(calls[0][1], 'echo_preview_overview_change')
-  assert.deepEqual(calls[0][2], { ...withoutApp, applicationId: APP })
+  assert.deepEqual(calls[0][2], { ...serviceArgs, applicationId: APP })
   assert.deepEqual(calls[0][4], { allowError: true })
   assert.deepEqual(output, { status: 'ready', proposalId: 'p1', kind: 'create', name: 'Operação', changes: 1, warnings: [] })
   assert.equal(events.length, 1)
@@ -57,6 +59,40 @@ test('a ready preview calls the service tool once and publishes a card that only
   assert.equal(events[0].data.widget.interactive, false)
   assert.deepEqual(events[0].data.widget.spec.elements.proposal, { type: 'EchoOverviewProposal', props: { proposalId: 'p1', applicationId: APP } })
   assert.match(tool.output.render(proposal, output)[0].text, /Nothing changed yet/)
+  assert.match(tool.output.render(proposal, output)[0].text, /end the turn: no questions/)
+})
+
+test('a proposal built on unconfirmed choices publishes nothing and tells the model to ask first', async () => {
+  const { tool, events, calls, exec } = setup()
+  const guessed = { ...proposal, operations: [{ action: 'add_ranking', metric: 'deviation_rate', breakdown: 'journey' }], assumptions: ['deviation_rate stands in for incorrect closings', ' '] }
+  const output = await tool.execute(guessed, exec)
+  assert.deepEqual(output, { status: 'needs_confirmation', assumptions: ['deviation_rate stands in for incorrect closings'] })
+  assert.equal(calls.length, 0)
+  assert.equal(events.length, 0)
+  const text = tool.output.render(guessed, output)[0].text
+  assert.match(text, /Nothing was published/)
+  assert.match(text, /ask_user_question/)
+  assert.ok(echoProposeOverviewChangeSchema.required.includes('assumptions'))
+})
+
+test('judge criteria reach the service unchanged and only from the closed list', () => {
+  const criterion = echoProposeOverviewChangeSchema.properties.operations.items.properties.criterion
+  assert.ok(criterion.enum.includes('appropriate_closure'))
+  assert.equal(criterion.enum.length, 11)
+  assert.deepEqual(
+    buildPreviewArguments({ intent: 'edit', summary: 'x', assumptions: [], operations: [{ action: 'add_ranking', metric: 'criterion_fail_rate', criterion: 'appropriate_closure', breakdown: 'journey' }] }, { applicationId: APP }),
+    { intent: 'edit', summary: 'x', applicationId: APP, operations: [{ action: 'add_ranking', metric: 'criterion_fail_rate', criterion: 'appropriate_closure', breakdown: 'journey' }] }
+  )
+})
+
+test('after a proposal card in the same turn the model cannot ask a question', () => {
+  const card = { type: 'voidr/widget', data: { widget: { id: 'echo-overview-proposal-p1' } } }
+  const otherWidget = { type: 'voidr/widget', data: { widget: { id: 'echo-deviations-x' } } }
+  assert.match(echoOverviewQuestionDenial('ask_user_question', [{ type: 'turn/start' }, card]), /end the turn/)
+  assert.equal(echoOverviewQuestionDenial('ask_user_question', [{ type: 'turn/start' }, card, { type: 'turn/start' }]), null)
+  assert.equal(echoOverviewQuestionDenial('ask_user_question', [{ type: 'turn/start' }, otherWidget]), null)
+  assert.equal(echoOverviewQuestionDenial('echo_propose_overview_change', [{ type: 'turn/start' }, card]), null)
+  assert.equal(echoOverviewQuestionDenial('ask_user_question', undefined), null)
 })
 
 test('invalid proposals, service errors and cancellation publish nothing', async () => {
@@ -122,4 +158,6 @@ test('native overview tool is part of the Echo family and documented in the skil
   assert.match(skill.content, /`echo_propose_overview_change`/)
   assert.doesNotMatch(skill.content, /mcp__voidr__echo_propose_overview_change/)
   assert.match(skill.content, /mcp__voidr__echo_get_overview_view/)
+  assert.match(skill.content, /Align before proposing/)
+  assert.match(skill.content, /`criterion_fail_rate`/)
 })

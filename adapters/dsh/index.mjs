@@ -7,7 +7,7 @@ import { registerEchoActor } from './echo-actor.mjs'
 import { registerEchoRenderDeviations } from './echo-render-deviations.mjs'
 import { registerEchoRenderRegulatoryControls } from './echo-render-regulatory-controls.mjs'
 import { registerEchoRenderDeviationGroup } from './echo-render-deviation-group.mjs'
-import { registerEchoProposeOverviewChange } from './echo-propose-overview-change.mjs'
+import { echoOverviewQuestionDenial, registerEchoProposeOverviewChange } from './echo-propose-overview-change.mjs'
 import { registerEchoMemberPolicy } from './echo-member-policy.mjs'
 import { registerObservabilityWidgets } from './observability-widgets.mjs'
 
@@ -127,6 +127,8 @@ export function apply(ctx) {
     if (decision.kind !== 'allow') return decision
     const restrictedDenial = memberDenial(exec)
     if (restrictedDenial) return { kind: 'deny', reason: restrictedDenial }
+    const questionDenial = echoOverviewQuestionDenial(exec.name, exec.agent?.session?.events)
+    if (questionDenial) return { kind: 'deny', reason: questionDenial }
     const authoringDenial = agentOwnedAuthoringDenial(exec.name)
     if (authoringDenial) return { kind: 'deny', reason: qualifyDshVoidrTools(authoringDenial) }
     if (exec.name !== 'bash') return decision

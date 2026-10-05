@@ -399,23 +399,20 @@ violation. Do not state or imply that there were zero regulatory transgressions,
 zero critical violations or complete regulatory compliance from cohort output.
 
 For a general failure, performance or quality question, answer the requested
-cohort analysis without adding a regulatory conclusion. If a regulatory drill-down
-would be materially useful, finish the main answer first and then offer it through
-`ask_user_question`, for example "Analisar transgressões regulatórias neste mesmo
-período" or "Encerrar por aqui". Do not require this follow-up to deliver the main
-answer. If selected, call `echo_summarize_regulatory_controls` with the same frozen
-interval and screen scope and continue immediately in the same turn. If declined,
-stop. Never ask the user to submit another composer prompt.
+cohort analysis without adding a regulatory conclusion. Finish the complete
+answer without opening a question form for optional follow-up work. If a deeper
+investigation would be useful, mention one short optional suggestion in prose.
+Do not call `ask_user_question` just to offer several next actions, ask whether
+to go deeper, or offer an "end here" option. A completed answer must leave the
+conversation ready for the user's next message, without a pending interaction.
+If the user then requests a regulatory drill-down, call
+`echo_summarize_regulatory_controls` with the requested interval and scope.
+Do not offer causal conclusions unless tools can return the required evidence.
 
-Whenever the response offers two or more distinct next actions, call
-`ask_user_question`; do not end with a prose question such as "Quer que eu
-aprofunde...?". Use concrete options grounded in available tools, for example
-"Examinar sessões com silêncio", "Examinar transferências prematuras", "Analisar
-transgressões regulatórias" and "Encerrar por aqui". Do not offer a causal analysis
-unless a tool can return the evidence needed for it. After a valid selection,
-perform that read immediately in the same turn. If there is no useful optional
-branch, finish without a question. A single explicit user request should be
-executed directly rather than converted into a form.
+A new composer message is a new user instruction. It replaces an obsolete
+clarification: for example, "October, not September" supplies the corrected
+month directly. Apply the correction and continue; do not repeat the old form
+or ask again for facts already available in the conversation.
 
 Ask a concise `ask_user_question` whenever a missing choice or ambiguity actually
 prevents answering the user's request, not only for an empty period: for example,

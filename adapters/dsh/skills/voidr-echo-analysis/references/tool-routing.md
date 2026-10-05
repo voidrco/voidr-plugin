@@ -49,8 +49,9 @@ uncertainty about newer capabilities; never bypass an access denial.
   they show how often each fact occurred, not whether the same sessions contain
   both facts. Do not claim causation or a reaction between them without explicit
   same-session evidence. One session can illustrate order only for that session.
-  When offering multiple evidence drill-downs, use `ask_user_question` with
-  concrete tool-supported options rather than a prose question.
+  Finish the answer without a form for optional evidence drill-downs. A short
+  optional suggestion in prose is enough; ask only for a missing fact needed
+  to complete the current request.
 
 ## Official session references
 
@@ -139,9 +140,9 @@ playground or Hive session parameters.
   subagent delegation, session-by-session scan or custom aggregation script.
   Any definitive claim of zero, some or a specific number of regulatory
   transgressions requires this read, even inside a general cohort answer. For a
-  general non-regulatory request, answer first and optionally use
-  `ask_user_question` to offer this deeper analysis. If accepted, preserve the
-  frozen interval and scope and continue immediately; if declined, stop.
+  general non-regulatory request, finish the answer and optionally mention
+  this deeper analysis in prose. Do not open a question form for optional work.
+  If subsequently requested, preserve the requested interval and scope.
   Use each returned control's `evidenceSamples` for exact non-compliant examples
   and `criticalEvidenceSamples` for exact critical examples. Those samples bind
   the session, control outcome, rationale and transcript citations. General

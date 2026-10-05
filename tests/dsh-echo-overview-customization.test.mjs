@@ -20,8 +20,17 @@ function setup(call = async () => envelope(ready)) {
   return { tool, events, calls, exec: { agent } }
 }
 
+function typeArrays(schema, path = 'schema') {
+  if (!schema || typeof schema !== 'object') return []
+  const own = Array.isArray(schema.type) ? [path] : []
+  return [...own, ...Object.entries(schema).flatMap(([key, value]) => typeArrays(value, path + '.' + key))]
+}
+
 test('closed schema rejects unknown fields and requires a product', () => {
   assert.equal(echoProposeOverviewChangeSchema.additionalProperties, false)
+  const { tool } = setup()
+  assert.deepEqual([...typeArrays(tool.parameters), ...typeArrays(tool.output.schema)], [])
+  assert.deepEqual(buildPreviewArguments({ intent: 'edit', summary: 'x', operations: [{ action: 'update', blockId: 'c_000001', journey: '' }] }, { applicationId: APP }).operations, [{ action: 'update', blockId: 'c_000001', journey: null }])
   assert.equal(echoProposeOverviewChangeSchema.properties.operations.items.additionalProperties, false)
   assert.throws(() => buildPreviewArguments({ ...proposal, color: '#f00' }), /Unsupported fields: color/)
   assert.throws(() => buildPreviewArguments({ intent: 'edit', summary: 'x' }, {}), /No product is selected/)
@@ -37,7 +46,7 @@ test('a ready preview calls the service tool once and publishes a card that only
   assert.equal(calls[0][1], 'echo_preview_overview_change')
   assert.deepEqual(calls[0][2], { ...withoutApp, applicationId: APP })
   assert.deepEqual(calls[0][4], { allowError: true })
-  assert.deepEqual(output, { status: 'ready', proposalId: 'p1', kind: 'create', name: 'Operação', presetName: null, changes: 1, warnings: [] })
+  assert.deepEqual(output, { status: 'ready', proposalId: 'p1', kind: 'create', name: 'Operação', changes: 1, warnings: [] })
   assert.equal(events.length, 1)
   assert.equal(events[0].type, 'voidr/widget')
   assert.equal(events[0].data.widget.interactive, false)

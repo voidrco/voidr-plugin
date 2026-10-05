@@ -21,8 +21,8 @@ const operationSchema = {
     compare: { type: 'boolean' },
     limit: { type: 'integer', minimum: 3, maximum: 15 },
     sort: { type: 'string', enum: ['desc', 'asc'] },
-    journey: { type: ['string', 'null'], description: 'Journey key from echo_get_overview_view entities; null clears the filter.' },
-    persona: { type: ['string', 'null'], description: 'Persona key from echo_get_overview_view entities; null clears the filter.' }
+    journey: { type: 'string', maxLength: 200, description: 'Journey key from echo_get_overview_view entities; an empty string clears the filter.' },
+    persona: { type: 'string', maxLength: 200, description: 'Persona key from echo_get_overview_view entities; an empty string clears the filter.' }
   },
   required: ['action']
 }
@@ -53,7 +53,13 @@ export function buildPreviewArguments(args, hint) {
   if (unknown.length) throw new Error('Unsupported fields: ' + unknown.join(', ') + '. Use only the documented overview operations.')
   const applicationId = args.applicationId ?? hint?.applicationId ?? hint?.echoContext?.applicationId
   if (!new RegExp(OBJECT_ID).test(applicationId ?? '')) throw new Error('No product is selected. Ask the user which product the overview change is for.')
-  return { ...args, applicationId, operations: args.operations ?? [] }
+  return { ...args, applicationId, operations: (args.operations ?? []).map(clearedFilters) }
+}
+
+function clearedFilters(operation) {
+  const cleared = { ...operation }
+  for (const key of ['journey', 'persona']) if (cleared[key] === '') cleared[key] = null
+  return cleared
 }
 
 function parseEnvelope(response) {
@@ -99,8 +105,8 @@ export function registerEchoProposeOverviewChange(ctx, callEchoTool) {
           status: { type: 'string', enum: ['ready', 'invalid'] },
           proposalId: { type: 'string' },
           kind: { type: 'string' },
-          name: { type: ['string', 'null'] },
-          presetName: { type: ['string', 'null'] },
+          name: { type: 'string' },
+          presetName: { type: 'string' },
           changes: { type: 'integer' },
           warnings: { type: 'array', items: { type: 'string' } },
           issues: { type: 'array', items: { type: 'object', additionalProperties: true } }
@@ -119,8 +125,8 @@ export function registerEchoProposeOverviewChange(ctx, callEchoTool) {
         status: 'ready',
         proposalId: data.proposalId,
         kind: data.kind,
-        name: data.name ?? null,
-        presetName: data.presetName ?? null,
+        ...(data.name ? { name: data.name } : {}),
+        ...(data.presetName ? { presetName: data.presetName } : {}),
         changes: Array.isArray(data.changes) ? data.changes.length : 0,
         warnings: data.warnings ?? []
       }

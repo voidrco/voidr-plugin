@@ -32,6 +32,11 @@ test('closed schema rejects unknown fields and requires a product', () => {
   assert.deepEqual([...typeArrays(tool.parameters), ...typeArrays(tool.output.schema)], [])
   assert.deepEqual(buildPreviewArguments({ intent: 'edit', summary: 'x', operations: [{ action: 'update', blockId: 'c_000001', journey: '' }] }, { applicationId: APP }).operations, [{ action: 'update', blockId: 'c_000001', journey: null }])
   assert.equal(echoProposeOverviewChangeSchema.properties.operations.items.additionalProperties, false)
+  assert.deepEqual(
+    buildPreviewArguments({ intent: 'edit', summary: 'x', operations: [{ action: 'style', blockId: 'ops_transfer_by_journey', color: 'amber', seriesColors: [{ key: 'cancelamento', color: 'red' }, { key: 'consulta-fatura', color: 'default' }], thresholds: [{ operator: 'gt', value: 0.25, color: 'green' }] }] }, { applicationId: APP }).operations,
+    [{ action: 'style', blockId: 'ops_transfer_by_journey', color: 'amber', seriesColors: { cancelamento: 'red', 'consulta-fatura': 'default' }, thresholds: [{ operator: 'gt', value: 0.25, color: 'green' }] }]
+  )
+  assert.equal(echoProposeOverviewChangeSchema.properties.operations.items.properties.color.enum.includes('#ff0000'), false)
   assert.throws(() => buildPreviewArguments({ ...proposal, color: '#f00' }), /Unsupported fields: color/)
   assert.throws(() => buildPreviewArguments({ intent: 'edit', summary: 'x' }, {}), /No product is selected/)
   assert.deepEqual(buildPreviewArguments({ intent: 'delete', summary: 'x' }, { echoContext: { applicationId: APP } }), { intent: 'delete', summary: 'x', applicationId: APP, operations: [] })

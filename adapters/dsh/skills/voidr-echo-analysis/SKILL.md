@@ -489,12 +489,14 @@ Voidr template or an organization preset. Presets are shared with the whole
 organization. Choosing one never changes another person's screen, but editing,
 renaming or deleting a preset changes it for everyone who chose it.
 
-1. Call `echo_get_overview_view` for the product on screen before proposing.
+1. Call `mcp__voidr__echo_get_overview_view` for the product on screen before proposing.
    Use only the block ids, template and preset choices, metrics and entity keys
    it returns.
 2. Propose with `echo_propose_overview_change`. It publishes a preview card and
    the page changes only when the person clicks Aplicar there. Never say a
-   change was applied or that you changed the page.
+   change was applied or that you changed the page. The card already offers
+   Aplicar, Salvar como novo, Ver na página and Descartar: end the turn after
+   describing it instead of asking which of those to pick.
 3. Target:
    - On a preset, edits update it by default. Pass `saveAs: "new"` with a
      `name` when the person wants a separate preset.
@@ -510,12 +512,20 @@ renaming or deleting a preset changes it for everyone who chose it.
    card formula (successes over evaluated sessions); `success_rate_conclusive`
    is the chat summary formula (successes over successes plus failures). Name
    the one you used.
-6. Colors, logo, fonts, themes, custom formulas, queries, links, other
-   organizations' data and Voidr block titles cannot be changed. Say so briefly
-   and offer the closest supported change.
-7. A rejected proposal returns issues. Fix them once or ask the person; do not
+6. KPI, chart and ranking blocks take palette colors from the returned
+   catalog: `color` for a KPI number, ranking bars or a single-series chart,
+   `seriesColors` for one series (journey, persona or environment key), and up
+   to three `thresholds` that color a KPI number or ranking value and draw
+   reference lines on charts; the first matching rule wins and rates are
+   fractions (25% = 0.25). Use `action: "style"` on an existing block or the
+   same fields when adding one. Voidr blocks keep their colors: to color one of
+   their numbers, add a KPI with the same metric and style it.
+7. Backgrounds, logo, fonts, themes, free hex colors, custom formulas, queries,
+   links, other organizations' data and Voidr block titles cannot be changed.
+   Say so briefly and offer the closest supported change.
+8. A rejected proposal returns issues. Fix them once or ask the person; do not
    repeat the same invalid change.
-8. To switch between the Visão Voidr, a template or a preset, point the person
+9. To switch between the Visão Voidr, a template or a preset, point the person
    to the "Visão" selector at the top of the overview.
 
 ## Output

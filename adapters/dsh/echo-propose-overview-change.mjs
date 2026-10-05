@@ -1,18 +1,20 @@
 const OBJECT_ID = '^[a-fA-F0-9]{24}$'
 const BLOCK_ID = '^[a-z][a-z0-9_]{1,39}$'
 const SERVICE_TOOL = 'echo_preview_overview_change'
+const COLORS = ['white', 'gray', 'cyan', 'blue', 'violet', 'pink', 'amber', 'yellow', 'sand', 'green', 'red']
+const COLOR_CHOICES = [...COLORS, 'default']
 
 const operationSchema = {
   type: 'object',
   additionalProperties: false,
   properties: {
-    action: { type: 'string', enum: ['show', 'hide', 'move', 'resize', 'rename', 'update', 'remove', 'add_chart', 'add_kpi', 'add_ranking', 'reset'] },
-    blockId: { type: 'string', pattern: BLOCK_ID, description: 'Block id returned by echo_get_overview_view.' },
+    action: { type: 'string', enum: ['show', 'hide', 'move', 'resize', 'rename', 'update', 'remove', 'style', 'add_chart', 'add_kpi', 'add_ranking', 'reset'] },
+    blockId: { type: 'string', pattern: BLOCK_ID, description: 'Block id returned by mcp__voidr__echo_get_overview_view.' },
     position: { type: 'string', enum: ['top', 'bottom', 'before', 'after'] },
     anchorBlockId: { type: 'string', pattern: BLOCK_ID },
     width: { type: 'integer', enum: [3, 4, 5, 6, 7, 8, 9, 12], description: 'Columns out of 12.' },
     title: { type: 'string', minLength: 1, maxLength: 80, description: 'Title of a new block only, in the user language.' },
-    metric: { type: 'string', description: 'Metric id from the catalog returned by echo_get_overview_view.' },
+    metric: { type: 'string', description: 'Metric id from the catalog returned by mcp__voidr__echo_get_overview_view.' },
     chartType: { type: 'string', enum: ['line', 'area', 'bar', 'stacked_bar'] },
     bucket: { type: 'string', enum: ['day', 'week'] },
     breakdown: { type: 'string', enum: ['none', 'journey', 'persona', 'environment'] },
@@ -21,8 +23,31 @@ const operationSchema = {
     compare: { type: 'boolean' },
     limit: { type: 'integer', minimum: 3, maximum: 15 },
     sort: { type: 'string', enum: ['desc', 'asc'] },
-    journey: { type: 'string', maxLength: 200, description: 'Journey key from echo_get_overview_view entities; an empty string clears the filter.' },
-    persona: { type: 'string', maxLength: 200, description: 'Persona key from echo_get_overview_view entities; an empty string clears the filter.' }
+    journey: { type: 'string', maxLength: 200, description: 'Journey key from mcp__voidr__echo_get_overview_view entities; an empty string clears the filter.' },
+    persona: { type: 'string', maxLength: 200, description: 'Persona key from mcp__voidr__echo_get_overview_view entities; an empty string clears the filter.' },
+    color: { type: 'string', enum: COLOR_CHOICES, description: 'Palette color of a KPI number, ranking bars or a single-series chart. default removes the override.' },
+    seriesColors: {
+      type: 'array',
+      maxItems: 9,
+      description: 'One palette color per chart or ranking series: a journey, persona or environment key from entities, total, or __others__. default removes one.',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { key: { type: 'string', minLength: 1, maxLength: 200 }, color: { type: 'string', enum: COLOR_CHOICES } },
+        required: ['key', 'color']
+      }
+    },
+    thresholds: {
+      type: 'array',
+      maxItems: 3,
+      description: 'Rules that color a KPI number or ranking value and draw reference lines on charts; the first matching rule wins. Values use the metric unit: rates are fractions (25% = 0.25), scores 0-100, times in milliseconds, counts in sessions. An empty list removes them.',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: { operator: { type: 'string', enum: ['gt', 'gte', 'lt', 'lte'] }, value: { type: 'number' }, color: { type: 'string', enum: COLORS } },
+        required: ['operator', 'value', 'color']
+      }
+    }
   },
   required: ['action']
 }
@@ -53,12 +78,13 @@ export function buildPreviewArguments(args, hint) {
   if (unknown.length) throw new Error('Unsupported fields: ' + unknown.join(', ') + '. Use only the documented overview operations.')
   const applicationId = args.applicationId ?? hint?.applicationId ?? hint?.echoContext?.applicationId
   if (!new RegExp(OBJECT_ID).test(applicationId ?? '')) throw new Error('No product is selected. Ask the user which product the overview change is for.')
-  return { ...args, applicationId, operations: (args.operations ?? []).map(clearedFilters) }
+  return { ...args, applicationId, operations: (args.operations ?? []).map(serviceOperation) }
 }
 
-function clearedFilters(operation) {
+function serviceOperation(operation) {
   const cleared = { ...operation }
   for (const key of ['journey', 'persona']) if (cleared[key] === '') cleared[key] = null
+  if (Array.isArray(cleared.seriesColors)) cleared.seriesColors = Object.fromEntries(cleared.seriesColors.map(entry => [entry.key, entry.color]))
   return cleared
 }
 
@@ -95,7 +121,7 @@ function renderOutcome(value) {
 export function registerEchoProposeOverviewChange(ctx, callEchoTool) {
   ctx.tools.register({
     name: 'echo_propose_overview_change',
-    description: 'Propose a change to the Echo overview ("Visão Geral") and show a preview card the person can apply or discard. Supports editing blocks (show, hide, move, resize, add charts, KPIs and rankings from the metric catalog), creating presets from the Voidr view or templates, and renaming or deleting presets. Call echo_get_overview_view first. Never changes the page by itself; colors, logo, fonts and formulas are not configurable.',
+    description: 'Propose a change to the Echo overview ("Visão Geral") and show a preview card the person can apply or discard. Supports editing blocks (show, hide, move, resize, add charts, KPIs and rankings from the metric catalog, and palette or threshold colors on those blocks), creating presets from the Voidr view or templates, and renaming or deleting presets. Call mcp__voidr__echo_get_overview_view first. Never changes the page by itself; backgrounds, logo, fonts, free hex colors and formulas are not configurable.',
     parameters: echoProposeOverviewChangeSchema,
     output: {
       schema: {

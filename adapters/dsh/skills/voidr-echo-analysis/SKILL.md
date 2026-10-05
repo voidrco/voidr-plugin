@@ -674,18 +674,30 @@ organization before that. There are no proposal cards in the studio.
    the rate of `criterion.outcome` FAIL) and confirm before switching. A
    breakdown with a multi control on the same field lets the reader choose
    which series appear; a single control cannot match the breakdown.
-5. A chart with a breakdown draws up to `catalog.limits.seriesMax` series.
-   Choose its `layout` by what the reader compares: `overlay` (default) for up
-   to about five series on one plot; `panels` to compare many journeys,
-   personas or criteria over time, one small chart per series with its value
-   and sample; `focus` to study one series at a time against the others, a
-   large chart plus a side list with sparklines where the reader switches the
-   focus. Never split one question into several blocks (part 1, part 2): raise
-   `seriesLimit` and choose panels or focus. Leave `bucket` out (auto: days
-   for short periods, weeks beyond 45 days) unless the person asks for a grain.
-6. A rejected change returns issues. Fix them once or ask the person; do not
+5. A chart with a breakdown draws up to `catalog.limits.seriesMax` series,
+   all in one block: never split one question into several blocks (part 1,
+   part 2, one per group of criteria). `layout` changes how they are drawn:
+   `overlay` (default) puts every line on one plot and is the right choice
+   when the person asks for one chart with all of them; `panels` draws one
+   small chart per series with its value and sample; `focus` draws one large
+   chart for the series the reader selects plus a side list with sparklines.
+   Offer panels or focus as an option when many lines cross each other; the
+   reader can also switch it in the block header. Honor the grain the person
+   states ("eixo X = dias" is `bucket: "day"`, "por semana" is `"week"`);
+   otherwise leave `bucket` out (auto: days for short periods, weeks beyond
+   45 days). The reader can switch between days and weeks in the header.
+6. Criteria over time per journey ("evolução dos critérios por jornada",
+   "média de cada critério por dia", "uma jornada por vez", "jamais duas
+   jornadas ao mesmo tempo") is the library widget `criteria_evolution`: one
+   line chart, `metric: "custom"` with subject criterion, kind mean,
+   `value: "criterion.score"`, `breakdown: "criterion.id"`,
+   `seriesLimit` 11 and `controls: [{field: "session.journey", mode:
+   "single"}]`, so the reader picks exactly one journey in the header. Use
+   that operation as is, changing only what the person asked differently.
+   Never pin the journey with `journey` when they want to choose it.
+7. A rejected change returns issues. Fix them once or ask the person; do not
    repeat the same invalid change.
-7. To switch between views, point the person to the "Visão" selector at the
+8. To switch between views, point the person to the "Visão" selector at the
    top of the overview.
 
 ## Output

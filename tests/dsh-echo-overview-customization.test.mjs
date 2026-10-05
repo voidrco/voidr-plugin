@@ -32,6 +32,16 @@ test('closed schema rejects unknown fields and requires a product', () => {
   const { tool } = setup()
   assert.deepEqual([...typeArrays(tool.parameters), ...typeArrays(tool.output.schema)], [])
   assert.deepEqual(buildPreviewArguments({ intent: 'edit', summary: 'x', operations: [{ action: 'update', blockId: 'c_000001', journey: '' }] }, { applicationId: APP }).operations, [{ action: 'update', blockId: 'c_000001', journey: null }])
+  assert.deepEqual(
+    buildPreviewArguments({ intent: 'edit', summary: 'x', operations: [{ action: 'update', blockId: 'c_000001', where: [], controls: [] }] }, { applicationId: APP }).operations,
+    [{ action: 'update', blockId: 'c_000001', where: null, controls: null }]
+  )
+  const composed = { action: 'add_chart', metric: 'sessions', breakdown: 'session.journey', layout: 'focus', bucket: 'auto', seriesLimit: 11, where: [{ field: 'session.outcome', op: 'in', values: ['fail'] }], controls: [{ field: 'session.journey', mode: 'multi' }] }
+  assert.deepEqual(buildPreviewArguments({ intent: 'edit', summary: 'x', operations: [composed] }, { applicationId: APP }).operations, [composed])
+  const operationFields = echoProposeOverviewChangeSchema.properties.operations.items.properties
+  assert.equal(operationFields.picker, undefined)
+  assert.deepEqual(operationFields.layout.enum, ['overlay', 'panels', 'focus'])
+  assert.equal(operationFields.seriesLimit.maximum, 11)
   assert.equal(echoProposeOverviewChangeSchema.properties.operations.items.additionalProperties, false)
   assert.deepEqual(
     buildPreviewArguments({ intent: 'edit', summary: 'x', operations: [{ action: 'style', blockId: 'ops_transfer_by_journey', color: 'amber', seriesColors: [{ key: 'cancelamento', color: 'red' }, { key: 'consulta-fatura', color: 'default' }], thresholds: [{ operator: 'gt', value: 0.25, color: 'green' }] }] }, { applicationId: APP }).operations,

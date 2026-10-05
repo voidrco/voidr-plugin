@@ -22,6 +22,17 @@ const conditionSchema = {
   required: ['field', 'op']
 }
 
+const controlSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    field: { type: 'string', minLength: 3, maxLength: 60, description: 'Category field from catalog.metricModel of the metric subject or of session: session.journey, session.persona, criterion.id, criterion.outcome, deviation.type and so on.' },
+    mode: { type: 'string', enum: ['single', 'multi'], description: 'single shows one value at a time; multi lets the reader tick several (Jornadas 4/6).' },
+    initial: { type: 'array', minItems: 1, maxItems: 40, items: { type: 'string', minLength: 1, maxLength: 200 }, description: 'Values selected at first. Leave out to start on the value with most sessions (single) or on all values (multi).' }
+  },
+  required: ['field', 'mode']
+}
+
 const customMetricSchema = {
   type: 'object',
   additionalProperties: false,
@@ -54,20 +65,22 @@ const operationSchema = {
     criterion: { type: 'string', enum: CRITERIA, description: 'Judge criterion for metric criterion_fail_rate (share of evaluated sessions whose official judge verdict for that criterion is FAIL), e.g. appropriate_closure for incorrect or improper closings. Required with that metric and ignored by others.' },
     custom: customMetricSchema,
     chartType: { type: 'string', enum: ['line', 'area', 'bar', 'stacked_bar'] },
-    bucket: { type: 'string', enum: ['day', 'week'] },
+    layout: { type: 'string', enum: ['overlay', 'panels', 'focus'], description: 'How a chart with a breakdown draws its series: overlay (one plot, up to about 5 series), panels (one small chart per series with its value and sample) or focus (one large chart for the series the reader picks plus a side list with sparklines). panels and focus need a breakdown.' },
+    bucket: { type: 'string', enum: ['auto', 'day', 'week'], description: 'auto (default) uses days for short periods and weeks beyond 45 days.' },
     breakdown: { type: 'string', minLength: 4, maxLength: 60, description: 'none, journey, persona, environment, or a dimension from catalog.metricModel such as session.termination_reason.' },
-    seriesLimit: { type: 'integer', minimum: 2, maximum: 8 },
+    seriesLimit: { type: 'integer', minimum: 2, maximum: 11 },
     window: { type: 'string', enum: ['page', '24h', '7d', '14d', '30d', '90d', 'all'] },
     compare: { type: 'boolean' },
     limit: { type: 'integer', minimum: 3, maximum: 15 },
     sort: { type: 'string', enum: ['desc', 'asc'] },
     journey: { type: 'string', maxLength: 200, description: 'Journey key from mcp__voidr__echo_get_overview_view entities; an empty string clears the filter.' },
     persona: { type: 'string', maxLength: 200, description: 'Persona key from mcp__voidr__echo_get_overview_view entities; an empty string clears the filter.' },
-    picker: { type: 'string', enum: ['journey', 'persona', 'none'], description: 'Selector in the block header that lets the reader choose ONE journey (or persona) at a time. Use it instead of one block per journey. journey/persona above becomes the starting choice. none removes it. A chart or ranking cannot also break down by the picked dimension.' },
+    where: { type: 'array', maxItems: 8, items: conditionSchema, description: 'Fixed conditions of a KPI, chart or ranking on any field of the metric subject or of session, for example [{field: "criterion.id", op: "in", values: ["appropriate_closure"]}]. An empty list removes them.' },
+    controls: { type: 'array', maxItems: 3, items: controlSchema, description: 'Selectors the reader uses in the block header to filter it. Use one instead of one block per value. A multi control on the breakdown field picks which series appear; a single one cannot match the breakdown. An empty list removes them.' },
     color: { type: 'string', enum: COLOR_CHOICES, description: 'Palette color of a KPI number, ranking bars or a single-series chart. default removes the override.' },
     seriesColors: {
       type: 'array',
-      maxItems: 9,
+      maxItems: 12,
       description: 'One palette color per chart or ranking series: a journey, persona or environment key from entities, total, or __others__. default removes one.',
       items: {
         type: 'object',
@@ -136,7 +149,7 @@ export function pendingAssumptions(args) {
 function serviceOperation(operation) {
   const cleared = { ...operation }
   for (const key of ['journey', 'persona']) if (cleared[key] === '') cleared[key] = null
-  if (cleared.picker === 'none') cleared.picker = null
+  for (const key of ['where', 'controls']) if (Array.isArray(cleared[key]) && cleared[key].length === 0) cleared[key] = null
   if (Array.isArray(cleared.seriesColors)) cleared.seriesColors = Object.fromEntries(cleared.seriesColors.map(entry => [entry.key, entry.color]))
   return cleared
 }

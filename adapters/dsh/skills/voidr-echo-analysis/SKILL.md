@@ -645,10 +645,12 @@ organization before that. There are no proposal cards in the studio.
    definition built only from the returned `catalog.metricModel` (subject,
    kind, base, where, match), name it in the person's language and confirm the
    definition with them. Name the metric you used.
-2. KPI, chart and ranking blocks take palette colors from the returned
-   catalog: `color` for a KPI number, ranking bars or a single-series chart,
-   `seriesColors` for one series (journey, persona or environment key), and up
-   to three `thresholds` that color a KPI number or ranking value and draw
+2. Charts use the Voidr series palette, already tuned for the light and dark
+   themes and every color-vision mode. Leave `color` and `seriesColors` out
+   unless the person asks for a color. When they do, use palette names from
+   the returned catalog: `color` for a KPI number, ranking bars or a
+   single-series chart, `seriesColors` for one series (its key), and up to
+   three `thresholds` that color a KPI number or ranking value and draw
    reference lines on charts; the first matching rule wins and rates are
    fractions (25% = 0.25). Use `action: "style"` on an existing block or the
    same fields when adding one. Voidr blocks keep their colors: to color one of
@@ -657,18 +659,30 @@ organization before that. There are no proposal cards in the studio.
    metric model, queries, links, other organizations' data and Voidr block
    titles cannot be changed. Say so briefly and offer the closest supported
    change.
-4. When the person wants to choose or switch the journey (or persona) inside a
-   widget ("filtrar por jornada", "escolher a jornada", "uma jornada por
-   vez"), build ONE block with `picker: "journey"` (or `"persona"`): the reader
-   picks one in the block header and never sees two together. Never add one
-   block per journey or persona for this. Asking which journey to start with
-   is unnecessary; it opens on the one with most sessions unless they name
-   one (then set `journey` as the starting choice). A chart or ranking with a
-   journey picker cannot also break down by journey.
-5. A chart shows at most `catalog.limits.seriesMax` series. When the person
-   asks for more lines than that (for example one per judge criterion), split
-   them into the fewest blocks by a grouping they recognize, keep the same
-   picker on each, and say in the reply why there is more than one block.
+4. Blocks compose: any KPI, chart or ranking takes `where` (fixed conditions,
+   same shape as `custom.where`) and up to three `controls`, selectors the
+   reader uses in the block header, on any category field of the metric
+   subject or of session (journey, persona, criterion, criterion outcome,
+   deviation type and so on). `mode: "single"` shows one value at a time;
+   `"multi"` lets the reader tick several ("Jornadas 4/6"). When the person
+   wants to filter, choose or switch something inside a widget ("filtro por
+   critério", "escolher a jornada", "uma jornada por vez"), add a control to
+   that block in place: never one block per value, and never refuse because
+   the option does not exist yet. A filter on criteria needs a metric about
+   criteria: when the block measures sessions, offer the closest criterion
+   metric (custom with subject criterion, the mean of `criterion.score` or
+   the rate of `criterion.outcome` FAIL) and confirm before switching. A
+   breakdown with a multi control on the same field lets the reader choose
+   which series appear; a single control cannot match the breakdown.
+5. A chart with a breakdown draws up to `catalog.limits.seriesMax` series.
+   Choose its `layout` by what the reader compares: `overlay` (default) for up
+   to about five series on one plot; `panels` to compare many journeys,
+   personas or criteria over time, one small chart per series with its value
+   and sample; `focus` to study one series at a time against the others, a
+   large chart plus a side list with sparklines where the reader switches the
+   focus. Never split one question into several blocks (part 1, part 2): raise
+   `seriesLimit` and choose panels or focus. Leave `bucket` out (auto: days
+   for short periods, weeks beyond 45 days) unless the person asks for a grain.
 6. A rejected change returns issues. Fix them once or ask the person; do not
    repeat the same invalid change.
 7. To switch between views, point the person to the "Visão" selector at the

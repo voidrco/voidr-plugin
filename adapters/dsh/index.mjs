@@ -9,6 +9,7 @@ import { registerEchoRenderRegulatoryControls } from './echo-render-regulatory-c
 import { registerEchoRenderDeviationGroup } from './echo-render-deviation-group.mjs'
 import { echoOverviewQuestionDenial, registerEchoProposeOverviewChange } from './echo-propose-overview-change.mjs'
 import { registerEchoMemberPolicy } from './echo-member-policy.mjs'
+import { echoOverviewStudioDenial } from './echo-overview-studio.mjs'
 import { registerObservabilityWidgets } from './observability-widgets.mjs'
 
 const CONTEXT_EVENT_TYPE = 'voidr/project-context-hint'
@@ -129,6 +130,8 @@ export function apply(ctx) {
     if (restrictedDenial) return { kind: 'deny', reason: restrictedDenial }
     const questionDenial = echoOverviewQuestionDenial(exec.name, exec.agent?.session?.events)
     if (questionDenial) return { kind: 'deny', reason: questionDenial }
+    const studioDenial = echoOverviewStudioDenial(exec.name, exec.arguments ?? exec.args, exec.agent?.session?.events)
+    if (studioDenial) return { kind: 'deny', reason: studioDenial }
     const authoringDenial = agentOwnedAuthoringDenial(exec.name)
     if (authoringDenial) return { kind: 'deny', reason: qualifyDshVoidrTools(authoringDenial) }
     if (exec.name !== 'bash') return decision

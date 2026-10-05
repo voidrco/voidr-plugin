@@ -5,6 +5,7 @@ import { registerEchoProposeOverviewChange, buildPreviewArguments, echoProposeOv
 import { registerEchoMemberPolicy, echoMemberToolDenial } from '../adapters/dsh/echo-member-policy.mjs'
 import { registerEchoActor } from '../adapters/dsh/echo-actor.mjs'
 import { loadDshPluginSkills } from '../adapters/dsh/plugin-skills.mjs'
+import { echoOverviewStudioDenial } from '../adapters/dsh/echo-overview-studio.mjs'
 
 const APP = '6a6cfa72d43cf76203eaf843'
 const proposal = { applicationId: APP, intent: 'edit', name: 'Operação', summary: 'Adiciona KPI de transferência', operations: [{ action: 'add_kpi', metric: 'transfer_rate' }], assumptions: [] }
@@ -152,6 +153,43 @@ test('restricted Echo members keep Echo tools and bundled references only', asyn
   assert.equal(denial({ name: 'bash', agent, arguments: {} }), null)
 })
 
+test('the proposal schema follows the service grid and metric model without templates', () => {
+  const properties = echoProposeOverviewChangeSchema.properties
+  const operation = properties.operations.items.properties
+  const base = new RegExp(properties.base.pattern)
+  assert.equal(base.test('template:operations'), false)
+  assert.equal(base.test('voidr'), true)
+  assert.equal(base.test('preset:6a6cfa72d43cf76203eaf843'), true)
+  assert.deepEqual(operation.width.enum, [3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
+  assert.deepEqual([operation.height.minimum, operation.height.maximum], [3, 24])
+  assert.equal(operation.custom.additionalProperties, false)
+  assert.equal(operation.custom.properties.where.items.additionalProperties, false)
+  assert.equal(operation.breakdown.enum, undefined)
+  assert.doesNotMatch(JSON.stringify(echoProposeOverviewChangeSchema), /anyOf|template:/)
+  const custom = { name: 'Encerramento pelo cliente', subject: 'session', kind: 'rate', where: [{ field: 'session.termination_initiator', op: 'in', values: ['persona', 'agent'] }], match: [{ field: 'session.termination_initiator', op: 'in', values: ['persona'] }] }
+  assert.deepEqual(
+    buildPreviewArguments({ intent: 'edit', summary: 'x', operations: [{ action: 'add_ranking', metric: 'custom', custom, breakdown: 'session.journey', width: 10, height: 12 }] }, { applicationId: APP }).operations,
+    [{ action: 'add_ranking', metric: 'custom', custom, breakdown: 'session.journey', width: 10, height: 12 }]
+  )
+})
+
+test('the overview studio routes changes to the open draft', () => {
+  const draftId = '6ac3f9a1b2c3d4e5f6a7b8c9'
+  const studio = [{ type: 'voidr/project-context-hint', data: { surface: 'echo', echoContext: { applicationId: APP, overviewDraftId: draftId, overviewSelectedBlocks: 'c_kpi,success_rate' } } }]
+  const page = [{ type: 'voidr/project-context-hint', data: { surface: 'echo', echoContext: { applicationId: APP } } }]
+  assert.match(echoOverviewStudioDenial('echo_propose_overview_change', proposal, studio), new RegExp('mcp__voidr__echo_edit_overview_draft and draftId ' + draftId))
+  assert.equal(echoOverviewStudioDenial('echo_propose_overview_change', proposal, page), null)
+  assert.match(echoOverviewStudioDenial('mcp__voidr__echo_get_overview_view', { applicationId: APP }, studio), new RegExp('with draftId ' + draftId))
+  assert.equal(echoOverviewStudioDenial('mcp__voidr__echo_get_overview_view', { applicationId: APP, draftId }, studio), null)
+  assert.equal(echoOverviewStudioDenial('mcp__voidr__echo_get_overview_view', { applicationId: APP }, page), null)
+  assert.equal(echoOverviewStudioDenial('mcp__voidr__echo_edit_overview_draft', { draftId, operations: [], summary: 'x' }, studio), null)
+  assert.match(echoOverviewStudioDenial('mcp__voidr__echo_edit_overview_draft', { draftId: '6ac3f9a1b2c3d4e5f6a7b8c0', operations: [] }, studio), new RegExp('draftId ' + draftId))
+  assert.match(echoOverviewStudioDenial('mcp__voidr__echo_edit_overview_draft', { draftId, operations: [] }, page), /No overview studio is open/)
+  assert.equal(echoOverviewStudioDenial('mcp__voidr__echo_get_overview', {}, studio), null)
+  const stale = [...studio, ...page]
+  assert.equal(echoOverviewStudioDenial('echo_propose_overview_change', proposal, stale), null)
+})
+
 test('native overview tool is part of the Echo family and documented in the skill', () => {
   const skill = loadDshPluginSkills().find(item => item.name === 'voidr-echo-analysis')
   assert.match(skill.content, /## Overview customization/)
@@ -160,4 +198,10 @@ test('native overview tool is part of the Echo family and documented in the skil
   assert.match(skill.content, /mcp__voidr__echo_get_overview_view/)
   assert.match(skill.content, /Align before proposing/)
   assert.match(skill.content, /`criterion_fail_rate`/)
+  assert.match(skill.content, /### In the overview studio/)
+  assert.match(skill.content, /`mcp__voidr__echo_edit_overview_draft`/)
+  assert.match(skill.content, /`echoContext.overviewSelectedBlocks`/)
+  assert.match(skill.content, /who reads this screen and which decision it supports/)
+  assert.match(skill.content, /`mcp__voidr__echo_query_overview_metric`/)
+  assert.doesNotMatch(skill.content, /template/i)
 })

@@ -10,6 +10,35 @@ const CRITERIA = [
 ]
 export const ECHO_OVERVIEW_PROPOSAL_WIDGET_PREFIX = 'echo-overview-proposal-'
 
+const conditionSchema = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    field: { type: 'string', minLength: 3, maxLength: 60, description: 'Field from catalog.metricModel for the metric subject.' },
+    op: { type: 'string', enum: ['in', 'not_in', 'gte', 'lte'] },
+    values: { type: 'array', maxItems: 30, items: { type: 'string', minLength: 1, maxLength: 200 }, description: 'Values for in and not_in, from catalog.metricModel.' },
+    value: { type: 'number', description: 'Number for gte and lte.' }
+  },
+  required: ['field', 'op']
+}
+
+const customMetricSchema = {
+  type: 'object',
+  additionalProperties: false,
+  description: 'Custom metric definition for metric "custom", built only from catalog.metricModel returned by mcp__voidr__echo_get_overview_view.',
+  properties: {
+    name: { type: 'string', minLength: 1, maxLength: 60, description: 'Metric name in the user language.' },
+    subject: { type: 'string', enum: ['session', 'criterion', 'deviation', 'knowledge', 'regulatory', 'hallucination'] },
+    kind: { type: 'string', enum: ['count', 'rate', 'mean'] },
+    base: { type: 'string', enum: ['all', 'valid', 'evaluated', 'conclusive'] },
+    where: { type: 'array', maxItems: 8, items: conditionSchema, description: 'Conditions every counted record meets (the denominator of a rate).' },
+    match: { type: 'array', maxItems: 8, items: conditionSchema, description: 'Conditions of the numerator of a rate.' },
+    value: { type: 'string', minLength: 3, maxLength: 60, description: 'Numeric field averaged by a mean.' },
+    favorable: { type: 'string', enum: ['high', 'low', 'neutral'] }
+  },
+  required: ['name', 'subject', 'kind']
+}
+
 const operationSchema = {
   type: 'object',
   additionalProperties: false,
@@ -18,13 +47,15 @@ const operationSchema = {
     blockId: { type: 'string', pattern: BLOCK_ID, description: 'Block id returned by mcp__voidr__echo_get_overview_view.' },
     position: { type: 'string', enum: ['top', 'bottom', 'before', 'after'] },
     anchorBlockId: { type: 'string', pattern: BLOCK_ID },
-    width: { type: 'integer', enum: [3, 4, 5, 6, 7, 8, 9, 12], description: 'Columns out of 12.' },
+    width: { type: 'integer', enum: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12], description: 'Columns out of 12.' },
+    height: { type: 'integer', minimum: 3, maximum: 24, description: 'Rows of 34 px for KPI, chart and ranking blocks; Voidr blocks keep their height.' },
     title: { type: 'string', minLength: 1, maxLength: 80, description: 'Title of a new block only, in the user language.' },
-    metric: { type: 'string', description: 'Metric id from the catalog returned by mcp__voidr__echo_get_overview_view.' },
+    metric: { type: 'string', description: 'Metric id from the catalog returned by mcp__voidr__echo_get_overview_view, or custom with a custom definition.' },
     criterion: { type: 'string', enum: CRITERIA, description: 'Judge criterion for metric criterion_fail_rate (share of evaluated sessions whose official judge verdict for that criterion is FAIL), e.g. appropriate_closure for incorrect or improper closings. Required with that metric and ignored by others.' },
+    custom: customMetricSchema,
     chartType: { type: 'string', enum: ['line', 'area', 'bar', 'stacked_bar'] },
     bucket: { type: 'string', enum: ['day', 'week'] },
-    breakdown: { type: 'string', enum: ['none', 'journey', 'persona', 'environment'] },
+    breakdown: { type: 'string', minLength: 4, maxLength: 60, description: 'none, journey, persona, environment, or a dimension from catalog.metricModel such as session.termination_reason.' },
     seriesLimit: { type: 'integer', minimum: 2, maximum: 8 },
     window: { type: 'string', enum: ['page', '24h', '7d', '14d', '30d', '90d', 'all'] },
     compare: { type: 'boolean' },
@@ -64,8 +95,8 @@ export const echoProposeOverviewChangeSchema = {
   additionalProperties: false,
   properties: {
     intent: { type: 'string', enum: ['edit', 'rename', 'delete'] },
-    base: { type: 'string', pattern: '^(current|voidr|template:[a-z][a-z0-9_]{1,39}|preset:[a-fA-F0-9]{24})$', description: 'Starting view for edit. Defaults to current.' },
-    saveAs: { type: 'string', enum: ['auto', 'new'], description: 'auto updates a preset base and creates a new preset from Voidr views or templates; new always creates.' },
+    base: { type: 'string', pattern: '^(current|voidr|preset:[a-fA-F0-9]{24})$', description: 'Starting view for edit. Defaults to current.' },
+    saveAs: { type: 'string', enum: ['auto', 'new'], description: 'auto updates a preset base and creates a new preset from the Voidr view; new always creates.' },
     presetId: { type: 'string', pattern: OBJECT_ID, description: 'Preset to rename or delete; defaults to the selected preset.' },
     name: { type: 'string', minLength: 1, maxLength: 60, description: 'Preset name (new preset or rename), in the user language.' },
     summary: { type: 'string', minLength: 1, maxLength: 280, description: 'One sentence in the user language describing the proposed change.' },
@@ -158,7 +189,7 @@ export function echoOverviewQuestionDenial(name, events) {
 export function registerEchoProposeOverviewChange(ctx, callEchoTool) {
   ctx.tools.register({
     name: 'echo_propose_overview_change',
-    description: 'Propose a change to the Echo overview ("Visão Geral") and show a preview card the person can apply or discard. Supports editing blocks (show, hide, move, resize, add charts, KPIs and rankings from the metric catalog, including the failure rate of one judge criterion, and palette or threshold colors on those blocks), creating presets from the Voidr view or templates, and renaming or deleting presets. Call mcp__voidr__echo_get_overview_view first and align with the person before calling: the card is the last step of the turn. Never changes the page by itself; backgrounds, logo, fonts, free hex colors and formulas are not configurable.',
+    description: 'Propose a change to the Echo overview ("Visão Geral") and show a preview card the person can apply or discard. Supports editing blocks (show, hide, move, resize, add charts, KPIs and rankings from the metric catalog or custom metrics from its metric model, including the failure rate of one judge criterion, and palette or threshold colors on those blocks), creating presets from the Voidr view, and renaming or deleting presets. Not for the overview studio: when the person has a studio draft open, edit it with mcp__voidr__echo_edit_overview_draft. Call mcp__voidr__echo_get_overview_view first and align with the person before calling: the card is the last step of the turn. Never changes the page by itself; backgrounds, logo, fonts, free hex colors and formulas are not configurable.',
     parameters: echoProposeOverviewChangeSchema,
     output: {
       schema: {

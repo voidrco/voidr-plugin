@@ -84,7 +84,7 @@ test('Echo does not infer causes from marginal cohort totals and renders next-st
   assert.match(text, /Reading one exact\s+session may establish order in that session only/)
   assert.match(text, /Whenever the response offers two or more distinct next actions, call\s+`ask_user_question`/)
   assert.match(text, /do not end with a prose question/)
-  assert.match(text, /After a complete empty cohort, the next tool call must be `ask_user_question`/)
+  assert.match(text, /After a complete empty cohort, continue only a comparison already requested\s+and resolved before reading data/)
   assert.match(text, /A deviation is an observed classified event or pattern/)
   assert.match(text, /not automatically wrongdoing\s+by the agent or test/)
   assert.match(text, /use only the\s+control-linked `evidenceSamples`/)

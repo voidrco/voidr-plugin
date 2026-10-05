@@ -538,8 +538,10 @@ organization before that. There are no proposal cards in the studio.
 
 1. Read the draft with `mcp__voidr__echo_get_overview_view` and the
    `draftId` before your first change and again whenever the person may have
-   edited by hand. Use only the block ids, library widgets, metrics, metric
-   model, judge criteria and entity keys it returns.
+   edited by hand. Use only the block ids, metrics, judge criteria and entity
+   keys it returns. Add `library: true` when building a new view or section
+   (ready-made widgets with their operations) and `metricModel: true` only
+   for a custom metric; leave both out for edits to existing blocks.
 2. `echoContext.overviewSelectedBlocks` lists the blocks the person clicked
    for you. "This", "esse gráfico" or an unnamed subject refers to them.
    Change only those blocks unless they ask for more.
@@ -554,8 +556,8 @@ organization before that. There are no proposal cards in the studio.
    - the period and breakdown, when they change the answer.
    Once they answer, build right away: the canvas is the proposal and every
    step can be undone. Ask again only when their answers left a metric, form
-   or period open, and offer ready-made widgets from the returned library as
-   options when that helps. When you
+   or period open, and offer ready-made widgets from the library as options
+   when that helps. When you
    are unsure the data exists, check with direct
    `mcp__voidr__echo_query_overview_metric` calls, one per metric, and share
    what you found. Never route these reads through `system_batch_execute`:
@@ -590,7 +592,8 @@ organization before that. There are no proposal cards in the studio.
 
 ### Outside the studio
 
-1. Call `mcp__voidr__echo_get_overview_view` for the product on screen first.
+1. Call `mcp__voidr__echo_get_overview_view` for the product on screen first
+   (with `library: true` when the request adds blocks or creates a view).
    Use only the block ids, view choices, library widgets, metrics, metric
    model, judge criteria and entity keys it returns.
 2. Align before proposing. When the request adds blocks or creates a view and
@@ -637,9 +640,10 @@ organization before that. There are no proposal cards in the studio.
    is the chat summary formula (successes over successes plus failures).
    `criterion_fail_rate` with a `criterion` is the share of evaluated sessions
    whose official judge verdict for that criterion is FAIL, over PASS plus
-   FAIL. When no catalog metric fits, define `metric: "custom"` with a
-   `custom` definition built only from `catalog.metricModel` (subject, kind,
-   base, where, match), name it in the person's language and confirm the
+   FAIL. When no catalog metric fits, read the view again with
+   `metricModel: true` and define `metric: "custom"` with a `custom`
+   definition built only from the returned `catalog.metricModel` (subject,
+   kind, base, where, match), name it in the person's language and confirm the
    definition with them. Name the metric you used.
 2. KPI, chart and ranking blocks take palette colors from the returned
    catalog: `color` for a KPI number, ranking bars or a single-series chart,

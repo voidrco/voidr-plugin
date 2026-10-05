@@ -25,7 +25,7 @@ const conditionSchema = {
 const customMetricSchema = {
   type: 'object',
   additionalProperties: false,
-  description: 'Custom metric definition for metric "custom", built only from catalog.metricModel returned by mcp__voidr__echo_get_overview_view.',
+  description: 'Custom metric definition for metric "custom", built only from catalog.metricModel returned by mcp__voidr__echo_get_overview_view with metricModel true.',
   properties: {
     name: { type: 'string', minLength: 1, maxLength: 60, description: 'Metric name in the user language.' },
     subject: { type: 'string', enum: ['session', 'criterion', 'deviation', 'knowledge', 'regulatory', 'hallucination'] },

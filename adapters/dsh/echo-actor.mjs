@@ -3,6 +3,7 @@ import { regulatoryScopeArguments } from './echo-regulatory-scope.mjs'
 import { createEchoAnalysisGuard } from './echo-analysis-guard.mjs'
 
 const PREFIX = 'mcp__voidr__'
+const NATIVE_ONLY_TOOLS = new Set(['echo_preview_overview_change'])
 
 class EchoAccessError extends Error {
   /** @param {number} status */
@@ -56,7 +57,7 @@ export function registerEchoActor(ctx, { fetchImpl = fetch, env = process.env } 
         const assertion = rawInput.trim()
         const result = await request('/tools/list', assertion)
         for (const tool of result.tools ?? []) names.set(publicName(tool.name), tool.name)
-        const tools = result.tools?.filter(tool => tool.name.startsWith('echo_')) ?? []
+        const tools = result.tools?.filter(tool => tool.name.startsWith('echo_') && !NATIVE_ONLY_TOOLS.has(tool.name)) ?? []
         if (!tools.length) throw new Error('Echo access unavailable')
         for (const tool of tools) {
           const name = publicName(tool.name)
@@ -88,6 +89,7 @@ export function registerEchoActor(ctx, { fetchImpl = fetch, env = process.env } 
     const assertion = assertions.get(exec.agent?.id)
     if (!assertion) throw new Error('Echo actor authorization required; send a new message to reconnect')
     const tool = names.get(exec.name) ?? exec.name.slice(PREFIX.length)
+    if (NATIVE_ONLY_TOOLS.has(tool)) throw new Error('Use echo_propose_overview_change for overview changes')
     const result = await analysis.call(exec.agent, tool, exec.arguments, hint, args => request('/tools/call', assertion, {
       tool,
       arguments: regulatoryScopeArguments(tool, args, hint)
@@ -98,13 +100,13 @@ export function registerEchoActor(ctx, { fetchImpl = fetch, env = process.env } 
     return { isError: false, value, content: value.content }
   })
   ctx.on('agent/disposed', ({ agent }) => { assertions.delete(agent.id); analysis.dispose(agent.id) })
-  return async (agent, tool, args, signal) => {
+  return async (agent, tool, args, signal, { allowError = false } = {}) => {
     const hint = agent?.session.events.findLast(event => event.type === 'voidr/project-context-hint')?.data
     if (hint?.surface !== 'echo') throw new Error('This tool requires the Echo surface')
     const assertion = assertions.get(agent?.id)
     if (!assertion) throw new Error('Echo actor authorization required; send a new message to reconnect')
     const result = await analysis.call(agent, tool, args, hint, checked => request('/tools/call', assertion, { tool, arguments: regulatoryScopeArguments(tool, checked, hint) }, signal))
-    if (result.isError) throw new Error('Echo query failed; no report was published')
+    if (result.isError && !allowError) throw new Error('Echo query failed; no report was published')
     return result
   }
 }

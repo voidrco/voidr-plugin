@@ -7,6 +7,8 @@ import { registerEchoActor } from './echo-actor.mjs'
 import { registerEchoRenderDeviations } from './echo-render-deviations.mjs'
 import { registerEchoRenderRegulatoryControls } from './echo-render-regulatory-controls.mjs'
 import { registerEchoRenderDeviationGroup } from './echo-render-deviation-group.mjs'
+import { registerEchoProposeOverviewChange } from './echo-propose-overview-change.mjs'
+import { registerEchoMemberPolicy } from './echo-member-policy.mjs'
 import { registerObservabilityWidgets } from './observability-widgets.mjs'
 
 const CONTEXT_EVENT_TYPE = 'voidr/project-context-hint'
@@ -62,6 +64,8 @@ export function apply(ctx) {
   registerEchoRenderDeviations(ctx, callEchoTool)
   registerEchoRenderRegulatoryControls(ctx, callEchoTool)
   registerEchoRenderDeviationGroup(ctx, callEchoTool)
+  registerEchoProposeOverviewChange(ctx, callEchoTool)
+  const memberDenial = registerEchoMemberPolicy(ctx)
   const skills = loadDshPluginSkills()
   for (const skill of skills) ctx.skills.register(skill)
   // DSH does not re-interpolate variable values, preserving skill examples and UI hint literals.
@@ -121,6 +125,8 @@ export function apply(ctx) {
   ctx.on('tools/pre-execute', async (exec, next) => {
     const decision = await next()
     if (decision.kind !== 'allow') return decision
+    const restrictedDenial = memberDenial(exec)
+    if (restrictedDenial) return { kind: 'deny', reason: restrictedDenial }
     const authoringDenial = agentOwnedAuthoringDenial(exec.name)
     if (authoringDenial) return { kind: 'deny', reason: qualifyDshVoidrTools(authoringDenial) }
     if (exec.name !== 'bash') return decision

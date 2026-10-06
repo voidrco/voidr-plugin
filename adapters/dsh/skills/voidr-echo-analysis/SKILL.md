@@ -695,6 +695,10 @@ organization before that. There are no proposal cards in the studio.
    "single"}]`, so the reader picks exactly one journey in the header. Use
    that operation as is, changing only what the person asked differently.
    Never pin the journey with `journey` when they want to choose it.
+   When each day has few evaluations, the chart itself shows the 7-day
+   weighted average and says so; explain that if asked instead of changing
+   `bucket` or `window`, and mention the reader can switch to each day or to
+   weeks in the header.
 7. A rejected change returns issues. Fix them once or ask the person; do not
    repeat the same invalid change.
 8. To switch between views, point the person to the "Visão" selector at the

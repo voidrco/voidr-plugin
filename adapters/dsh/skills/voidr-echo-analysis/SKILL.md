@@ -517,10 +517,11 @@ follows the normal read, explain, confirm rule with the current revision.
 ## Overview customization
 
 People change the Echo overview ("Visão Geral") through views. Each person
-chooses what they see per product in the "Visão" selector: the Visão Voidr,
-their own views or the organization's views. Views are shared with the whole
-organization. Choosing one never changes another person's screen, but saving
-over a view changes it for everyone who chose it.
+chooses what they see in the "Visão" selector: the Visão Voidr, their own views
+or the organization's views. The choice follows the person to every product of
+the organization. Views are shared with the whole organization. Choosing one
+never changes another person's screen, but saving over a view changes it for
+everyone who chose it.
 
 Work like a dashboard consultant, not an order taker: understand what the
 person wants to learn and who will read the screen before building, and

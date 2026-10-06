@@ -655,7 +655,12 @@ organization before that. There are no proposal cards in the studio.
    reference lines on charts; the first matching rule wins and rates are
    fractions (25% = 0.25). Use `action: "style"` on an existing block or the
    same fields when adding one. Voidr blocks keep their colors: to color one of
-   their numbers, add a KPI with the same metric and style it.
+   their numbers, add a KPI with the same metric and style it. In thresholds,
+   green, amber and red are the status colors of the Voidr cards. KPIs and
+   rankings of success, failure, judge score, deviation rate and the library
+   widgets already come with the Voidr status limits (`catalog.statusColors`):
+   keep them, and when the person asks for other limits or colors replace
+   `thresholds` with `action: "style"` (`thresholds: []` removes them).
 3. Backgrounds, logo, fonts, themes, free hex colors, formulas outside the
    metric model, queries, links, other organizations' data and Voidr block
    titles cannot be changed. Say so briefly and offer the closest supported

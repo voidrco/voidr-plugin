@@ -92,7 +92,7 @@ const operationSchema = {
     thresholds: {
       type: 'array',
       maxItems: 3,
-      description: 'Rules that color a KPI number or ranking value and draw reference lines on charts; the first matching rule wins. Values use the metric unit: rates are fractions (25% = 0.25), scores 0-100, times in milliseconds, counts in sessions. An empty list removes them.',
+      description: 'Rules that color a KPI number or ranking value and draw reference lines on charts; the first matching rule wins. Values use the metric unit: rates are fractions (25% = 0.25), scores 0-100, times in milliseconds, counts in sessions. In thresholds green, amber and red are the status colors of the Voidr cards (good, attention, bad). An empty list removes them.',
       items: {
         type: 'object',
         additionalProperties: false,

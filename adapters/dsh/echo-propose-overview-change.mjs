@@ -185,6 +185,10 @@ function renderOutcome(value) {
       value.issues.map(item => '- ' + (item.operation === null ? '' : 'operation ' + item.operation + ': ') + item.message).join('\n')
   }
   const target = value.kind === 'create' ? 'new preset "' + value.name + '"' : 'preset "' + value.presetName + '"'
+  if (value.channel === 'whatsapp') {
+    return 'Stored proposal ' + value.proposalId + ' (' + value.kind + ', ' + target + ', ' + value.changes + ' change(s)). WhatsApp cannot show proposal cards and nothing changed. Now call mcp__voidr__echo_share_overview with source "proposal" and proposalId "' + value.proposalId + '" so the person receives a link to the proposed view, then tell them in one or two sentences what it changes and that they can apply it from the Echo overview in the platform. Do not claim it was applied.' +
+      (value.warnings.length ? '\nTell the person: ' + value.warnings.join(' ') : '')
+  }
   return 'Published a preview card (' + value.kind + ', ' + target + ', ' + value.changes + ' change(s)). Nothing changed yet: the page changes only if the person clicks Aplicar in the card. Describe what the card proposes in one or two sentences of product language, name the metric it uses, and end the turn: no questions, no other tools. Do not claim it was applied.' +
     (value.warnings.length ? '\nTell the person: ' + value.warnings.join(' ') : '')
 }
@@ -219,7 +223,8 @@ export function registerEchoProposeOverviewChange(ctx, callEchoTool) {
           presetName: { type: 'string' },
           changes: { type: 'integer' },
           warnings: { type: 'array', items: { type: 'string' } },
-          issues: { type: 'array', items: { type: 'object', additionalProperties: true } }
+          issues: { type: 'array', items: { type: 'object', additionalProperties: true } },
+          channel: { type: 'string', enum: ['whatsapp'] }
         },
         required: ['status']
       },
@@ -232,8 +237,10 @@ export function registerEchoProposeOverviewChange(ctx, callEchoTool) {
       const data = parseEnvelope(await callEchoTool(exec.agent, SERVICE_TOOL, input, exec.signal, { allowError: true }))
       if (data.status === 'invalid') return { status: 'invalid', issues: data.issues ?? [] }
       if (exec.signal?.aborted) throw new Error('Preview cancelled before publication')
-      publishPreview(exec.agent, data)
+      const whatsapp = screenHint(exec.agent)?.channel === 'whatsapp'
+      if (!whatsapp) publishPreview(exec.agent, data)
       return {
+        ...(whatsapp ? { channel: 'whatsapp' } : {}),
         status: 'ready',
         proposalId: data.proposalId,
         kind: data.kind,

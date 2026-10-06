@@ -8,6 +8,7 @@ import { registerEchoRenderDeviations } from './echo-render-deviations.mjs'
 import { registerEchoRenderRegulatoryControls } from './echo-render-regulatory-controls.mjs'
 import { registerEchoRenderDeviationGroup } from './echo-render-deviation-group.mjs'
 import { echoOverviewQuestionDenial, registerEchoProposeOverviewChange } from './echo-propose-overview-change.mjs'
+import { whatsappChannelDenial } from './whatsapp-channel.mjs'
 import { registerEchoMemberPolicy } from './echo-member-policy.mjs'
 import { echoOverviewStudioDenial } from './echo-overview-studio.mjs'
 import { registerObservabilityWidgets } from './observability-widgets.mjs'
@@ -110,7 +111,7 @@ export function apply(ctx) {
             'environment', 'errorType', 'errorMessage', 'stackTrace', 'filePath', 'line',
             'browser', 'os', 'branch', 'commitSha', 'currentState', 'severity', 'targetType', 'analysisMode',
             'hasSpec', 'specVersion', 'specUpdatedAt', 'suiteCount', 'caseCount', 'sessionIds',
-            'intent', 'surface', 'signature', 'causalChain', 'echoContext', 'gateContext'
+            'intent', 'surface', 'channel', 'signature', 'causalChain', 'echoContext', 'gateContext'
           ]
             .filter(key => value[key] !== undefined && value[key] !== null)
             .map(key => [key, value[key]])
@@ -128,6 +129,8 @@ export function apply(ctx) {
     if (decision.kind !== 'allow') return decision
     const restrictedDenial = memberDenial(exec)
     if (restrictedDenial) return { kind: 'deny', reason: restrictedDenial }
+    const channelDenial = whatsappChannelDenial(exec.name, exec.agent?.session?.events)
+    if (channelDenial) return { kind: 'deny', reason: channelDenial }
     const questionDenial = echoOverviewQuestionDenial(exec.name, exec.agent?.session?.events)
     if (questionDenial) return { kind: 'deny', reason: questionDenial }
     const studioDenial = echoOverviewStudioDenial(exec.name, exec.arguments ?? exec.args, exec.agent?.session?.events)

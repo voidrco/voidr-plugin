@@ -4,6 +4,7 @@ import { interactiveTestDevelopmentPrompt } from '../../core/workflow/interactiv
 import { loadDshPluginSkills } from './plugin-skills.mjs'
 import { qualifyDshVoidrTools } from './skill-parity.mjs'
 import { registerEchoActor } from './echo-actor.mjs'
+import { registerChannelActor } from './channel-actor.mjs'
 import { registerEchoRenderDeviations } from './echo-render-deviations.mjs'
 import { registerEchoRenderRegulatoryControls } from './echo-render-regulatory-controls.mjs'
 import { registerEchoRenderDeviationGroup } from './echo-render-deviation-group.mjs'
@@ -59,6 +60,7 @@ export const inject = ['commands', 'skills', 'systemPrompt', 'tools']
 export function apply(ctx) {
   registerObservabilityWidgets(ctx)
   const callEchoTool = registerEchoActor(ctx)
+  registerChannelActor(ctx)
   registerEchoRenderDeviations(ctx, callEchoTool)
   registerEchoRenderRegulatoryControls(ctx, callEchoTool)
   registerEchoRenderDeviationGroup(ctx, callEchoTool)

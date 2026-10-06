@@ -102,9 +102,17 @@ playground or Hive session parameters.
   returned version in subsequent reads and links. `pending` is unclassified;
   `other` is a completed classification without a supported catalog match.
 - Filter `echo_list_deviations` with `categoryGroupId`, `categoryGroupVersion`
-  and optionally `categoryId`. Read returned assignments for category names and
+  and optionally `categoryId`. For a dynamic subcategory inside Other, use
+  `categoryId: other` together with the returned `subcategoryId`. Subcategory
+  identities belong to one group; never reuse IDs across groups. Read assignments
+  for `subcategoryName` as well as category names and
   explanations. The same record can belong to different categories across groups;
   never sum group totals as distinct deviations or treat them as session failures.
+- Other retains the closed parent catalog and gains reusable, dynamically named
+  subcategories. Coverage includes subcategory counts; these are a breakdown of
+  Other, not additional deviations. Older Other assignments may still be gaining
+  subcategories (`enriching`). Deferred records retry automatically while other
+  records continue; never present partial coverage as a completed classification.
 - Catalogs are edited in Echo's category-group editor. Publishing, historical
   classification, retry and archive do not rejudge a session or resolve a defect.
 - During a mixed release, use only advertised schemas. If category tools are

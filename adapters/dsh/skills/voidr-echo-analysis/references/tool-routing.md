@@ -123,7 +123,8 @@ playground or Hive session parameters.
 
 - Find a session by an exact id first when supplied. Otherwise use
   `echo_list_sessions` with application/environment/date filters and `search`
-  for persona names or session metadata; `transcriptQuery` searches only
+  for persona names, session metadata or the exact CPF or line of the test
+  account; `transcriptQuery` searches only
   evaluated-assistant (`agent`) turns. For tester/IVR evidence, resolve the
   session and use the paginated transcript tool with the appropriate role.
   Preserve the actual returned `sessionId` in the answer. Resolve `personaId`

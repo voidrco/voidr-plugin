@@ -11,5 +11,5 @@ export function contextChannel(events) {
 
 export function whatsappChannelDenial(name, events) {
   if (!WIDGET_TOOLS.has(name) || contextChannel(events) !== 'whatsapp') return null
-  return 'This conversation is on WhatsApp, which only shows text. Answer with a short text summary of the numbers instead. When the person wants to see the dashboard, call mcp__voidr__echo_share_overview to send them a link to it.'
+  return 'This conversation is on WhatsApp, which only shows text. Answer with a short text summary of the numbers instead. When the person wants a dashboard, follow the guided dashboard creation and send it with mcp__voidr__echo_share_overview.'
 }

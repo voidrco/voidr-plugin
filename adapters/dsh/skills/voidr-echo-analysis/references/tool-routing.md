@@ -92,6 +92,33 @@ playground or Hive session parameters.
 - Cancel: fetch exact execution, summarize its current status/effect, obtain a
   separate confirmation turn, then `echo_cancel_execution`.
 
+## Configurable deviation category groups
+
+- Discover `echo_list_deviation_category_groups` when available. The default Voidr
+  view groups canonical semantic codes; user catalogs are closed, versioned views
+  over the same records. Do not infer a catalog from a customer name.
+- Use `echo_get_deviation_category_coverage` with the selected product, group,
+  published version, environment, journey and occurrence interval. Preserve the
+  returned version in subsequent reads and links. `pending` is unclassified;
+  `other` is a completed classification without a supported catalog match.
+- Filter `echo_list_deviations` with `categoryGroupId`, `categoryGroupVersion`
+  and optionally `categoryId`. For a dynamic subcategory inside Other, use
+  `categoryId: other` together with the returned `subcategoryId`. Subcategory
+  identities belong to one group; never reuse IDs across groups. Read assignments
+  for `subcategoryName` as well as category names and
+  explanations. The same record can belong to different categories across groups;
+  never sum group totals as distinct deviations or treat them as session failures.
+- Other retains the closed parent catalog and gains reusable, dynamically named
+  subcategories. Coverage includes subcategory counts; these are a breakdown of
+  Other, not additional deviations. Older Other assignments may still be gaining
+  subcategories (`enriching`). Deferred records retry automatically while other
+  records continue; never present partial coverage as a completed classification.
+- Catalogs are edited in Echo's category-group editor. Publishing, historical
+  classification, retry and archive do not rejudge a session or resolve a defect.
+- During a mixed release, use only advertised schemas. If category tools are
+  unavailable, say that this view cannot be queried yet; never substitute a
+  guessed mapping or modify the judge's canonical taxonomy.
+
 ## Sessions, evaluations and deviations
 
 - Find a session by an exact id first when supplied. Otherwise use

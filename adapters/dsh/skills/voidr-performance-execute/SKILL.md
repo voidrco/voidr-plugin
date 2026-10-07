@@ -20,7 +20,7 @@ Para reutilizar exatamente a versão e o ambiente de um run anterior, chame `per
 
 ## Acompanhar e analisar
 
-- Para status, use `performance_get_run` ou `performance_list_runs`. Não faça polling se o widget de progresso já estiver acompanhando.
+- Para status da carga, use `performance_get_run` ou `performance_list_runs`. Não faça polling se o widget de progresso já estiver acompanhando. A validação inicial tem outro fluxo: siga `voidr-performance-validate` e consulte `performance_get_preflight_result` para a mesma tentativa até terminar ou atingir o limite de espera.
 - Para resultado concluído, use `performance_analyze_run` antes de interpretar saúde; `performance_get_run_report` fornece o relatório detalhado. Compare runs com `performance_compare_runs` e consulte `performance_list_impacted_sessions` antes de atribuir uma regressão a sessões específicas.
 - Cancele com `performance_cancel_run` somente quando o usuário pedir. Não diga que um run passou por causa de um preflight verde ou de uma amostra pequena; informe quando o resultado for inconclusivo.
 

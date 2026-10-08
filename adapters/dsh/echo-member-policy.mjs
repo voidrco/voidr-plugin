@@ -17,7 +17,8 @@ const MEMBER_TOOLS = new Set([
   'echo_render_deviations',
   'echo_render_regulatory_controls',
   'echo_render_deviation_group',
-  'echo_propose_overview_change'
+  'echo_propose_overview_change',
+  'mcp__voidr__files_analyze_uploaded_file'
 ])
 const DENIAL = 'Not available on Echo for this member. Use the Echo tools and bundled Echo references only; never run commands, edit files, browse the web or call non-Echo tools.'
 

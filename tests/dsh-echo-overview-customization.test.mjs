@@ -151,7 +151,7 @@ test('restricted Echo members keep Echo tools and bundled references only', asyn
   for (const name of ['bash', 'write', 'edit', 'web_fetch', 'mcp__voidr__list_applications', 'mcp__github__get_me']) {
     assert.match(denial({ name, agent, arguments: {} }), /Not available on Echo/)
   }
-  for (const name of ['mcp__voidr__echo_get_overview_view', 'echo_propose_overview_change', 'echo_render_deviations', 'ask_user_question', 'render_widget']) {
+  for (const name of ['mcp__voidr__echo_get_overview_view', 'echo_propose_overview_change', 'echo_render_deviations', 'ask_user_question', 'render_widget', 'mcp__voidr__files_analyze_uploaded_file']) {
     assert.equal(denial({ name, agent, arguments: {} }), null)
   }
   assert.match(denial({ name: 'read', agent, arguments: { file_path: '/etc/passwd' } }), /Not available/)

@@ -9,6 +9,9 @@ import { registerEchoRenderDeviations } from './echo-render-deviations.mjs'
 import { registerEchoRenderRegulatoryControls } from './echo-render-regulatory-controls.mjs'
 import { registerEchoRenderDeviationGroup } from './echo-render-deviation-group.mjs'
 import { registerObservabilityWidgets } from './observability-widgets.mjs'
+import { registerThirdPartyActor } from './third-party-actor.mjs'
+import { registerThirdPartyCodebase } from './third-party-codebase.mjs'
+import { registerThirdPartyDiscovery } from './third-party-discovery.mjs'
 
 const CONTEXT_EVENT_TYPE = 'voidr/project-context-hint'
 const SPEND_CONTEXTS_KEY = Symbol.for('voidr.dsh.litellm-contexts.v1')
@@ -21,6 +24,7 @@ const SPEND_ACTION_BY_SURFACE = {
   automate: 'voidr_dsh_automate',
   monitor: 'voidr_dsh_failure_analysis',
   'context-graph': 'voidr_dsh_general',
+  'third-party-management': 'voidr_dsh_general',
   performance: 'voidr_dsh_performance_analysis',
   echo: 'voidr_dsh_echo'
 }
@@ -50,6 +54,11 @@ function contextHint(events) {
   return events.findLast(event => event.type === CONTEXT_EVENT_TYPE)?.data
 }
 
+function thirdPartyContext(agent) {
+  const events = agent?.session?.events ?? []
+  return events.find(event => event.type === CONTEXT_EVENT_TYPE && event.data?.intent === 'third_party_simulation_preparation')?.data ?? contextHint(events)
+}
+
 export function registerKnownEvents(knownEventTypes) {
   knownEventTypes.add(CONTEXT_EVENT_TYPE)
 }
@@ -59,6 +68,8 @@ export const inject = ['commands', 'skills', 'systemPrompt', 'tools']
 
 export function apply(ctx) {
   registerObservabilityWidgets(ctx)
+  registerThirdPartyCodebase(ctx, registerThirdPartyActor(ctx, { getContext: thirdPartyContext }))
+  registerThirdPartyDiscovery(ctx)
   const callEchoTool = registerEchoActor(ctx)
   registerChannelActor(ctx)
   registerEchoRenderDeviations(ctx, callEchoTool)
@@ -77,7 +88,8 @@ export function apply(ctx) {
       performance: 'voidr-performance-setup',
       monitor: 'voidr-failure-analysis',
       echo: 'voidr-echo-analysis',
-      'voidr-gate': 'voidr-gate-analysis'
+      'voidr-gate': 'voidr-gate-analysis',
+      'third-party-management': 'voidr-third-parties'
     }[hint?.surface]
     const skill = skills.find(candidate => candidate.name === skillName)
     return [
@@ -102,7 +114,7 @@ export function apply(ctx) {
         const value = JSON.parse(Buffer.from(rawInput.trim(), 'base64url').toString('utf8'))
         const hint = Object.fromEntries(
           [
-            'assistantSessionId', 'applicationId', 'testPlanId', 'testCaseSlug', 'moduleSlug',
+            'assistantSessionId', 'simulationPreparationId', 'applicationId', 'partnerId', 'integrationId', 'managementAction', 'testPlanId', 'testCaseSlug', 'moduleSlug',
             'suiteSlug', 'executionId', 'journeyId', 'journeyName', 'testName', 'productType',
             'environment', 'errorType', 'errorMessage', 'stackTrace', 'filePath', 'line',
             'browser', 'os', 'branch', 'commitSha', 'currentState', 'severity', 'targetType', 'analysisMode',

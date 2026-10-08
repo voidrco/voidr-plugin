@@ -1,6 +1,7 @@
 import { assertReviewedCatalogChange } from './third-party-discovery.mjs'
 
 const PREFIX = 'mcp__voidr__'
+const ARTIFACT_TOOLS = new Set(['artifacts_read', 'artifacts_query', 'artifacts_aggregate'])
 const TOOL_NAMES = new Set(['third_party_catalog', 'third_party_read', 'third_party_change', 'third_party_map_journeys', 'third_party_get_journey_mapping', 'third_party_review_journey_mapping', 'third_party_get_simulation_preparation', 'third_party_submit_simulation_proposal'])
 
 export function registerThirdPartyActor(ctx, { fetchImpl = fetch, env = process.env, getContext = () => null } = {}) {
@@ -24,8 +25,8 @@ export function registerThirdPartyActor(ctx, { fetchImpl = fetch, env = process.
       try {
         const assertion = rawInput.trim()
         const result = await request('/tools/list', assertion)
-        const tools = result.tools?.filter(tool => TOOL_NAMES.has(tool.name)) ?? []
-        if (tools.length !== TOOL_NAMES.size) throw new Error('Third Parties tools unavailable')
+        const tools = result.tools?.filter(tool => TOOL_NAMES.has(tool.name) || (getContext(agent)?.intent === 'third_party_simulation_preparation' && ARTIFACT_TOOLS.has(tool.name))) ?? []
+        if (tools.filter(tool => TOOL_NAMES.has(tool.name)).length !== TOOL_NAMES.size) throw new Error('Third Parties tools unavailable')
         for (const tool of tools) {
           const name = PREFIX + tool.name
           if (registered.has(name) || ctx.tools.get?.(name)) continue
@@ -43,14 +44,15 @@ export function registerThirdPartyActor(ctx, { fetchImpl = fetch, env = process.
   })
   ctx.on('tools/execute', async (exec, next) => {
     const name = exec.name.startsWith(PREFIX) ? exec.name.slice(PREFIX.length) : ''
-    if (getContext(exec.agent)?.intent === 'third_party_simulation_preparation') {
+    const preparation = getContext(exec.agent)?.intent === 'third_party_simulation_preparation'
+    if (preparation) {
       const allowed = ['third_party_catalog', 'third_party_read', 'third_party_get_simulation_preparation', 'third_party_submit_simulation_proposal']
       const validation = name === 'third_party_change' && exec.arguments?.operationId === 'validate-simulation-blueprint'
       const discovery = exec.name === PREFIX + 'system_search_tools'
       const skill = exec.name === 'skill' && exec.arguments?.name === 'voidr-third-parties'
-      if (!allowed.includes(name) && !validation && !discovery && !skill) throw new Error('Preparation only permits reading context, validating and submitting a proposal')
+      if (!allowed.includes(name) && !ARTIFACT_TOOLS.has(name) && !validation && !discovery && !skill) throw new Error('Preparation only permits reading context, validating and submitting a proposal')
     }
-    if (!TOOL_NAMES.has(name)) return next()
+    if (!TOOL_NAMES.has(name) && !(preparation && ARTIFACT_TOOLS.has(name))) return next()
     const assertion = assertions.get(exec.agent?.id)
     if (!assertion) throw new Error('Third Parties actor authorization required; reopen the integration from the Platform')
     if (name === 'third_party_change') await assertReviewedCatalogChange({ exec, args: exec.arguments,

@@ -4,7 +4,7 @@ import { createServer } from 'node:http'
 import { once } from 'node:events'
 import { registerThirdPartyActor } from '../../adapters/dsh/third-party-actor.mjs'
 
-const names = ['third_party_catalog', 'third_party_read', 'third_party_change', 'third_party_map_journeys', 'third_party_get_journey_mapping', 'third_party_review_journey_mapping', 'third_party_get_simulation_preparation', 'third_party_submit_simulation_proposal']
+const names = ['third_party_catalog', 'third_party_read', 'third_party_change', 'third_party_map_journeys', 'third_party_get_journey_mapping', 'third_party_review_journey_mapping', 'third_party_get_simulation_preparation', 'third_party_submit_simulation_proposal', 'artifacts_read', 'artifacts_query', 'artifacts_aggregate']
 
 test('DSH preparation routes signed context over HTTP and cannot publish, activate or escape to other capabilities', async t => {
   const requests = [], hooks = new Map(), commands = new Map(), tools = new Map()
@@ -16,6 +16,9 @@ test('DSH preparation routes signed context over HTTP and cannot publish, activa
     const chunks = []; for await (const chunk of req) chunks.push(chunk)
     const body = JSON.parse(Buffer.concat(chunks).toString())
     requests.push({ body, scope: req.headers['x-mcp-scope'], assertion: req.headers['x-voidr-session'] })
+    if (body.arguments.preparationId === 'invalid-proposal') {
+      res.end(JSON.stringify({ isError: true, content: [{ type: 'text', text: JSON.stringify({ code: 'ENTITY_SCHEMA_INVALID', details: { issues: [{ path: '/initial/person/0/key' }], schema: { additionalProperties: false } } }) }] })); return
+    }
     res.end(JSON.stringify({ content: [{ type: 'text', text: 'accepted' }], structuredContent: { data: body.arguments } }))
   })
   server.listen(0, '127.0.0.1'); await once(server, 'listening')
@@ -37,7 +40,18 @@ test('DSH preparation routes signed context over HTTP and cannot publish, activa
   for (const name of ['third_party_map_journeys', 'third_party_review_journey_mapping', 'shell', 'system_batch_execute'])
     await assert.rejects(execute(name), /Preparation only permits/)
   await assert.rejects(execute('third_party_read', {}, other), /authorization required/)
-  assert.equal(requests.length, 3)
+  for (const tool of ['artifacts_read', 'artifacts_query', 'artifacts_aggregate']) {
+    const result = await execute(tool, { artifactId: 'bound-artifact' })
+    assert.equal(result.value.structuredContent.data.artifactId, 'bound-artifact')
+    await assert.rejects(execute(tool, { artifactId: 'bound-artifact' }, other), /authorization required/)
+  }
+  await assert.rejects(execute('third_party_submit_simulation_proposal', { preparationId: 'invalid-proposal' }), error => {
+    assert.match(error.message, /ENTITY_SCHEMA_INVALID/)
+    assert.match(error.message, /initial\/person\/0\/key/)
+    assert.match(error.message, /additionalProperties/)
+    return true
+  })
+  assert.equal(requests.length, 7)
   assert.ok(requests.every(item => item.scope === 'assistant-runtime' && item.assertion === 'synthetic-signed-assertion'))
   hooks.get('agent/disposed')({ agent })
   await assert.rejects(execute('third_party_read'), /authorization required/)

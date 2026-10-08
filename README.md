@@ -262,3 +262,8 @@ relation.
 
 See [architecture](docs/architecture.md), [E2E strategy](docs/e2e-strategy.md),
 and [authentication flow](docs/auth-roadmap.md).
+
+DSH Third Parties discovery authenticates checkout provenance and accepted evidence
+with a process-local signing key. After a runtime restart, prepare and review the
+checkout again; persisted files alone cannot reauthorize catalog evidence. Unchanged,
+clean checkouts are reused within the session at the same repository, branch and commit.

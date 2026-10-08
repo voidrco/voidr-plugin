@@ -56,7 +56,7 @@ function contextHint(events) {
 
 function thirdPartyContext(agent) {
   const events = agent?.session?.events ?? []
-  return events.find(event => event.type === CONTEXT_EVENT_TYPE && event.data?.intent === 'third_party_simulation_preparation')?.data ?? contextHint(events)
+  return contextHint(events)
 }
 
 export function registerKnownEvents(knownEventTypes) {
@@ -114,7 +114,7 @@ export function apply(ctx) {
         const value = JSON.parse(Buffer.from(rawInput.trim(), 'base64url').toString('utf8'))
         const hint = Object.fromEntries(
           [
-            'assistantSessionId', 'simulationPreparationId', 'applicationId', 'partnerId', 'integrationId', 'managementAction', 'testPlanId', 'testCaseSlug', 'moduleSlug',
+            'assistantSessionId', 'simulationPreparationId', 'applicationId', 'partnerId', 'integrationId', 'managementAction', 'period', 'stepId', 'operationId', 'testPlanId', 'testCaseSlug', 'moduleSlug',
             'suiteSlug', 'executionId', 'journeyId', 'journeyName', 'testName', 'productType',
             'environment', 'errorType', 'errorMessage', 'stackTrace', 'filePath', 'line',
             'browser', 'os', 'branch', 'commitSha', 'currentState', 'severity', 'targetType', 'analysisMode',

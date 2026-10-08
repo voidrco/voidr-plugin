@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process'
 import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import { promisify } from 'node:util'
-import { recordPreparedCodebase } from './third-party-discovery.mjs'
+import { findPreparedCodebase, recordPreparedCodebase } from './third-party-discovery.mjs'
 
 const executeFile = promisify(execFile)
 const gitOptions = ['-c', 'core.hooksPath=/dev/null', '-c', 'credential.helper=', '-c', 'http.followRedirects=false',
@@ -19,14 +19,17 @@ function cloneTarget(response) {
   } catch { throw new Error('Repository inspection requires an authenticated HTTPS clone target') }
 }
 
-async function cloneCodebase({ root, target, branch, signal }) {
+async function cloneCodebase({ root, target, branch, exec, repositoryId }) {
   const askpass = join(root, 'askpass.sh')
   const checkout = join(root, 'source')
   await writeFile(askpass, '#!/bin/sh\ncase "$1" in\n*Username*) printf "%s\\n" "$VOIDR_GIT_USERNAME" ;;\n*) printf "%s\\n" "$VOIDR_GIT_TOKEN" ;;\nesac\n', { mode: 0o700 })
   const env = { PATH: process.env.PATH, HOME: root, GIT_CONFIG_NOSYSTEM: '1', GIT_CONFIG_GLOBAL: '/dev/null',
     GIT_TERMINAL_PROMPT: '0', GIT_LFS_SKIP_SMUDGE: '1', GIT_ASKPASS: askpass, ...target.credentials }
-  const run = args => executeFile('git', [...gitOptions, ...args], { cwd: root, env, signal, timeout: 180000, maxBuffer: 1024 * 1024 })
+  const run = args => executeFile('git', [...gitOptions, ...args], { cwd: root, env, signal: exec.signal, timeout: 180000, maxBuffer: 1024 * 1024 })
   try {
+    const remote = (await run(['ls-remote', '--exit-code', '--heads', target.url, `refs/heads/${branch}`])).stdout.trim().split(/\s+/)[0]
+    const cached = await findPreparedCodebase(exec, { repositoryId, branch, revision: remote })
+    if (cached) return cached
     await run(['clone', '--depth', '1', '--single-branch', '--no-tags', '--branch', branch, '--', target.url, checkout])
     const revision = (await run(['-C', checkout, 'rev-parse', 'HEAD'])).stdout.trim()
     await run(['-C', checkout, 'remote', 'remove', 'origin'])
@@ -60,8 +63,9 @@ export function registerThirdPartyCodebase(ctx, callTool) {
         throw new Error('Select a valid repository branch')
       const root = await mkdtemp(join(await realpath(cwd), `third-party-${args.repositoryId}-`))
       try {
-        const source = await cloneCodebase({ root, target, branch, signal: exec.signal })
-        await recordPreparedCodebase(root, { ...source, repositoryId: args.repositoryId })
+        const source = await cloneCodebase({ root, target, branch, exec, repositoryId: args.repositoryId })
+        if (source.workspacePath !== join(root, 'source')) await rm(root, { recursive: true, force: true })
+        else await recordPreparedCodebase(root, { ...source, repositoryId: args.repositoryId })
         return source
       }
       catch (error) { await rm(root, { recursive: true, force: true }); throw error }

@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { createHash, randomUUID } from 'node:crypto'
+import { createHash, createHmac, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { lstat, readFile, readdir, realpath, rename, writeFile } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve, extname } from 'node:path'
 import { promisify } from 'node:util'
@@ -29,16 +29,28 @@ const git = (cwd, args) => execute('git', ['-c', 'core.hooksPath=/dev/null', ...
 const digest = value => createHash('sha256').update(value).digest('hex').slice(0, 20)
 const inside = (root, path) => { const part = relative(root, path); return part !== '' && !part.startsWith('..') && !isAbsolute(part) }
 const snippet = line => sensitive.test(line) ? '[sensitive configuration omitted]' : line.trim().slice(0, 240)
-const readJson = async path => JSON.parse(await readFile(path, 'utf8'))
+const stateKey = randomBytes(32)
+const authenticate = (path, value) => createHmac('sha256', stateKey).update(JSON.stringify([resolve(path), value])).digest()
+
+async function readJson(path) {
+  path = join(await realpath(dirname(path)), basename(path))
+  const envelope = JSON.parse(await readFile(path, 'utf8'))
+  const signature = Buffer.from(envelope.signature ?? '', 'hex')
+  const expected = authenticate(path, envelope.value)
+  if (signature.length !== expected.length || !timingSafeEqual(signature, expected))
+    throw Object.assign(new Error('Untrusted discovery state; prepare and review this codebase again'), { code: 'UNTRUSTED_DISCOVERY_STATE' })
+  return envelope.value
+}
 
 async function saveJson(path, value) {
+  path = join(await realpath(dirname(path)), basename(path))
   const temporary = `${path}.${randomUUID()}.tmp`
-  await writeFile(temporary, JSON.stringify(value), { mode: 0o600 })
+  await writeFile(temporary, JSON.stringify({ value, signature: authenticate(path, value).toString('hex') }), { mode: 0o600 })
   await rename(temporary, path)
 }
 
 export async function recordPreparedCodebase(root, record) {
-  await saveJson(join(root, 'discovery-source.json'), record)
+  await saveJson(join(root, 'discovery-source.json'), { ...record, workspacePath: await realpath(record.workspacePath) })
 }
 
 async function sourceFor(args, exec) {
@@ -141,7 +153,7 @@ async function verifyEvidence(source, reference) {
   const line = content.split(/\r?\n/)[reference.line - 1]
   if (!Number.isInteger(reference.line) || reference.line < 1 || !line?.trim()) throw new Error('Evidence line is missing or blank')
   if (sensitive.test(line)) throw new Error(`Evidence line is sensitive; choose a safe reference: ${reference.path}:${reference.line}`)
-  if (!reference.quote?.trim() || !line.includes(reference.quote.trim()))
+  if (!reference.quote?.trim() || reference.quote.trim().length < Math.min(12, line.trim().length) || !line.includes(reference.quote.trim()))
     throw new Error(`Evidence quote does not match ${reference.path}:${reference.line}; read that exact line in the pinned checkout`)
   return { ...reference, quote: snippet(reference.quote), verified: true }
 }
@@ -168,7 +180,7 @@ async function reviewDecision(source, state, decision) {
 
 const updates = new Map()
 
-const evidenceKey = item => [item.repositoryId, item.revision, item.path, item.line].join(':')
+const evidenceKey = item => JSON.stringify([item.repositoryId, item.revision, item.path, item.line, item.quote?.trim()])
 
 async function sessionInventories(exec) {
   const cwd = exec.agent?.session?.header?.cwd
@@ -178,7 +190,7 @@ async function sessionInventories(exec) {
     try {
       const source = await sourceFor({ workspacePath: join(cwd, directory.name, 'source') }, exec)
       return await readJson(source.statePath)
-    } catch (error) { if (error.code === 'ENOENT') return null; throw error }
+    } catch (error) { if (['ENOENT', 'UNTRUSTED_DISCOVERY_STATE'].includes(error.code)) return null; throw error }
   }))
   return states.filter(Boolean)
 }
@@ -186,7 +198,7 @@ async function sessionInventories(exec) {
 function approvedReferences(states) {
   return states.flatMap(state => state.candidates.filter(item => ['confirmed', 'pending'].includes(item.status))
     .flatMap(item => (item.evidence ?? []).filter(reference => reference.verified).map(reference => ({
-      key: evidenceKey(reference), role: reference.role, confidence: item.status === 'confirmed' ? 'confirmed' : 'candidate',
+      key: evidenceKey(reference), decision: `${state.repositoryId}:${state.revision}:${item.id}`, role: reference.role, confidence: item.status === 'confirmed' ? 'confirmed' : 'candidate',
     }))))
 }
 
@@ -194,11 +206,15 @@ export async function assertReviewedCatalogChange({ exec, args, readCurrent }) {
   if (/^(?:create|replace)-catalog-journey-maps$/.test(args.operationId ?? '')) return assertJourneyEvidence({ exec, args, readCurrent });
   if (!/^(?:create|replace)-catalog-(?:partners|integrations)$/.test(args.operationId ?? '')) return
   const states = await sessionInventories(exec)
-  if (!states.length) return
   const replacing = args.operationId.startsWith('replace-')
   if (replacing && (!Number.isInteger(args.body?.expectedVersion) || !args.body?.data))
     throw new Error('Replace requires body: { expectedVersion: currentVersion, data: { ...completeResource, evidence: [...] } }. Read the current resource and operation contract.')
   const data = replacing ? args.body?.data : args.body
+  if (!states.length) {
+    if (data?.evidence?.some(reference => reference.repositoryId || reference.confidence === 'confirmed'))
+      throw new Error('Prepare and review source evidence in this session before persisting it')
+    return
+  }
   if (!Array.isArray(data?.evidence) || !data.evidence.length)
     throw new Error('Discovery writes require reviewed evidence. Read the operation contract; send one resource, then use third_party_review_mapping before persisting.')
   const current = replacing ? await readCurrent() : null
@@ -212,10 +228,11 @@ export async function assertReviewedCatalogChange({ exec, args, readCurrent }) {
   })
   if (unsupported.length) throw new Error(`Unreviewed source evidence: ${unsupported.length} reference(s). Register accepted decisions with third_party_review_mapping and persist those exact references; confirmed evidence requires a confirmed decision.`)
   const confirmed = data.evidence.filter(reference => inScope.has(reference.repositoryId) && reference.confidence === 'confirmed')
-  const roles = new Set(approved.filter(proof => proof.confidence === 'confirmed' &&
-    confirmed.some(reference => evidenceKey(reference) === proof.key)).map(proof => proof.role))
-  if (confirmed.length && (!roles.has('callsite') || !roles.has('destination')))
-    throw new Error('Confirmed catalog resources require both reviewed callsite and destination references in their own evidence array. Include the accepted consumer and destination references before saving.')
+  const matching = approved.filter(proof => proof.confidence === 'confirmed' && confirmed.some(reference => evidenceKey(reference) === proof.key))
+  const complete = new Set(matching.filter(proof => matching.some(other => other.decision === proof.decision && other.role === 'callsite') &&
+    matching.some(other => other.decision === proof.decision && other.role === 'destination')).map(proof => proof.decision))
+  if (confirmed.some(reference => !matching.some(proof => proof.key === evidenceKey(reference) && complete.has(proof.decision))))
+    throw new Error('Confirmed catalog resources require callsite and destination evidence from the same accepted decision. Include both exact reviewed references before saving.')
 }
 
 async function preparedSources(exec) {
@@ -224,8 +241,16 @@ async function preparedSources(exec) {
   const entries = (await readdir(cwd, { withFileTypes: true })).filter(item => item.isDirectory() && item.name.startsWith('third-party-'))
   return (await Promise.all(entries.map(async entry => {
     try { return await sourceFor({ workspacePath: join(cwd, entry.name, 'source') }, exec) }
-    catch (error) { if (error.code === 'ENOENT') return null; throw error }
+    catch (error) { if (['ENOENT', 'UNTRUSTED_DISCOVERY_STATE'].includes(error.code)) return null; throw error }
   }))).filter(Boolean)
+}
+
+export async function findPreparedCodebase(exec, { repositoryId, branch, revision }) {
+  const sources = await preparedSources(exec)
+  const source = sources.find(item => item.repositoryId === repositoryId && item.branch === branch && item.revision === revision)
+  if (!source) return null
+  const changed = (await git(source.workspacePath, ['status', '--porcelain'])).stdout.trim()
+  return changed ? null : { workspacePath: source.workspacePath, revision, branch, repository: source.repository }
 }
 
 function journeyClaimSignature(claim) {

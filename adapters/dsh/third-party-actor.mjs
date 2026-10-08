@@ -75,6 +75,12 @@ export function registerThirdPartyActor(ctx, { fetchImpl = fetch, env = process.
     if (!assertion) throw new Error('Open Third Parties in the Platform before preparing a codebase')
     const result = await request('/tools/call', assertion, { tool, arguments: args }, signal)
     if (result.isError) throw new Error('The selected repository could not be authorized for inspection')
-    return result.structuredContent?.data ?? JSON.parse(result.content.find(item => item.type === 'text').text)
+    if (result.structuredContent?.data) return result.structuredContent.data
+    const text = result.content?.find(item => item.type === 'text' && typeof item.text === 'string' && item.text.trim())?.text
+    try {
+      const data = text ? JSON.parse(text) : null
+      if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error()
+      return data
+    } catch { throw new Error('Repository authorization returned no usable clone target; retry the repository lookup') }
   }
 }

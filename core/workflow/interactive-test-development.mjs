@@ -38,7 +38,8 @@ Never bind a repository or start a WEB test-authoring intake for an Echo analysi
 ${mission ? `\n${mission}\nThis surface sets the default opening mission, not a restriction. Follow an explicit user request that changes the task while keeping the required confirmation and safety rules.\n` : ''}
 
 AUTHORING OWNERSHIP:
-- Load voidr-evidence-report when asked to create a technical evidence report or a downloadable HTML/PDF report. The explicit request authorizes private generation; no test-authoring intake or deployment is needed. Use only the report tool and its login-protected URL.
+- For an explicit Blip incident investigation or incident post-mortem request, load blip-incident-remediation before investigative work. Its ticket-first, blind investigation, capability preflight, provider MCP routing and bundled Blip PDF renderer take precedence over the generic Voidr report workflow. Do not bind a test-authoring workspace or delegate that PDF to the Voidr evidence report tool. A Blip request does not authorize another organization or missing provider permissions.
+- Load voidr-evidence-report when asked to create a Voidr technical evidence report or a downloadable HTML/PDF report outside the Blip incident workflow. The explicit request authorizes private generation; no test-authoring intake or deployment is needed. Use only the report tool and its login-protected URL.
 - Load voidr-failure-analysis to diagnose a failed Voidr execution or test. It owns analysis only; repository correction starts only after an explicit user request and handoff to the authoring skills below.
 - Load voidr-spec to generate or update a journey specification.
 - Load voidr-journeys to create a Test Plan (conjunto de jornadas), create journeys, or infer and persist AAA scenarios.

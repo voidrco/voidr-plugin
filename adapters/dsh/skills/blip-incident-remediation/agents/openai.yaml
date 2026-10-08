@@ -1,0 +1,4 @@
+interface:
+  display_name: "Blip Incident Investigator"
+  short_description: "Diagnostica incidentes e gera post-mortem PDF Blip"
+  default_prompt: "Use $blip-incident-remediation para investigar o ticket 429814/1053978 e entregar um post-mortem PDF na identidade visual da Blip, sem usar a conclusão posterior como input."

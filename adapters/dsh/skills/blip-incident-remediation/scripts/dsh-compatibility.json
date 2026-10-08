@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "activation": {"tool": "skill", "arguments": {"name": "blip-incident-remediation"}},
+  "organization": "Blip",
+  "transport": "provider-specific-discovery",
+  "providerRoutes": {
+    "grafana": {"kind": "custom-mcp", "endpoint": "https://grafana-mcp.blip.tools/mcp", "network": "service-egress-through-authorized-vpn"},
+    "slack": {"kind": "existing-voidr-integration", "operations": "discover-read-search-thread-schemas"},
+    "github": {"kind": "existing-voidr-integration", "discovery": "source_control_list_contexts", "operations": "discover-source_control-schemas"},
+    "drive-docs": {"kind": "session-discovery", "operations": "discover-document-read-schemas"}
+  },
+  "discovery": {
+    "search": "mcp__voidr__system_search_tools",
+    "call": "mcp__voidr__system_call_tool",
+    "connectors": "mcp__voidr__custom_connectors_list",
+    "remoteTools": "mcp__voidr__custom_connectors_list_mcp_tools",
+    "execute": "mcp__voidr__custom_connectors_execute_mcp_tool"
+  },
+  "remoteInvocation": {"provider": "grafana", "connector": "discover-id-or-slug", "tool": "discover-exact-name", "arguments": "validate-remote-inputSchema"},
+  "canonicalRoles": {
+    "mcp__codex_apps__slack_*": "slack",
+    "mcp__blip_grafana__*": "grafana",
+    "mcp__codex_apps__github_*": "github",
+    "mcp__codex_apps__google_drive_*": "drive-docs"
+  },
+  "remoteBindings": {},
+  "local": {"shell": "bash", "text": "read", "image": "read_image", "artifactWrite": "write", "artifactEdit": "edit"},
+  "requiredPreflight": ["loki", "prometheus", "tempo", "github_blip_ai", "argo_history", "kafka_assignments_rebalances", "redis_snapshots", "vault_effective_config", "slack", "drive_docs"],
+  "constraints": {
+    "readOnlyInvestigation": true,
+    "respectDispatcherWriteScopeAndApproval": true,
+    "browserOrDirectApiRequiresExplicitAuthorization": true,
+    "datasourceInventoryIsNotOperationProof": true,
+    "mfaRemainsHuman": true
+  }
+}

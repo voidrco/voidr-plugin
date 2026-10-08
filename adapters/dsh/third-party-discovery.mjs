@@ -180,7 +180,7 @@ async function reviewDecision(source, state, decision) {
 
 const updates = new Map()
 
-const evidenceKey = item => JSON.stringify([item.repositoryId, item.revision, item.path, item.line, item.quote?.trim()])
+const evidenceKey = item => JSON.stringify([item.repositoryId, item.revision, item.path, item.line, item.quote?.trim(), item.role])
 
 async function sessionInventories(exec) {
   const cwd = exec.agent?.session?.header?.cwd

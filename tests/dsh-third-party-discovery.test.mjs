@@ -40,6 +40,7 @@ test('catalog evidence must belong to one complete accepted decision', async t =
   await f.save([...f.evidence(first), ...f.evidence(second)])
   await assert.rejects(f.save([f.evidence(first)[0], f.evidence(second)[1]]), /same accepted decision/)
   await assert.rejects(f.save(f.evidence(first).map(ref => ({ ...ref, quote: 'changed quote' }))), /Unreviewed/)
+  await assert.rejects(f.save(f.evidence(first).map(ref => ({ ...ref, role: ref.role === 'callsite' ? 'destination' : 'callsite' }))), /Unreviewed/)
 })
 
 test('short substrings cannot establish evidence', async t => {

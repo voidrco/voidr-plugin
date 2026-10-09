@@ -29,13 +29,17 @@ function readsSkillReference(args) {
   return SKILL_ROOTS.some(root => target.startsWith(root))
 }
 
+export function memberToolVisible(name) {
+  return name.startsWith(ECHO_MCP_PREFIX) || MEMBER_TOOLS.has(name) || name === 'read'
+}
+
 export function echoMemberToolDenial(name, args) {
   if (name.startsWith(ECHO_MCP_PREFIX) || MEMBER_TOOLS.has(name)) return null
   if (name === 'read' && readsSkillReference(args)) return null
   return DENIAL
 }
 
-export function registerEchoMemberPolicy(ctx) {
+export function registerEchoMemberPolicy(ctx, onChange = () => {}) {
   const restricted = new Set()
   ctx.commands.register({
     name: 'echo-member-policy',
@@ -46,9 +50,13 @@ export function registerEchoMemberPolicy(ctx) {
       if (value === 'restricted') restricted.add(agent.id)
       else if (value === 'full') restricted.delete(agent.id)
       else return { kind: 'error', text: 'Invalid Echo member policy' }
+      onChange(agent)
       return { kind: 'success', text: 'Echo member policy applied' }
     }
   })
   ctx.on('agent/disposed', ({ agent }) => { restricted.delete(agent.id) })
-  return exec => restricted.has(exec.agent?.id) ? echoMemberToolDenial(exec.name, exec.arguments ?? exec.args) : null
+  return {
+    restricted: agent => restricted.has(agent?.id),
+    denial: exec => restricted.has(exec.agent?.id) ? echoMemberToolDenial(exec.name, exec.arguments ?? exec.args) : null
+  }
 }

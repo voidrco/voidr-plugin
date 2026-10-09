@@ -1,4 +1,4 @@
-const WIDGET_TOOLS = new Set([
+export const WIDGET_TOOLS = new Set([
   'render_widget',
   'echo_render_deviations',
   'echo_render_deviation_group',

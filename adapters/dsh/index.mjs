@@ -11,6 +11,7 @@ import { registerEchoRenderDeviationGroup } from './echo-render-deviation-group.
 import { echoOverviewQuestionDenial, registerEchoProposeOverviewChange } from './echo-propose-overview-change.mjs'
 import { whatsappChannelDenial } from './whatsapp-channel.mjs'
 import { registerEchoMemberPolicy } from './echo-member-policy.mjs'
+import { registerToolVisibility } from './tool-visibility.mjs'
 import { echoOverviewStudioDenial } from './echo-overview-studio.mjs'
 import { registerObservabilityWidgets } from './observability-widgets.mjs'
 
@@ -59,7 +60,7 @@ export function registerKnownEvents(knownEventTypes) {
 }
 
 export const name = 'voidr-agent-plugin-dsh'
-export const inject = ['commands', 'skills', 'systemPrompt', 'tools']
+export const inject = ['agents', 'commands', 'skills', 'systemPrompt', 'tools']
 
 export function apply(ctx) {
   registerObservabilityWidgets(ctx)
@@ -69,7 +70,8 @@ export function apply(ctx) {
   registerEchoRenderRegulatoryControls(ctx, callEchoTool)
   registerEchoRenderDeviationGroup(ctx, callEchoTool)
   registerEchoProposeOverviewChange(ctx, callEchoTool)
-  const memberDenial = registerEchoMemberPolicy(ctx)
+  const visibility = registerToolVisibility(ctx, agent => memberPolicy.restricted(agent))
+  const memberPolicy = registerEchoMemberPolicy(ctx, visibility.refresh)
   const skills = loadDshPluginSkills()
   for (const skill of skills) ctx.skills.register(skill)
   // DSH does not re-interpolate variable values, preserving skill examples and UI hint literals.
@@ -120,6 +122,7 @@ export function apply(ctx) {
         )
         if (Object.keys(hint).length > 0) agent.session.append(CONTEXT_EVENT_TYPE, hint)
         registerSpendContext(agent.id, hint)
+        visibility.refresh(agent)
         return { kind: 'success', text: 'Assistant context registered' }
       } catch {
         return { kind: 'error', text: 'Invalid assistant context' }
@@ -129,7 +132,7 @@ export function apply(ctx) {
   ctx.on('tools/pre-execute', async (exec, next) => {
     const decision = await next()
     if (decision.kind !== 'allow') return decision
-    const restrictedDenial = memberDenial(exec)
+    const restrictedDenial = memberPolicy.denial(exec)
     if (restrictedDenial) return { kind: 'deny', reason: restrictedDenial }
     const channelDenial = whatsappChannelDenial(exec.name, exec.agent?.session?.events)
     if (channelDenial) return { kind: 'deny', reason: channelDenial }

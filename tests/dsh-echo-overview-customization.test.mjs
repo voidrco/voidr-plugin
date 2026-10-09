@@ -142,12 +142,15 @@ test('the raw preview tool stays hidden from the model and refuses direct calls'
 test('restricted Echo members keep Echo tools and bundled references only', async () => {
   const hooks = new Map()
   let command
-  const denial = registerEchoMemberPolicy({ on: (event, fn) => hooks.set(event, fn), commands: { register: value => { command = value } } })
+  const changed = []
+  const { denial, restricted } = registerEchoMemberPolicy({ on: (event, fn) => hooks.set(event, fn), commands: { register: value => { command = value } } }, agent => changed.push(agent.id))
   const agent = { id: 'member' }
   const other = { id: 'editor' }
   assert.equal(command.recordInput, false)
   assert.equal(denial({ name: 'bash', agent, arguments: { command: 'ls' } }), null)
   assert.equal((await command.handler({ agent, rawInput: ' restricted ' })).kind, 'success')
+  assert.deepEqual(changed, ['member'])
+  assert.equal(restricted(agent), true)
   for (const name of ['bash', 'write', 'edit', 'web_fetch', 'mcp__voidr__list_applications', 'mcp__github__get_me']) {
     assert.match(denial({ name, agent, arguments: {} }), /Not available on Echo/)
   }

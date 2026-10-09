@@ -26,6 +26,8 @@ Em um smoke limitado a inventário, diga “smoke de catálogo aprovado; preflig
 
 Também verifique Slack (busca exata e pai/thread) e Docs/Drive (leitura inicial autorizada) porque são necessários para o fluxo ticket/CCH-first. Ausência de Docs pode ser não aplicável se o input não aponta para documento; explique. Não classifique indisponível como não aplicável para esconder falta de interface.
 
+Quando a entrada identificar Zendesk, descubra também o coletor `zendesk-browser-v1` e os schemas de leitura de tickets conforme [dsh-zendesk-tickets.md](dsh-zendesk-tickets.md). Inventário não prova consulta nem conteúdo inicial disponível. Não carregue histórico/resolução para testar o preflight: até a leitura autorizada do caso, mantenha a consulta e sua cobertura como `não verificadas`. Registre separadamente se a interface consegue isolar o relato original; o contrato atual devolve a captura mais recente, sem filtro inicial-only. Antes da leitura, informe essa limitação da fase cega. Ao consultar, registre conector, ticket, captura, cobertura, paginação e consulta na linha ticket/registro inicial do Anexo B, além das capacidades do template.
+
 ## Registro e trava de conclusão
 
 Use `../scripts/dsh-preflight.template.json` como estrutura, preenchendo apenas evidências reais. No registro, uma capacidade pode estar:

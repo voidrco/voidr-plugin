@@ -7,7 +7,18 @@
     "grafana": {"kind": "custom-mcp", "endpoint": "https://grafana-mcp.blip.tools/mcp", "network": "service-egress-through-authorized-vpn"},
     "slack": {"kind": "existing-voidr-integration", "operations": "discover-read-search-thread-schemas"},
     "github": {"kind": "existing-voidr-integration", "discovery": "source_control_list_contexts", "operations": "discover-source_control-schemas"},
-    "drive-docs": {"kind": "session-discovery", "operations": "discover-document-read-schemas"}
+    "drive-docs": {"kind": "session-discovery", "operations": "discover-document-read-schemas"},
+    "zendesk": {
+      "kind": "collected-voidr-dataset",
+      "adapter": "zendesk-browser-v1",
+      "storage": "clickhouse",
+      "connector": "discover-id-or-slug-in-authorized-organization",
+      "readTools": ["custom_connectors_search_tickets", "custom_connectors_ticket_attachment"],
+      "pagination": {"input": "textOffset", "next": "textWindow.nextOffset"},
+      "liveSource": false,
+      "initialOnlyAvailable": false,
+      "reference": "references/dsh-zendesk-tickets.md"
+    }
   },
   "discovery": {
     "search": "mcp__voidr__system_search_tools",

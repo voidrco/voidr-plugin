@@ -82,3 +82,10 @@ test('sessions outside WhatsApp with full access are never masked', () => {
 
   assert.equal(masks.length, 0)
 })
+
+test('a mask the runtime rejects never fails the conversation', () => {
+  const { agent, visibility } = setup()
+  agent.ctx.tools.restrict = () => { throw new Error('tools.restrict() names unknown global tool') }
+
+  assert.doesNotThrow(() => visibility.refresh(agent))
+})

@@ -30,6 +30,8 @@ export function registerToolVisibility(ctx, isRestricted) {
     refreshing = true
     try {
       install(agent, state)
+    } catch (error) {
+      ctx.logger?.warn('tool visibility mask was not applied', { agentId: agent.id, error: error instanceof Error ? error.message : String(error) })
     } finally {
       refreshing = false
     }

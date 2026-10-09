@@ -15,6 +15,8 @@ Se faltar uma capacidade, registre **`inacessível por permissão/interface`**, 
 
 Para o PDF, use o Python definido em [references/dsh-installation.md](references/dsh-installation.md); o gerador canônico não foi modificado. Resolva caminhos a partir do `resourceBase` retornado pela ferramenta nativa `skill`, não a partir do diretório da conversa. `agents/openai.yaml` foi preservado apenas como metadado de origem: o Harness ativa esta skill pelo frontmatter deste arquivo e por `skill({name: "blip-incident-remediation"})`.
 
+Para tickets Zendesk, leia [references/dsh-zendesk-tickets.md](references/dsh-zendesk-tickets.md) antes de consultar seu conteúdo. No Harness, o contrato ticket-first abaixo também usa as ferramentas Voidr de tickets previamente coletados no ClickHouse, antes de concluir que falta acesso ao ticket. Menção no Slack e pedido pela UI são entradas da investigação, não fontes substitutas do ticket nem gatilhos automáticos da ingestão. Captura mais recente não equivale ao estado inicial: preserve a quarentena de resolução e informe quando a interface não permite garantir a fase cega.
+
 Trate o ticket ou registro interno como input canônico. Ele fornece o relato original e os identificadores de correlação; Slack, Grafana, GitHub, GitOps e codebases fornecem as evidências da investigação. O post-mortem é somente o formato da entrega, não o input.
 
 ## Escolha do modo

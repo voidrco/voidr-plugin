@@ -47,6 +47,22 @@ test('registers the Blip skill with a readable packaged resource base', () => {
     assert.ok(readFileSync(join(skill.resourceBase.path, file)).length, file)
 })
 
+test('maps collected Zendesk tickets to tenant-discovered read tools instead of remote MCP dispatch', () => {
+  const skill = loadDshPluginSkills().find(entry => entry.name === 'blip-incident-remediation')
+  const mapping = JSON.parse(readFileSync(join(skill.resourceBase.path, 'scripts/dsh-compatibility.json'), 'utf8'))
+  const route = mapping.providerRoutes.zendesk
+  assert.equal(route.kind, 'collected-voidr-dataset')
+  assert.equal(route.adapter, 'zendesk-browser-v1')
+  assert.equal(route.storage, 'clickhouse')
+  assert.equal(route.connector, 'discover-id-or-slug-in-authorized-organization')
+  assert.deepEqual(route.readTools, ['custom_connectors_search_tickets', 'custom_connectors_ticket_attachment'])
+  assert.deepEqual(route.pagination, { input: 'textOffset', next: 'textWindow.nextOffset' })
+  assert.equal(route.liveSource, false)
+  assert.equal(route.initialOnlyAvailable, false)
+  assert.equal(mapping.remoteInvocation.provider, 'grafana')
+  assert.ok(readFileSync(resolve(skill.resourceBase.path, route.reference)).length)
+})
+
 test('preserves a supplied canonical package byte-for-byte beyond its compatibility block', {
   skip: !process.env.BLIP_CANONICAL_SKILL,
 }, () => {

@@ -41,6 +41,7 @@ Uma chamada bem-sucedida prova que a operação respondeu pelo caminho testado; 
 
 | Fonte canônica | Harness pela configuração | Operações que precisam existir |
 | --- | --- | --- |
+| Ticket Zendesk inicial | Coletor `zendesk-browser-v1` da organização; ferramentas Voidr de leitura do ClickHouse | `custom_connectors_list`, `custom_connectors_search_tickets`, `custom_connectors_ticket_attachment`. Siga [dsh-zendesk-tickets.md](dsh-zendesk-tickets.md): não é Zendesk ao vivo nem despacho para MCP remoto. |
 | `mcp__codex_apps__slack_*` | Integração Slack existente; descoberta no catálogo Voidr | Buscar IDs/mensagens, ler mensagem pai/thread, obter permalink/anexos iniciais. Confirmar acesso a `C08MGJ6F596`. Status do canal ou capacidade de enviar mensagens não prova leitura/busca. |
 | `mcp__blip_grafana__*` | Conector MCP Grafana customizado + dispatcher Voidr | Loki/LogQL, Prometheus/PromQL, Tempo/TraceQL ou busca por trace ID. Inventário de datasources não substitui consultas. |
 | `mcp__codex_apps__github_*` | Integração GitHub existente; operações `source_control_*` descobertas no catálogo | Descubra contextos com `source_control_list_contexts` e use o ID/schema retornado nas operações disponíveis. Ler arquivos por revisão, commits, diffs, PRs e repositórios privados de `blip-ai`. Lista de instalações ou repos públicos não é prova de acesso. |
@@ -50,6 +51,8 @@ Uma chamada bem-sucedida prova que a operação respondeu pelo caminho testado; 
 Se o catálogo realmente expuser MCPs diretos, use os nomes exatos descobertos e seus schemas; a convenção nativa é `mcp__<serverName>__<toolName>`, com normalização pelo Harness. Não misture schemas de um servidor com nomes de outro. O arquivo `../scripts/dsh-compatibility.json` registra esta rota sem inventar bindings remotos.
 
 Para Slack/GitHub/Docs, use `system_search_tools` e leia os schemas retornados; `system_call_tool` usa exatamente `_invokeAs`. Não encaminhe essas fontes para `custom_connectors_execute_mcp_tool`. Se a integração existir na UI mas não expuser a operação de leitura necessária, registre `inacessível por permissão/interface`; não invente uma ferramenta equivalente. `custom_connectors_catalog`, consultas a datasets coletados e dashboards agregados não equivalem a consulta direta do backend de observabilidade.
+
+Para Zendesk coletado, use o mesmo mecanismo de descoberta de ferramentas Voidr, mas invoque `custom_connectors_search_tickets` e `custom_connectors_ticket_attachment` diretamente ou pelo `_invokeAs` retornado. Não use `custom_connectors_query` (sinais Grafana), SQL direto ou `custom_connectors_execute_mcp_tool` para ler tickets. A consulta ao ClickHouse pelo Service não depende da VM/VPN do Grafana e não exige cadastrar outro servidor MCP.
 
 ## Local e PDF
 

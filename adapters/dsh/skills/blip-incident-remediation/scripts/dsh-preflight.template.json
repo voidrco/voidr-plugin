@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "organization": "Blip",
+  "checkedAt": "",
+  "causalCeiling": "Nenhuma capacidade remota foi comprovada. Somente input inicial declarado e fatos locais observados poderão sustentar uma entrega parcial; defeito iniciador, propagação histórica e origem/exposição ainda não demonstráveis.",
+  "capabilities": [
+    {"id": "loki", "status": "não verificada", "reason": "Conector e operação ainda não testados", "operation": "", "source": "", "scope": "", "evidence": "", "outcome": "", "historicalCoverage": "não verificada"},
+    {"id": "prometheus", "status": "não verificada", "reason": "Conector e operação ainda não testados", "operation": "", "source": "", "scope": "", "evidence": "", "outcome": "", "historicalCoverage": "não verificada"},
+    {"id": "tempo", "status": "não verificada", "reason": "TraceQL/busca por trace_id ainda não testados", "operation": "", "source": "", "scope": "", "evidence": "", "outcome": "", "historicalCoverage": "não verificada"},
+    {"id": "github_blip_ai", "status": "não verificada", "reason": "Leitura de repo blip-ai ainda não testada", "operation": "", "source": "", "scope": "", "evidence": "", "outcome": "", "historicalCoverage": "não verificada"},
+    {"id": "argo_history", "status": "não verificada", "reason": "Histórico efetivo ainda não testado", "operation": "", "source": "", "scope": "", "evidence": "", "outcome": "", "historicalCoverage": "não verificada"},
+    {"id": "kafka_assignments_rebalances", "status": "não verificada", "reason": "Histórico efetivo ainda não testado", "operation": "", "source": "", "scope": "", "evidence": "", "outcome": "", "historicalCoverage": "não verificada"},
+    {"id": "redis_snapshots", "status": "não verificada", "reason": "Leitura de snapshot existente ainda não testada", "operation": "", "source": "", "scope": "", "evidence": "", "outcome": "", "historicalCoverage": "não verificada"},
+    {"id": "vault_effective_config", "status": "não verificada", "reason": "Configuração aplicada ainda não testada", "operation": "", "source": "", "scope": "", "evidence": "", "outcome": "", "historicalCoverage": "não verificada"},
+    {"id": "slack", "status": "não verificada", "reason": "Busca e leitura inicial ainda não testadas", "operation": "", "source": "", "scope": "", "evidence": "", "outcome": "", "historicalCoverage": "não verificada"},
+    {"id": "drive_docs", "status": "não verificada", "reason": "Busca e leitura inicial ainda não testadas", "operation": "", "source": "", "scope": "", "evidence": "", "outcome": "", "historicalCoverage": "não verificada"}
+  ]
+}

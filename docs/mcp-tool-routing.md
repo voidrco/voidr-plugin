@@ -44,6 +44,7 @@ Routing invariants:
 | --- | --- | --- |
 | `test_plans_list_test_plans` | `voidr-context` | User selection of an existing plan. Never an error fallback. |
 | `voidr_select_test_plan` | `voidr-context` | Validate and bind the exact plan the user named; a successful switch resets plan-scoped session context. |
+| `voidr_reset_test_plan_creation` | — (nenhuma skill) | After the user explicitly cancels a failed creation, clear only the bridge's in-memory retry lock and idempotency key. Never changes platform state. |
 | `test_plans_get_test_plan` | `voidr-generate`, `voidr-execute` | Read one explicitly selected plan; verify persisted content and real slugs. |
 | `test_plans_get_test_counts` | `voidr-execute` | Post-deploy synchronization verification only. |
 | `test_plans_create_test_plan` | — (nenhuma skill) | First mutation of an approved new plan; must return the linked `repository`. |

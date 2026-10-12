@@ -5,6 +5,7 @@ import { addComparisonSchema } from './echo-analysis-windows.mjs'
 import { COMPARISON_TOOL, comparisonSchema, compareEchoPeriods } from './echo-period-comparison.mjs'
 
 const PREFIX = 'mcp__voidr__'
+const NATIVE_ONLY_TOOLS = new Set(['echo_preview_overview_change'])
 
 class EchoAccessError extends Error {
   /** @param {number} status */
@@ -65,7 +66,7 @@ export function registerEchoActor(ctx, { fetchImpl = fetch, env = process.env } 
         const assertion = rawInput.trim()
         const result = await request('/tools/list', assertion)
         for (const tool of result.tools ?? []) names.set(publicName(tool.name), tool.name)
-        const tools = result.tools?.filter(tool => tool.name.startsWith('echo_')) ?? []
+        const tools = result.tools?.filter(tool => tool.name.startsWith('echo_') && !NATIVE_ONLY_TOOLS.has(tool.name)) ?? []
         if (!tools.length) throw new Error('Echo access unavailable')
         if (['echo_resolve_analysis_window', 'echo_analyze_session_cohort', 'echo_analyze_judge_criterion']
           .every(name => tools.some(tool => tool.name === name))) tools.push({
@@ -103,6 +104,7 @@ export function registerEchoActor(ctx, { fetchImpl = fetch, env = process.env } 
     const assertion = assertions.get(exec.agent?.id)
     if (!assertion) throw new Error('Echo actor authorization required; send a new message to reconnect')
     const tool = names.get(exec.name) ?? exec.name.slice(PREFIX.length)
+    if (NATIVE_ONLY_TOOLS.has(tool)) throw new Error('Use echo_propose_overview_change for overview changes')
     const result = await callEcho(exec.agent, tool, exec.arguments, hint, assertion, exec.signal)
     if (result.isError) throw new Error('Echo tool rejected: ' +
       (result.content ?? []).filter(item => item.type === 'text').map(item => item.text).join('\n'))
@@ -110,13 +112,13 @@ export function registerEchoActor(ctx, { fetchImpl = fetch, env = process.env } 
     return { isError: false, value, content: value.content }
   })
   ctx.on('agent/disposed', ({ agent }) => { assertions.delete(agent.id); analysis.dispose(agent.id) })
-  return async (agent, tool, args, signal) => {
+  return async (agent, tool, args, signal, { allowError = false } = {}) => {
     const hint = agent?.session.events.findLast(event => event.type === 'voidr/project-context-hint')?.data
     if (hint?.surface !== 'echo') throw new Error('This tool requires the Echo surface')
     const assertion = assertions.get(agent?.id)
     if (!assertion) throw new Error('Echo actor authorization required; send a new message to reconnect')
     const result = await callEcho(agent, tool, args, hint, assertion, signal)
-    if (result.isError) throw new Error('Echo query failed; no report was published')
+    if (result.isError && !allowError) throw new Error('Echo query failed; no report was published')
     return result
   }
 }

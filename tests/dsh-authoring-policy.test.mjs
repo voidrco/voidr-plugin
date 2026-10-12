@@ -40,7 +40,7 @@ test('DSH uses exact MCP namespaces while preserving native tools', () => {
   }
   assert.match(combined, /\bmcp__voidr__assistant_workspace_status\b/)
   assert.match(combined, /\bmcp__voidr__assistant_workspace_prepare\b/)
-  const nativeEchoTools = ['echo_execution_confirmation', 'echo_render_deviations', 'echo_render_regulatory_controls']
+  const nativeEchoTools = ['echo_execution_confirmation', 'echo_render_deviations', 'echo_render_regulatory_controls', 'echo_render_deviation_group', 'echo_propose_overview_change']
   for (const tool of nativeEchoTools) assert.equal(qualifyDshVoidrTools(tool), tool)
   assert.doesNotMatch(nativeEchoTools.reduce((text, tool) => text.replaceAll(tool, 'native-widget'), combined), unqualifiedVoidrTool)
   assert.match(combined, /\bask_user_question\b/)

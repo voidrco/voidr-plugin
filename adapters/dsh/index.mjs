@@ -20,6 +20,7 @@ const SPEND_ACTION_BY_SURFACE = {
   'journey-overview': 'voidr_dsh_journeys',
   automate: 'voidr_dsh_automate',
   monitor: 'voidr_dsh_failure_analysis',
+  'preventive-monitor': 'voidr_dsh_general',
   'context-graph': 'voidr_dsh_general',
   performance: 'voidr_dsh_performance_analysis',
   echo: 'voidr_dsh_echo'
@@ -76,6 +77,7 @@ export function apply(ctx) {
       automate: 'voidr-automate',
       performance: 'voidr-performance-setup',
       monitor: 'voidr-failure-analysis',
+      'preventive-monitor': 'blip-preventive-monitor',
       echo: 'voidr-echo-analysis',
       'voidr-gate': 'voidr-gate-analysis'
     }[hint?.surface]
@@ -107,7 +109,10 @@ export function apply(ctx) {
             'environment', 'errorType', 'errorMessage', 'stackTrace', 'filePath', 'line',
             'browser', 'os', 'branch', 'commitSha', 'currentState', 'severity', 'targetType', 'analysisMode',
             'hasSpec', 'specVersion', 'specUpdatedAt', 'suiteCount', 'caseCount', 'sessionIds',
-            'intent', 'surface', 'signature', 'causalChain', 'echoContext', 'gateContext'
+            'intent', 'surface', 'route', 'assistantAction', 'signature', 'causalChain',
+            'radarSituationId', 'radarSituationTitle', 'radarSituationStatus',
+            'radarDecisionSummary', 'radarDecisionCriteria', 'radarSignals',
+            'echoContext', 'gateContext'
           ]
             .filter(key => value[key] !== undefined && value[key] !== null)
             .map(key => [key, value[key]])

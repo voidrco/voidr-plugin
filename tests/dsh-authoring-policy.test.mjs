@@ -241,7 +241,7 @@ test('DSH registers authoring skills and canonical analysis/context/generate/exe
   const skills = loadDshPluginSkills()
   assert.deepEqual(
     skills.map(skill => skill.name),
-    ['blip-incident-remediation', 'voidr-automate', 'voidr-context', 'voidr-echo-analysis', 'voidr-evidence-report', 'voidr-execute', 'voidr-failure-analysis', 'voidr-gate-analysis', 'voidr-generate', 'voidr-hero-analysis', 'voidr-journeys', 'voidr-performance-author', 'voidr-performance-execute', 'voidr-performance-setup', 'voidr-performance-validate', 'voidr-spec']
+    ['blip-incident-remediation', 'voidr-automate', 'voidr-context', 'voidr-echo-analysis', 'voidr-evidence-report', 'voidr-execute', 'voidr-failure-analysis', 'voidr-gate-analysis', 'voidr-generate', 'voidr-hero-analysis', 'voidr-journeys', 'voidr-performance-author', 'voidr-performance-execute', 'voidr-performance-setup', 'voidr-performance-validate', 'voidr-spec', 'voidr-third-parties']
   )
   assert.equal(inject.includes('skills'), true)
   for (const skill of skills) {

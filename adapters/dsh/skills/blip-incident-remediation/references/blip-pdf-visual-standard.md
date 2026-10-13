@@ -60,7 +60,7 @@ O arquivo de saída deve ter nome estável, por exemplo `POST_MORTEM_<ticket>.pd
 
 1. execute `pdfinfo` e confirme A4, quantidade de páginas e ausência de erro;
 2. renderize todas as páginas em PNG com `pdftoppm`;
-3. inspecione visualmente separador, capa, primeira página interna, páginas de tabelas, grafo e última página;
+3. se o modelo ativo aceitar entrada de imagem, inspecione visualmente separador, capa, primeira página interna, páginas de tabelas, grafo e última página; se não aceitar, **não chame ferramenta de imagem**: faça a validação estrutural por `pdfinfo`, `pdffonts`, `pdftotext` e pelos PNGs gerados, e declare a inspeção visual como indisponível no modelo ativo;
 4. confirme que nenhum texto se sobrepõe, é cortado ou sai das margens;
 5. confirme que a classificação e a paginação estão corretas em todas as páginas;
 6. confirme que as seções, campos e colunas obrigatórias continuam presentes;

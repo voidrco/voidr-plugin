@@ -5,11 +5,30 @@ Execute antes da coleta investigativa, após carregar o input inicial fornecido 
 ## Procedimento
 
 1. Confirme organização **Blip**, contexto autorizado e identidade de acesso sem expor credenciais. Leia `dsh-compatibility.md` e descubra os conectores/ferramentas reais.
+   Nesta stack local, não invoque `observability_source`: essa operação nativa é bloqueada para a organização Blip (`Native observability access denied`). Grafana deve ser provado somente pelo conector `blip-grafana-mcp`, via `custom_connectors_list_mcp_tools` e `custom_connectors_execute_mcp_tool`.
 2. Registre schema, operação, escopo, janela e fonte para cada capacidade abaixo. Só execute operações de leitura delimitadas. Não rode snapshot, alteração de assignment, rebalance, refresh de Vault ou sync de Argo.
 3. Prove cada interface com uma operação real autorizada. Quando o caso ainda não fornece o identificador necessário, marque a capacidade como **não verificada**, não como disponível. Não invente datasource UID, repo, topic, application, key, trace ID ou caminho Vault.
 4. Diferencie **interface executável** de **cobertura histórica do incidente**. Uma consulta neutra vazia pode provar que a interface aceita a operação; não prova amostras nem retenção para o incidente. Complete a cobertura ao resolver seus identificadores.
 5. Se houver erro/403/401, operação ausente, timeout não resolvido ou recurso inacessível, registre `inacessível por permissão/interface` e o erro factual. Uma ferramenta com o nome esperado mas schema incompatível é uma interface ausente para essa operação.
+   Não use `get_annotations` no conector Grafana durante estes diagnósticos locais: o endpoint corporativo de annotations resolve para um serviço interno e expira antes dos headers. Para cobrir mudanças e alertas, use `alerting_manage_rules`, dashboards, logs e métricas; registre annotations como `inacessível por interface` sem executar a chamada conhecida como falha.
+   No harness local, execute chamadas do conector Grafana em sequência, nunca em paralelo. Para Loki, limite cada consulta inicial a no máximo duas horas e divida janelas maiores. Isso evita saturar o transporte MCP sem reduzir a cobertura temporal.
+   Respeite os nomes exatos dos argumentos de tempo: `query_prometheus` usa `startTime` e `endTime`; `query_loki_logs` usa `startRfc3339` e `endRfc3339`. Nunca misture os dois schemas.
 6. Apresente o quadro e o limite causal ao usuário **antes de investigar**. Atualize-os se novas evidências mudarem a cobertura. Não silencie uma lacuna ao escrever o PDF.
+
+## Falha estrutural da execução
+
+Ausência conhecida de uma interface pode reduzir o teto causal e ainda permitir um diagnóstico parcial. Isso é diferente de uma capacidade que o ambiente declarou disponível ou que o contrato da execução exige, mas falha por catálogo não carregado, autenticação/permissão incorreta, configuração local, transporte persistente ou API indisponível.
+
+Se uma capacidade exigida pelo caso falhar estruturalmente:
+
+1. confirme o erro com uma única repetição segura ou uma operação neutra equivalente;
+2. emita o marcador literal **`FALHA ESTRUTURAL DE CAPACIDADE`**, com ferramenta, operação e erro factual;
+3. pare a investigação e não apresente o caso como concluído;
+4. não gere nem valide um PDF final para avaliação comparativa; preserve somente os artefatos diagnósticos da falha para a orquestração corrigir e reiniciar o caso.
+
+Erro de sintaxe de consulta, consulta vazia, filtro incorreto ou tentativa que o próprio agente consegue reformular não é falha estrutural. Também não é falha estrutural a ausência de Slack quando o relato inicial foi fornecido integralmente e a execução já declarou essa interface como indisponível. Em contrapartida, Grafana configurado mas inacessível, ticket/trigger não recuperável quando ele é a única âncora, catálogo GitHub ausente quando código é aplicável, ou isolamento histórico incompatível invalidam a execução até correção.
+
+Quando o prompt trouxer um ADO, execute primeiro apenas `issue_tracker_list`. Chame `issue_tracker_get_issue` somente se a listagem retornar um contexto de work items executável e use o identificador exato devolvido. Se não houver contexto, registre ADO como `inacessível por interface`; não invoque `get_issue` com o contexto padrão ausente e não tente encontrar o ADO pela busca global do Zendesk.
 
 Em um smoke limitado a inventário, diga “smoke de catálogo aprovado; preflight operacional parcial”. Não diga “preflight concluído sem falhas”, “ambiente pronto” ou que as consultas estão liberadas se ainda há capacidades não verificadas. Sem ticket, não prometa um diagnóstico nem classifique antecipadamente um PDF: informe somente o teto atual, sujeito às evidências do caso futuro. Responda no idioma do usuário e mantenha separados o resultado do smoke e a prontidão investigativa.
 
@@ -27,6 +46,8 @@ Em um smoke limitado a inventário, diga “smoke de catálogo aprovado; preflig
 Também verifique Slack (busca exata e pai/thread) e Docs/Drive (leitura inicial autorizada) porque são necessários para o fluxo ticket/CCH-first. Ausência de Docs pode ser não aplicável se o input não aponta para documento; explique. Não classifique indisponível como não aplicável para esconder falta de interface.
 
 Quando a entrada identificar Zendesk, descubra também o coletor `zendesk-browser-v1` e os schemas de leitura de tickets conforme [dsh-zendesk-tickets.md](dsh-zendesk-tickets.md). Inventário não prova consulta nem conteúdo inicial disponível. Não carregue histórico/resolução para testar o preflight: até a leitura autorizada do caso, mantenha a consulta e sua cobertura como `não verificadas`. Registre separadamente se a interface consegue isolar o relato original; o contrato atual devolve a captura mais recente, sem filtro inicial-only. Antes da leitura, informe essa limitação da fase cega. Ao consultar, registre conector, ticket, captura, cobertura, paginação e consulta na linha ticket/registro inicial do Anexo B, além das capacidades do template.
+
+Quando a entrada for exclusivamente CCH/Slack, não teste Zendesk ao vivo: ele não é uma capacidade aplicável ao trigger e a busca/listagem global pode falhar por escopo. Teste somente a leitura Slack exata; se ela não existir, registre a interface como inacessível e preserve como âncora o relato inicial fornecido, sem abrir uma rota Zendesk não solicitada.
 
 ## Registro e trava de conclusão
 

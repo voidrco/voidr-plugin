@@ -121,6 +121,19 @@ const localTools = [
     inputSchema: { type: 'object', properties: {} }
   },
   {
+    name: 'voidr_reset_test_plan_creation',
+    description:
+      'Cancel the failed Test Plan creation intent held by this local bridge session. This clears only the in-memory retry lock and idempotency key; it never deletes or changes a Test Plan or repository on the Voidr platform. Call only after the user explicitly cancels the failed attempt.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        confirm: { type: 'boolean', enum: [true] }
+      },
+      required: ['confirm'],
+      additionalProperties: false
+    }
+  },
+  {
     name: 'voidr_select_test_plan',
     description:
       'Select the exact Test Plan the user named for this session. Pass its exact name or ID; the MCP reads it from the platform before switching. This changes only the local session context and clears plan-specific environment, repository, and validation state. Use only when the user has explicitly identified the target; do not infer or silently substitute a plan.',
@@ -714,7 +727,7 @@ async function callTool(params) {
       const same = creationFingerprint === lastFailedCreateArgs
       if (!same) {
         throw new Error(
-          'Blocked by Voidr workflow: test_plans_create_test_plan already failed in this session. Changing the name, status, or other parameters never fixes a provisioning failure and can create duplicate plans. Show the user the exact previous error and offer only two options: retry the same creation unchanged, or cancel.'
+          'Blocked by Voidr workflow: test_plans_create_test_plan already failed in this session. Changing the name, status, or other parameters never fixes a provisioning failure and can create duplicate plans. Show the user the exact previous error and offer only two options: retry the same creation unchanged, or explicitly cancel it with voidr_reset_test_plan_creation before starting a new intent.'
         )
       }
     }
@@ -1083,6 +1096,16 @@ function stableStringify(value) {
     .sort()
     .map(key => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
     .join(',')}}`
+}
+
+function resetFailedPlanCreation() {
+  const reset = Boolean(
+    planCreationFailed || lastFailedCreateArgs || creationIdempotency
+  )
+  planCreationFailed = false
+  lastFailedCreateArgs = null
+  creationIdempotency = null
+  return reset
 }
 
 function resetStructureTracking() {
@@ -1769,6 +1792,20 @@ async function callLocal(name, args) {
       )
     case 'voidr_auth_status':
       return textResult(await validatedAuthStatus())
+    case 'voidr_reset_test_plan_creation': {
+      if (args.confirm !== true) {
+        throw new Error(
+          'Reset requires confirm: true after the user explicitly cancels the failed Test Plan creation.'
+        )
+      }
+      const reset = resetFailedPlanCreation()
+      return textResult({
+        reset,
+        note: reset
+          ? 'The failed local creation intent was cleared. No platform Test Plan or repository was changed.'
+          : 'There was no failed local creation intent to clear. No platform state was changed.'
+      })
+    }
     case 'voidr_select_test_plan':
       return selectTestPlan(args)
     case 'voidr_auth_select_organization': {

@@ -159,6 +159,7 @@ test('bridge filters discovery, keeps secrets local, and blocks forbidden calls'
   assert.equal(names.includes('applications_list_applications'), true)
   assert.equal(names.includes('test_plans_create_test_plan'), true)
   assert.equal(names.includes('voidr_auth_status'), true)
+  assert.equal(names.includes('voidr_reset_test_plan_creation'), true)
   assert.equal(names.includes('voidr_auth_login'), true)
   assert.equal(
     names.includes('voidr_workspace_prepare_test_repository'),
@@ -1669,6 +1670,30 @@ test('a creation blocked with other arguments keeps the failed intent key', asyn
     seenKeys[0],
     seenKeys[1],
     'a blocked call with other arguments must not replace the key of the failed intent'
+  )
+
+  const unconfirmedReset = await client.requestRaw('tools/call', {
+    name: 'voidr_reset_test_plan_creation',
+    arguments: { confirm: false }
+  })
+  assert.match(unconfirmedReset.error.message, /confirm: true/)
+
+  const reset = await client.request('tools/call', {
+    name: 'voidr_reset_test_plan_creation',
+    arguments: { confirm: true }
+  })
+  assert.equal(JSON.parse(reset.content[0].text).reset, true)
+
+  const restarted = await client.requestRaw('tools/call', {
+    name: 'test_plans_create_test_plan',
+    arguments: { ...args, name: 'Plano renomeado' }
+  })
+  assert.match(restarted.error.message, /connector timeout/)
+  assert.equal(seenKeys.length, 3)
+  assert.notEqual(
+    seenKeys[1],
+    seenKeys[2],
+    'an explicit reset must start the next creation intent with a new key'
   )
 })
 

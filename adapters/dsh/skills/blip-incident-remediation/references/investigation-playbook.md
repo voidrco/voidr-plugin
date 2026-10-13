@@ -26,6 +26,8 @@ Antes da busca ampla, use a ontologia para acrescentar à ficha:
 | Runtime físico | qual cluster, namespace, workload e pod estão executando? |
 | Mudança | qual digest, build, commit, PR, configuração ou GMUD chegou ao runtime? |
 
+Leia e aplique [dsh-scope-resolution-gate.md](dsh-scope-resolution-gate.md) antes de escolher definitivamente cluster, célula ou serviço. A primeira stack que responde serve para provar interface, não para provar que o incidente ocorreu ali.
+
 ## 2. Triangulação das fontes
 
 ### Slack: contexto humano e cronologia
@@ -54,6 +56,8 @@ Escolha primeiro a stack, datasource, tenant/célula e identidade física corret
 
 Não conclua “infra” só porque há saturação, nem “aplicação” só porque há stack trace. Explique o mecanismo causal.
 
+Quando a célula física estiver desconhecida, faça primeiro a mesma passagem localizadora curta em cada candidato plausível, em sequência. Compare presença do tenant/cliente ou identificador equivalente, anomalia compatível com o sintoma e proximidade temporal. Não transforme HTTP 200, tráfego genérico, deployment existente ou ausência do cliente em outro cluster em prova positiva do escopo escolhido.
+
 #### Logs: consulte a fonte, não dependa do dashboard
 
 Um dashboard contém consultas e transformações preparadas para acompanhamento recorrente; ele não é o conjunto completo de logs. Use as ferramentas do Grafana MCP para inspecionar o painel apenas quando precisar descobrir nomes de serviço, datasource, labels, campos e janelas relevantes. Na investigação, consulte as linhas diretamente no Loki ou Elasticsearch pelas ferramentas MCP correspondentes. Não abra o Grafana no browser nem troque para API direta sem autorização explícita do usuário.
@@ -67,11 +71,19 @@ Escolha a fonte a partir da configuração observada:
 Fluxo de consulta:
 
 1. Fixe datasource, ambiente/célula, serviço e janela absoluta com fuso.
-2. Busque linhas brutas em uma janela curta ao redor do início do sintoma. Comece amplo pelo serviço e escopo; não comece por uma mensagem de erro presumida.
+2. Busque linhas brutas em uma janela curta ao redor do início do sintoma. Comece amplo pelo serviço e escopo; não comece por uma mensagem de erro presumida. Se o serviço voltado ao cliente não apresentar um fingerprint causal, percorra ao menos um salto a montante e um a jusante da jornada antes de concluir normalidade.
 3. Observe a forma real dos registros e só então aplique parser JSON/logfmt ou filtros por nível, exceção, rota, tenant anonimizado e correlation/trace ID.
 4. A partir de uma linha concreta, expanda para eventos anteriores e posteriores do mesmo correlation/trace ID e para serviços adjacentes.
 5. Compare volume, padrão e distribuição com uma janela saudável equivalente. Agregações como `count_over_time` ou histogramas vêm depois da inspeção das linhas, não antes.
 6. Registre na evidência: datasource, consulta exata, intervalo, fuso, quantidade retornada, truncamento/amostragem e link para reprodução quando existir.
+
+No conector Grafana MCP, prove Loki com `query_loki_logs` e um seletor LogQL mínimo antes de usar operações auxiliares. Não use `list_loki_label_values` como preflight: algumas versões do servidor anunciam a operação, mas encaminham esse endpoint para a interface HTML e retornam 404. Derive os labels das linhas devolvidas ou de uma operação de labels que já tenha sido comprovada na mesma sessão. Para JSON com chaves iniciadas por `@`, não escreva extrações nomeadas como `| json msg="@m"`, que não são LogQL válido. Use primeiro `| json` sem remapeamento e filtros literais sobre a linha bruta; só agregue campos cujos nomes normalizados tenham aparecido numa resposta bem-sucedida.
+
+No harness local, não dispare chamadas do mesmo conector Grafana em paralelo. Faça uma por vez. Em Loki, comece com janelas de até duas horas e divida intervalos maiores; em Prometheus, use `startTime`/`endTime`, enquanto Loki usa `startRfc3339`/`endRfc3339`. Não reutilize os nomes de tempo de uma ferramenta na outra.
+
+Evite agrupamentos de alta cardinalidade sobre campos extraídos do payload, como `From`, `To`, contact ID, tenant ID ou correlation ID. Primeiro conte o total; depois, se necessário, use uma janela menor e `topk(20, ...)` somente sobre labels ou campos estáveis já observados. Não rode `count by (From)` após `| json` sobre um stream amplo: o limite de séries torna a consulta inválida e não produz evidência confiável.
+
+No conector local, não use o estágio LogQL `| regexp` para extrair labels de linhas JSON. O escape atravessa JSON, dispatcher e LogQL e pode produzir uma expressão inválida. Para classificar exceções, observe primeiro uma linha bruta e execute contagens sequenciais com filtros literais simples, por exemplo `|= "OperationCanceledException"`; use `|~` somente com uma expressão curta que não contenha aspas JSON escapadas. Não tente agrupar tipos de exceção numa única consulta por captura nomeada.
 
 Não copie payloads completos quando contiverem PII ou segredos. Preserve apenas campos estruturais necessários para provar o mecanismo. Ausência de linhas não prova ausência do evento sem validar retenção, filtros, tenant do datasource e limites da consulta.
 
@@ -100,6 +112,8 @@ Use primeiro as pistas do runtime para selecionar o repositório e a revisão im
 6. caminho de erro e retries.
 
 Depois use Git/GitHub para verificar alterações recentes naquele caminho. Se houver ticket ou PR mencionado no Slack, trate-o como candidato e valide o diff.
+
+Código é posterior ao fingerprint do runtime, não substituto dele. Um caminho plausível encontrado por busca textual permanece `INFERIDO` até que uma mensagem, métrica, trace, configuração efetiva ou revisão implantada o ligue à execução do incidente. Se a imagem/digest/versão observada não puder ser mapeada ao snapshot disponível, use o código apenas para explicar um mecanismo genérico possível e mantenha o defeito iniciador aberto.
 
 O repositório da aplicação, o repositório de testes e o repositório GitOps podem ser distintos. Não atribua ausência de teste apenas porque ele não existe no repo da aplicação.
 

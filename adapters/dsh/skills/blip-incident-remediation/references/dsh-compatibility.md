@@ -31,6 +31,8 @@ Conectores da tela não expõem automaticamente uma família `mcp__grafana__*` n
 
 Os nomes acima foram verificados no código do Harness/Service; **a exposição real da sessão ainda precisa ser confirmada**. Não atribua um slug nem um nome remoto antes do inventário. Registre os bindings reais da sessão no preflight.
 
+Na stack local Blip, não use a ferramenta nativa `observability_source`; ela é negada pelo Service. Toda telemetria deve passar por `blip-grafana-mcp`. Também não invoque a operação remota `get_annotations`, cujo backend interno expira nesta rota; use as operações de alertas, dashboards, Loki e Prometheus e registre annotations como inacessíveis.
+
 O dispatcher genérico é classificado como **escrita** pelo Service, mesmo se a operação remota for leitura. Respeite o scope e as confirmações exigidas pela plataforma. Não desative approvals, não mude para acesso irrestrito e não contorne o dispatcher via shell/HTTP. Se a permissão necessária não estiver disponível, registre `inacessível por permissão/interface`. Não execute uma ferramenta remota de escrita durante esta investigação somente leitura.
 
 Se o resultado vier com `isError`, erro remoto ou envelope de falha, não marque sucesso só porque o transporte respondeu HTTP 200. Se vier offload para um artifact, leia o artifact com a operação estruturada retornada; não interprete a prévia truncada como resultado completo. Timeout não prova execução inexistente; não repita operações de efeito desconhecido.
@@ -58,7 +60,7 @@ Para Zendesk coletado, use o mesmo mecanismo de descoberta de ferramentas Voidr,
 
 - `read`: `{ "file_path": "<caminho absoluto>", "offset": 1, "limit": <linhas> }`. Continue até EOF se houver paginação.
 - `bash`: `{ "command": "<comando>", "description": "<descrição curta>", "workdir": "<diretório absoluto>" }`. Verifique o código de saída; respeite permissões do workspace.
-- `read_image`: `{ "file_path": "<PNG absoluto>" }` para a conferência visual, se disponível.
+- `read_image`: use somente quando o modelo ativo declarar suporte a entrada de imagem. O DeepSeek `deepseek-v4.1-flash` desta instalação não aceita imagens: nesse modelo, **não invoque** `read_image` nem tente abrir PNG como imagem. Renderize todas as páginas com `pdftoppm`, valide `pdfinfo`, `pdffonts`, extração de texto e dimensões/arquivos PNG por shell, e registre `inspeção visual indisponível no modelo ativo` como limitação de apresentação — isso não invalida as verificações estruturais do PDF.
 - Git local não é fallback para acessar Slack/Grafana/Docs via `curl`. Não use shell para contornar falta de MCP, autenticação ou confirmação.
 - Uma VM conectada à VPN não habilita automaticamente Argo/Kafka/Redis/Vault: cada interface, permissão e evidência histórica precisam passar no preflight.
 - MFA exige confirmação humana. Nunca armazene o segredo de segundo fator nem automatize/bypasse o aceite no celular.

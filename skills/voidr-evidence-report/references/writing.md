@@ -1,5 +1,7 @@
 # Redação técnica
 
+Leia também [design informacional](information-design.md), que define a síntese para decisão, categorias de afirmação e aprofundamento.
+
 Adaptado dos critérios de linguagem do `linkedin-ghostwriting` do repositório
 `voidr-gtm`, sem importar persuasão comercial, hooks ou chamadas para engajamento.
 
@@ -8,7 +10,7 @@ Adaptado dos critérios de linguagem do `linkedin-ghostwriting` do repositório
   códigos HTTP e trechos de erro quando explicarem o comportamento.
 - Resumo de até 650 caracteres. Como referência editorial, 2–5 páginas; o limite
   técnico é 20. Use apenas o espaço necessário para preservar as evidências.
-- Separe fato, hipótese e recomendação. Diga o que não foi medido ou reproduzido.
+- Separe fato observado, relato, interpretação, hipótese e recomendação. Diga o que não foi medido ou reproduzido.
 - Não repita o resumo em uma seção de abertura nem use slogans em frases telegráficas.
 - Não transforme uma ocorrência em taxa de falha; informe numerador e denominador
   quando ambos existirem. Nunca invente impacto financeiro ou número de usuários.

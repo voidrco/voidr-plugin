@@ -2,7 +2,7 @@
 
 Use esta estrutura em toda entrega. Ela reproduz a ordem observada nos post-mortems da Blip e acrescenta um anexo técnico para o diagnóstico reproduzível. O portão de viabilidade define a modalidade:
 
-A entrega final é um PDF A4, não um bloco Markdown. Use esta referência para estruturar o conteúdo, serialize o resultado em JSON e gere o artefato com `scripts/render_blip_postmortem.py`, seguindo [blip-pdf-visual-standard.md](blip-pdf-visual-standard.md). O Markdown abaixo define a semântica e a ordem; o gerador define a identidade visual.
+No Assistant/Slack, a entrega final é PDF A4 pelo Service `evidence_reports_create`, com síntese para decisão, aprofundamento e anexos referenciados conforme `blip-pdf-visual-standard.md`. Este arquivo preserva o inventário técnico a cobrir; sua ordem literal e renderer Python aplicam-se somente à compatibilidade offline legada. Não reduza os portões causais nem o livro de evidências para mudar o desenho.
 
 - **com evidência suficiente:** `POST MORTEM — <título>`;
 - **bloqueado por evidência:** `POST MORTEM — DIAGNÓSTICO PARCIAL — <título>`.
@@ -182,9 +182,9 @@ Use links reproduzíveis para terceiros. Evidência de código deve apontar para
 
 No grafo, use os IDs `E1`, `E2` e assim por diante quando precisar ligar visualmente uma etapa à evidência sem aumentar demais o texto do nó.
 
-## Rigidez estrutural
+## Ordem do template offline legado
 
-Use os títulos e a ordem da estrutura obrigatória literalmente. Não substitua `## 4. EVENTOS IMPORTANTES DO INCIDENTE` por `Eventos e análise causal`; não mova a linha do tempo para um anexo; não crie `Anexo C`. Coloque:
+Somente no renderer Python offline legado, use os títulos e a ordem abaixo. No Assistant/Slack, reorganize o mesmo conteúdo para abrir com achados, impacto e próximos passos; a timeline e detalhes extensos podem ficar em anexos referenciados. Não substitua `## 4. EVENTOS IMPORTANTES DO INCIDENTE` por `Eventos e análise causal`; não mova a linha do tempo para um anexo; não crie `Anexo C`. Coloque:
 
 - cronologia na seção 4;
 - mecanismo, hipóteses e refutações em `### Investigação`;

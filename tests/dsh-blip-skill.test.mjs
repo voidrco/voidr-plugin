@@ -14,12 +14,12 @@ function walk(directory, prefix = '') {
   })
 }
 
-test('routes Blip incidents to their preserved renderer without bypassing organization permissions', () => {
+test('routes Blip incidents to the Service renderer without bypassing organization permissions', () => {
   const prompt = interactiveTestDevelopmentPrompt()
   assert.match(prompt, /explicit Blip incident[\s\S]*load blip-incident-remediation before investigative work/)
-  assert.match(prompt, /bundled Blip PDF renderer take precedence/)
+  assert.match(prompt, /tenant-bound Service evidence_reports_create layer/)
   assert.match(prompt, /does not authorize another organization or missing provider permissions/)
-  assert.match(prompt, /Do not bind a test-authoring workspace or delegate that PDF/)
+  assert.match(prompt, /Do not bind a test-authoring workspace or use the legacy offline Python renderer/)
 })
 
 test('registers the Blip skill with a readable packaged resource base', () => {
@@ -63,16 +63,21 @@ test('maps collected Zendesk tickets to tenant-discovered read tools instead of 
   assert.ok(readFileSync(resolve(skill.resourceBase.path, route.reference)).length)
 })
 
-test('preserves a supplied canonical package byte-for-byte beyond its compatibility block', {
+test('preserves canonical investigation and offline assets while updating presentation', {
   skip: !process.env.BLIP_CANONICAL_SKILL,
 }, () => {
   const skill = loadDshPluginSkills().find(entry => entry.name === 'blip-incident-remediation')
   const canonical = process.env.BLIP_CANONICAL_SKILL
   const original = readFileSync(join(canonical, 'SKILL.md'), 'utf8')
   const installed = readFileSync(skill.path, 'utf8')
-  const start = installed.indexOf('## Adaptação nativa')
-  const end = installed.indexOf('Trate o ticket ou registro interno como input canônico.')
-  assert.equal(installed.slice(0, start) + installed.slice(end), original)
+  const investigation = content => {
+    const start=content.indexOf('Trate o ticket ou registro interno como input canônico.')
+    const end=content.indexOf(content.includes('## Entrega para decisão')?'## Entrega para decisão':'## Formato obrigatório da entrega')
+    assert.ok(start>=0 && end>start)
+    return content.slice(start,end)
+  }
+  assert.equal(investigation(installed), investigation(original))
+  assert.equal(installed.slice(installed.indexOf('## Continuidade')),original.slice(original.indexOf('## Continuidade')))
   function originals(directory, prefix = '') {
     return readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
       if (entry.name === '__pycache__') return []
@@ -80,6 +85,18 @@ test('preserves a supplied canonical package byte-for-byte beyond its compatibil
       return entry.isDirectory() ? originals(join(directory, entry.name), path) : [path]
     })
   }
-  for (const file of originals(canonical).filter(file => file !== 'SKILL.md'))
+  for (const file of originals(canonical).filter(file => !['SKILL.md','references/blip-pdf-visual-standard.md','references/blip-postmortem-format.md'].includes(file)))
     assert.deepEqual(readFileSync(join(skill.resourceBase.path, file)), readFileSync(join(canonical, file)), file)
 })
+
+// Active instructions must not send Assistant investigations into legacy shell rendering.
+test('keeps investigation gates while using decision-first partial PDF delivery', () => {
+ const skill = loadDshPluginSkills().find(entry => entry.name === 'blip-incident-remediation');
+ const content = readFileSync(skill.path, 'utf8');
+ for (const token of ['Escada causal obrigatória','DIAGNÓSTICO PARCIAL','decisionSummary','evidence_reports_create','upload','tempo e tokens']) assert.ok(content.includes(token),token);
+ assert.ok(!content.includes('Os títulos e a ordem do template são literais'));
+ const guidance = readFileSync(join(process.cwd(),'skills/voidr-evidence-report/references/information-design.md'),'utf8');
+ for(const token of ['denominadores','correlação não demonstra causa','Space Grotesk Light','Inter Light/Medium']) assert.ok(guidance.includes(token),token);
+ assert.match(guidance,/Dois percursos/);
+ assert.match(guidance,/Não invente responsáveis, prazos/);
+});

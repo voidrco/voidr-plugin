@@ -67,3 +67,23 @@ result, trace, console, network, dom ou screenshot.
 O documento JSON sanitizado é armazenado cifrado e entregue somente pela sessão
 autenticada. A UI oferece download das evidências, links para seções/fontes e Teams.
 Leia references/dx.md para escolher os componentes e validar a origem.
+
+## Contrato de composição v3 (retrocompatível com v2)
+
+Use `schemaVersion: 3`; a versão exige `decisionSummary`. Chamadas v2 continuam válidas para manter investigações e PDFs em andamento. Os blocos, limites e fontes anteriores continuam válidos.
+
+`classification`: `observed`, `reported`, `interpretation`, `hypothesis`, `recommendation`, `limitation`. Não classifique relato como observação própria.
+
+`decisionSummary`: `{ findings: [claim], impact: claim, nextSteps: [action] }`. De 1 a 4 findings e de 1 a 3 ações.
+`claim`: `{ text, classification, evidence, limitation? }` (text até 800, limitation 500). Hipótese requer limitation descrevendo a verificação ausente.
+`action`: `{ text, rationale, validation, priority, priorityBasis, evidence, limitation? }` (text 600; rationale/validation 500; priority 80; priorityBasis 350). Não adicione owners/deadlines inventados.
+
+`paragraph` aceita classification e limitation opcionais; `finding.status` aceita as seis classificações e mantém verificationGap obrigatório para hypothesis.
+`assessment`: `{ type, label, classification, text, problem, consequence, action, limitation?, evidence }` (label 100; text 800; problem/consequence 500). Hipótese requer limitation. Action segue o contrato acima e mantém suas próprias fontes.
+`diagram`: `{ type, label, caption, nodes, edges, evidence }`. Nodes 2–4: `{id, label, classification}`, id até 20 caracteres a-z/0-9/hífen, label até 100. Edges 1–8: `{from, to, label, classification, evidence}`. IDs distintos, endpoints existentes, sem self-edge; labels até 100, caption até 500. Não envie SVG/HTML. Relações hipotéticas/interpretadas/propostas são tracejadas e classificadas por texto. A existência de seta não prova causa.
+
+Seções aceitam `appendix: true`; referências usam os mesmos anchors `section-N`. A abertura navega para as seções técnicas. Todo evidence deve existir em sources, inclusive ações e edges. Fontes e logos são server-owned. O renderer usa fonts reais Light/Medium locais, preserva paginação e acesso privado.
+
+## Rollout e hosts ainda em v2
+
+Leia o schema anunciado por `evidence_reports_create` antes de compor. Service v3 aceita v2 para manter sessões em andamento. Se o host ainda anunciar apenas v2, não envie campos v3: escreva a síntese em seções iniciais paragraph/finding e inclua classificações, critérios de prioridade e validação no texto, com fontes adjacentes. Isso preserva a geração/anexo obrigatório durante o rollout. A composição tipada e o leitor v3 requerem a versão correspondente do Service/Platform; não contorne a versão com HTML, Python ou outra organização.

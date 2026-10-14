@@ -70,7 +70,7 @@ essa ausência. Nunca gere uma imagem artificial para representar evidência ori
 
 O link retornado abre o leitor autenticado, com navegação, zoom, cURL copiável,
 downloads e modal Compartilhar. O usuário pode copiar um link para a seção/evidência
-ou abrir o Teams. O destinatário continua precisando de acesso Serasa. Não envie
+ou abrir o Teams. O destinatário continua precisando de acesso à organização autenticada. Não envie
 mensagens, crie grants públicos ou anuncie entrega no Teams por conta própria.
 
 ## Revisão antes da criação

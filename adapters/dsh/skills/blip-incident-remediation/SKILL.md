@@ -13,7 +13,7 @@ As famílias `mcp__codex_apps__*` e `mcp__blip_grafana__*` abaixo são os nomes 
 
 Se faltar uma capacidade, registre **`inacessível por permissão/interface`**, a operação ausente e a consequência causal. Não preencha lacunas com hipóteses tratadas como resultado. Mantenha ticket/CCH inicial, fase cega, quarentena de post-mortem, separação observado/declarado/inferido/lacuna e prova do defeito iniciador exatamente como descrito no restante desta skill.
 
-Para o PDF, use o Python definido em [references/dsh-installation.md](references/dsh-installation.md); o gerador canônico não foi modificado. Resolva caminhos a partir do `resourceBase` retornado pela ferramenta nativa `skill`, não a partir do diretório da conversa. `agents/openai.yaml` foi preservado apenas como metadado de origem: o Harness ativa esta skill pelo frontmatter deste arquivo e por `skill({name: "blip-incident-remediation"})`.
+No Assistant e no Slack, gere o PDF pelo Service com `evidence_reports_create`, carregando `voidr-evidence-report` e suas referências `references/contract.md` e `references/information-design.md` pelo loader de skills. O transporte autentica a organização e a conversa; não use shell, Python, checkout local ou outra organização para gerar. O renderer Python empacotado é compatibilidade offline legada, não a rota do Assistant. Resolva referências pelo resourceBase da skill.
 
 Para tickets Zendesk, leia [references/dsh-zendesk-tickets.md](references/dsh-zendesk-tickets.md) antes de consultar seu conteúdo. No Harness, o contrato ticket-first abaixo também usa as ferramentas Voidr de tickets previamente coletados no ClickHouse, antes de concluir que falta acesso ao ticket. Menção no Slack e pedido pela UI são entradas da investigação, não fontes substitutas do ticket nem gatilhos automáticos da ingestão. Captura mais recente não equivale ao estado inicial: preserve a quarentena de resolução e informe quando a interface não permite garantir a fase cega.
 
@@ -248,26 +248,21 @@ Leia [references/blip-ontology-routing.md](references/blip-ontology-routing.md),
 
 Antes de redigir o artefato, valide este definition of done: escopo físico; matriz completa das dependências observadas no onset; primeiro ponto anômalo contra baseline; contrato de erro seguido até persistência/repetição/projeção; runtime ligado à revisão quando demonstrável; churn de workload além de counters de restart; e relógios separados de encerramento. Um item desconhecido vira lacuna explícita, não autoriza encerrar a investigação no primeiro candidato.
 
-## Formato obrigatório da entrega
+## Entrega para decisão e aprofundamento
 
-Sempre leia [references/blip-postmortem-format.md](references/blip-postmortem-format.md) e entregue o diagnóstico no formato dos post-mortems da Blip. Preserve a ordem das seções e inclua o grafo do caminho da falha. O portão define apenas se a entrega será `POST MORTEM` completo ou `POST MORTEM — DIAGNÓSTICO PARCIAL`; ele nunca remove a camada de apresentação solicitada.
+Leia [references/blip-pdf-visual-standard.md](references/blip-pdf-visual-standard.md). A investigação mantém os portões causais e a separação entre relato, evidência e inferência acima. A apresentação segue o design informacional de `voidr-evidence-report/references/information-design.md`, não uma ordem literal de títulos do template legado.
 
-O artefato final obrigatório é um PDF A4 na identidade visual oficial da Blip. Leia [references/blip-pdf-visual-standard.md](references/blip-pdf-visual-standard.md), estruture o diagnóstico em JSON e gere o arquivo com `scripts/render_blip_postmortem.py`. Markdown pode ser usado durante a investigação, mas não é a entrega final. Não substitua o PDF por texto no chat, HTML, impressão do browser ou uma versão “aproximada” do template.
+Sempre gere o PDF A4, inclusive quando a causa não foi determinada, e no Slack anexe-o à conversa. Texto no chat não substitui o anexo. Use `DIAGNÓSTICO PARCIAL` quando os portões não passarem; marque incidentes ativos como preliminares. Não preencha lacunas para completar seções. A falta de causa, imagens, logs, revisão ou acesso deve acompanhar cada conclusão afetada.
 
-Use `INTERNA — RASCUNHO` por padrão. Gere `PÚBLICA` somente quando o usuário pedir a versão compartilhável, o conteúdo tiver sido sanitizado e o JSON contiver `public_release_authorized: true`. Antes de entregar, renderize todas as páginas e valide capa, primeira página interna, grafo, tabelas e última página. Faça inspeção visual somente se o modelo ativo declarar entrada de imagem; em modelo sem visão, não invoque ferramenta de imagem, execute as verificações estruturais descritas no padrão visual e registre essa limitação. Corrija qualquer corte, sobreposição, classificação ou paginação incorreta que a validação disponível revelar.
+Abra com achados, impacto conhecido e próximos passos priorizados por critérios explícitos. Depois explique o diagnóstico e remeta a anexos com consultas, janelas, escopos, revisões, timeline, cobertura e livro de evidências completo. Cada achado relevante conecta problema, evidência, consequência, ação e validação; não invente dono, prazo ou estimativa. Use títulos que expressem o achado. Preserve todos os campos do livro de evidências mesmo que distribuídos em subseções legíveis, sem exigir oito colunas estreitas em uma página A4.
 
-Os títulos e a ordem do template são literais. Não renomeie `EVENTOS IMPORTANTES DO INCIDENTE` para análise causal, não mova a timeline para um anexo e não crie anexos alternativos. Detalhe causal pertence a `Investigação`; timeline à seção 4; grafo ao Anexo A; evidências, matriz de cobertura e próximo desbloqueio ao Anexo B.
+Use prosa para explicar relações, tabelas para comparações e diagramas para fluxos sustentados. Não transforme todo o relatório em cards. Sem spans identificados por trace_id, não rotule o diagrama como trace observado. Distinga visualmente e por texto nós e relações observados, relatados, interpretados, hipotéticos, recomendados e lacunas. Um grafo parcial não autoriza inventar dependências.
 
-No Anexo B, preserve literalmente todas as colunas do livro de evidências definido no template: `ID`, `Afirmação`, `Fonte`, `Escopo/versão`, `Janela`, `Consulta ou método`, `Estado` e `Link`. Não compacte a tabela mesmo quando algumas células forem `não determinado` ou `indisponível`.
+Antes de gerar, reproduza as consultas de baseline quando a interface permitir. Corrija valores divergentes e recalcule denominadores, razões e durações, registrando a correção. Preserve horários e unidades originais e separe relógios técnicos e de impacto declarado.
 
-Antes de entregar, reproduza as consultas usadas na baseline quando a interface permitir. Se um valor fornecido divergir da consulta reproduzida, use o valor reproduzido, registre a correção e recalcule razões e durações dependentes; não propague silenciosamente o número recebido.
+No Assistant confira o schema anunciado; quando v3 estiver disponível use `schemaVersion: 3`, `decisionSummary`, blocos tipados e fontes reais no contrato do Service. Em host ainda v2, siga a composição compatível descrita no contrato, preservando síntese, classificações textuais e PDF. Consulte `evidence_reports_get` até `ready`; o bridge do Slack entrega o PDF. Só anuncie anexo entregue após confirmação de upload na mesma conversa. Se falhar, trate a falha de entrega, sem anunciar sucesso só por ter um PDF pronto. Preserve o rodapé de tempo e tokens do transporte e as limitações de medição; não estime manualmente números ausentes. Não crie outro turno de investigação para contornar a entrega.
 
-O grafo é obrigatório, mesmo quando parcial:
-
-- use `Trace observado` somente quando houver spans reais do Tempo ou outro backend, identificados por `trace_id`;
-- sem spans, use `Grafo causal reconstruído` e marque cada nó como `OBSERVADO`, `DECLARADO`, `INFERIDO` ou `LACUNA`;
-- destaque o primeiro ponto anômalo, a mudança causal quando conhecida, o efeito a jusante e o ponto de recuperação;
-- não invente serviços, chamadas, latências ou relações para completar o desenho.
+Inspecione as páginas renderizadas antes de entregar: fontes, logos oficiais, tabelas, diagramas, cortes, quebras e títulos isolados. Em host sem visão, faça as verificações estruturais e registre que a revisão visual permanece pendente; não alegue que foi realizada. Mantenha acesso restrito; versão pública exige pedido explícito e sanitização.
 
 ## Continuidade
 

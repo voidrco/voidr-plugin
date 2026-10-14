@@ -1,6 +1,6 @@
 ---
 name: voidr-evidence-report
-description: Gera relatórios técnicos focados em DX com evidências navegáveis, screenshots reais, reprodução e cURL, em HTML e PDF, com identidade Serasa e Voidr, paginação e download restrito à área logada. Use quando o usuário pedir um relatório de falha, diagnóstico, comparação de execuções ou evidências para baixar. Disponível somente para a organização Serasa nesta versão.
+description: Gera relatórios técnicos focados em DX com evidências navegáveis, screenshots reais, reprodução e cURL, em HTML e PDF, com identidade oficial do cliente e da Voidr, paginação e download restrito à área logada. Use quando o usuário pedir um relatório de falha, diagnóstico, comparação de execuções ou evidências para baixar. Disponível para organizações habilitadas no Service, incluindo Serasa e Blip; o transporte define o escopo.
 ---
 
 # Relatório técnico de evidências
@@ -24,7 +24,7 @@ Transforme as evidências disponíveis em um relatório objetivo. A AI compõe o
 HTML responsivo, pagina a versão impressa, converte em PDF, armazena os dois arquivos privados e devolve o link
 da área logada. Use `evidence_reports_create`; não gere um arquivo público por
 conta própria. Leia [o contrato e o exemplo](references/contract.md) antes de montar
-a entrada, [a composição para DX](references/dx.md) para escolher evidências e componentes, e [o padrão de redação](references/writing.md) antes de revisar o texto.
+a entrada, [a composição para DX](references/dx.md) para escolher evidências e componentes, e [o padrão de redação](references/writing.md) e [design informacional](references/information-design.md) antes de revisar o texto.
 
 ## Fluxo
 
@@ -42,7 +42,7 @@ a entrada, [a composição para DX](references/dx.md) para escolher evidências 
 4. Remova senhas, tokens, cookies, chaves, documentos pessoais e dados de clientes
    desnecessários. Capturas devem estar previamente revisadas e mascaradas. Não
    sintetize capturas de tela nem reconstrua logs como se fossem evidência original.
-5. Monte a entrada estruturada. O template e as marcas são definidos no servidor.
+5. Confira o schema anunciado pela ferramenta e monte a entrada estruturada com `schemaVersion: 3` e síntese `decisionSummary` quando disponível. Para host ainda v2, siga a compatibilidade descrita no contrato sem perder a síntese ou o anexo. O template e as marcas são definidos no servidor.
    Não envie HTML, CSS, JavaScript, URLs de imagens, caminhos locais, credenciais,
    organizationId ou um logo escolhido pelo modelo. Não busque uma URL arbitrária
    para contornar a validação. Uma captura aceita é PNG/JPEG em base64, até 525 KB, ou uma referência frame
@@ -51,12 +51,12 @@ a entrada, [a composição para DX](references/dx.md) para escolher evidências 
 6. Gere um UUID para `idempotencyKey` e chame `evidence_reports_create`. O pedido
    explícito de criar o relatório autoriza essa criação privada; não exige outra
    confirmação. Nunca publique, envie por e-mail ou altere permissões como efeito
-   colateral. Uma conta técnica sem delegação humana assinada não pode gerar.
+   colateral. A autorização técnica é validada pelo Service: delegação humana ou vínculo restrito à conversa Slack persistida. O modelo nunca cria ou amplia esse vínculo.
 7. Em repetição de uma chamada interrompida, reuse a mesma chave e o mesmo conteúdo.
    Se houver ID com status `generating`, consulte `evidence_reports_get`; não anuncie
    sucesso antes de `ready`. Para status `failed`, ajuste a causa e use nova chave.
 8. Entregue somente o link retornado e uma frase informando que HTML e PDF estão
-   disponíveis para membros autenticados da Serasa. Não invente URL nem entregue
+   disponíveis para membros autenticados da organização. Não invente URL nem entregue
    o endpoint de conteúdo, base64, token, link temporário ou bucket.
 
 ## Limites e falhas
@@ -74,5 +74,7 @@ a entrada, [a composição para DX](references/dx.md) para escolher evidências 
 
 ## Saída
 
-“[Abrir relatório](URL_RETORNADA). HTML e PDF disponíveis na área logada da Serasa.”
+“[Abrir relatório](URL_RETORNADA). HTML e PDF disponíveis na área logada da organização.”
 Use essa mensagem apenas após `status: ready`.
+
+Na investigação Blip via Slack, gere inclusive diagnóstico parcial e aguarde o upload confirmado pelo bridge na mesma conversa antes de dizer que anexou. Preserve o rodapé do transporte com tempo e tokens, sem inventar valores.

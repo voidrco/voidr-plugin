@@ -1,7 +1,7 @@
 {
   "name": "copilot",
   "description": "Develop, deploy, and execute Voidr tests, analyze failures, and generate authenticated Echo monitoring reports.",
-  "version": "0.2.25",
+  "version": "0.2.26",
   "author": {
     "name": "Voidr"
   },

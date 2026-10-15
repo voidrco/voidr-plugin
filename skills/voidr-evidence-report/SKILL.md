@@ -28,7 +28,7 @@ a entrada, [a composição para DX](references/dx.md) para escolher evidências 
 
 ## Fluxo
 
-1. Reuse o contexto já validado da conversa. Resolva a aplicação com
+1. Reuse o contexto já validado da conversa. Como etapa final de uma investigação, preserve modelo, organização, sessão, recibos, achados congelados, contradições e lacunas. Não reinicie o preflight, inventário de fontes ou coleta para gerar o PDF. Um limite de investigação encerra a coleta, não a composição a partir das evidências existentes. Resolva a aplicação com
    `applications_get_application` ou `applications_list_applications` se necessário.
    Pergunte apenas se faltar uma escolha que não possa ser inferida com segurança.
 2. Para fatos de execução, consulte `playwright_get_execution_analytics` e os detalhes

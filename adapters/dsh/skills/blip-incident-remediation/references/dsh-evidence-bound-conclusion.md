@@ -13,7 +13,7 @@ Classifique cada lacuna pela consequência:
 
 A mesma lacuna pode ser decisiva para causa raiz e apenas de refinamento para o diagnóstico operacional. Se o usuário pede a decomposição exata, informe que essa parte permanece não determinada; não prometa completá-la usando só métricas agregadas. Não chame evidência ausente de irrelevante sem explicar qual afirmação ela poderia mudar.
 
-Reutilize recibos primários completos e sua proveniência antes de repetir consultas. Faça novas leituras quando houver lacuna material, contradição ou cobertura insuficiente. Um backend disponível não exige varredura se a operação não distingue uma hipótese material dentro do escopo; registre a justificativa. Não ignore evidência contrária acessível nem interrompa trabalho discriminatório já autorizado ao publicar um checkpoint.
+Reutilize recibos primários completos e sua proveniência antes de repetir consultas. Faça novas leituras quando houver lacuna material, contradição ou cobertura insuficiente. Um backend disponível não exige varredura se a operação não distingue uma hipótese material dentro do escopo; registre a justificativa. Não ignore evidência contrária acessível; reserve consultas para ela dentro do orçamento. Um checkpoint não autoriza coleta ilimitada: ao atingir o limite, congele as lacunas e entregue.
 
 ## Filas e atraso de processamento
 
@@ -32,6 +32,8 @@ Crescimento quando entrada supera consumo, estabilização quando se aproximam e
 Dividir volume por taxa produz equivalência condicional de trabalho. Não a converta em minutos adicionados ao evento, redução garantida ou percentual causal. Decompor atraso individual exige vínculo por registro; média agregada não explica sozinha diferenças de idade entre consumidores.
 
 ## Entrega e parada
+
+Para atraso, priorização, limite de 8 minutos/40 chamadas e continuidade do PDF, siga [dsh-processing-first.md](dsh-processing-first.md). Não reinicie a investigação após congelar os achados.
 
 Abra com o diagnóstico operacional sustentado e sua confiança, depois evidências discriminantes, hipóteses contraditas e limites por afirmação. Preserve a distinção entre recomendação e alteração aplicada. Se a causa raiz continua aberta, o PDF permanece DIAGNÓSTICO PARCIAL quanto à causa raiz e pode conter **diagnóstico operacional sustentado**; não marque todo o caso como bloqueado.
 

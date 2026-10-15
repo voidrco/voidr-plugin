@@ -14,7 +14,7 @@ const names = [
   "read_document_import",
   "submit_document_import",
 ].map((name) => "third_party_" + name);
-function setup() {
+function setup(intent = "third_party_document_import") {
   const hooks = new Map();
   const calls = [];
   let command;
@@ -34,7 +34,7 @@ function setup() {
         DSH_VOIDR_MCP_AUTHORIZATION: "test",
       },
       getContext: () => ({
-        intent: "third_party_document_import",
+        intent,
         documentImportId: "import-one",
       }),
       fetchImpl: async (url, init) => {
@@ -101,4 +101,58 @@ test("authorized import calls use the isolated signed actor and disposal revokes
     hooks.get("tools/execute")(exec, () => {}),
     /authorization required/,
   );
+});
+
+test("serialized arguments are parsed before forwarding an authorized proposal", async () => {
+  const { hooks, command, calls } = setup("third_party_simulation_preparation");
+  const agent = { id: "one" };
+  await command.handler({ agent, rawInput: "signed-preparation" });
+  const args = { preparationId: "preparation-one", proposal: { gaps: [] } };
+  await hooks.get("tools/execute")(
+    {
+      name: "mcp__voidr__third_party_submit_simulation_proposal",
+      agent,
+      arguments: JSON.stringify(args),
+    },
+    () => assert.fail("must use actor"),
+  );
+  assert.deepEqual(JSON.parse(calls.at(-1).init.body).arguments, args);
+});
+
+test("invalid serialized arguments never reach the backend", async () => {
+  const { hooks, command, calls } = setup();
+  const agent = { id: "one" };
+  await command.handler({ agent, rawInput: "signed-import-one" });
+  for (const args of ['{"value":undefined}', "null", "[]", '"text"']) {
+    await assert.rejects(
+      hooks.get("tools/execute")(
+        {
+          name: "mcp__voidr__third_party_submit_document_import",
+          agent,
+          arguments: args,
+        },
+        () => assert.fail("must not delegate"),
+      ),
+      /JSON object/,
+    );
+  }
+  assert.equal(calls.length, 1);
+});
+
+test("parsed preparation arguments permit validation but never activation", async () => {
+  const { hooks, command, calls } = setup("third_party_simulation_preparation");
+  const agent = { id: "one" };
+  await command.handler({ agent, rawInput: "signed-preparation" });
+  const execute = (operationId) =>
+    hooks.get("tools/execute")(
+      {
+        name: "mcp__voidr__third_party_change",
+        agent,
+        arguments: JSON.stringify({ operationId, data: {} }),
+      },
+      () => assert.fail("must not delegate"),
+    );
+  await execute("validate-simulation-blueprint");
+  await assert.rejects(execute("activate-simulation-run"), /only permits/);
+  assert.equal(calls.length, 2);
 });

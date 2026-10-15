@@ -14,6 +14,16 @@ const TOOL_NAMES = new Set([
   "third_party_submit_document_import",
 ]);
 
+function toolArguments(value) {
+  try {
+    const args = typeof value === "string" ? JSON.parse(value) : value;
+    if (args && typeof args === "object" && !Array.isArray(args)) return args;
+  } catch {}
+  throw new Error(
+    "Tool arguments must be a JSON object with valid JSON values; do not use undefined",
+  );
+}
+
 export function registerThirdPartyActor(
   ctx,
   { fetchImpl = fetch, env = process.env, getContext = () => null } = {},
@@ -107,6 +117,9 @@ export function registerThirdPartyActor(
       throw new Error(
         "Document imports only permit reading attached sources and submitting the catalog",
       );
+    const args = TOOL_NAMES.has(name)
+      ? toolArguments(exec.arguments)
+      : exec.arguments;
     if (
       getContext(exec.agent)?.intent === "third_party_simulation_preparation"
     ) {
@@ -118,10 +131,10 @@ export function registerThirdPartyActor(
       ];
       const validation =
         name === "third_party_change" &&
-        exec.arguments?.operationId === "validate-simulation-blueprint";
+        args?.operationId === "validate-simulation-blueprint";
       const discovery = exec.name === PREFIX + "system_search_tools";
       const skill =
-        exec.name === "skill" && exec.arguments?.name === "voidr-third-parties";
+        exec.name === "skill" && args?.name === "voidr-third-parties";
       if (!allowed.includes(name) && !validation && !discovery && !skill)
         throw new Error(
           "Preparation only permits reading context, validating and submitting a proposal",
@@ -136,7 +149,7 @@ export function registerThirdPartyActor(
     if (name === "third_party_change")
       await assertReviewedCatalogChange({
         exec,
-        args: exec.arguments,
+        args,
         readCurrent: async () => {
           const response = await request(
             "/tools/call",
@@ -144,11 +157,8 @@ export function registerThirdPartyActor(
             {
               tool: "third_party_read",
               arguments: {
-                operationId: exec.arguments.operationId.replace(
-                  /^replace-/,
-                  "get-",
-                ),
-                id: exec.arguments.id,
+                operationId: args.operationId.replace(/^replace-/, "get-"),
+                id: args.id,
               },
             },
             exec.signal,
@@ -163,7 +173,7 @@ export function registerThirdPartyActor(
     const result = await request(
       "/tools/call",
       assertion,
-      { tool: name, arguments: exec.arguments },
+      { tool: name, arguments: args },
       exec.signal,
     );
     if (result.isError)

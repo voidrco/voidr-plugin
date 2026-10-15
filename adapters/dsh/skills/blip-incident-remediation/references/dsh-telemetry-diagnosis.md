@@ -35,6 +35,9 @@ No Grafana descubra UIDs, labels e descritores; faça chamadas sequenciais confo
 
 ## Concluir no nível suportado
 
+Antes de concluir ou pedir insumos, aplique [a relevância das lacunas e o método temporal para filas](dsh-evidence-bound-conclusion.md). Falta de origem exata não bloqueia uma fronteira operacional comprovada. Registre o que cada lacuna pode mudar, preserve contradições e use recibos primários existentes antes de ampliar acesso.
+
+
 Separe três perguntas na resposta e no relatório:
 
 1. **Diagnóstico operacional:** qual fronteira falha e como afeta a jornada? Pode ser sustentado por erros concretos de operação e outra fonte independente que os vincule ao runtime/dependência. Nomeie os elos observados; mantenha como inferência a propagação sem request pareado.

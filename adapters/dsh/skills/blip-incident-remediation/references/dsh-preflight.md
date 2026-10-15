@@ -19,14 +19,16 @@ Execute antes da coleta investigativa, após carregar o input inicial fornecido 
 
 Ausência conhecida de uma interface pode reduzir o teto causal e ainda permitir um diagnóstico parcial. Isso é diferente de uma capacidade que o ambiente declarou disponível ou que o contrato da execução exige, mas falha por catálogo não carregado, autenticação/permissão incorreta, configuração local, transporte persistente ou API indisponível.
 
-Se uma capacidade exigida pelo caso falhar estruturalmente:
+Uma capacidade é exigida para uma afirmação quando sua falha impede sustentá-la e não existe evidência independente equivalente. A mera presença no inventário não a torna essencial para todo o diagnóstico. Uma indisponibilidade decisiva só para a causa raiz não bloqueia diagnóstico operacional já comprovado; aplique [o critério por afirmação](dsh-evidence-bound-conclusion.md). Preserve bloqueios de autenticação, modelo e permissões, sem tentar contorná-los.
+
+Se uma capacidade essencial para a conclusão pretendida falhar estruturalmente:
 
 1. confirme o erro com uma única repetição segura ou uma operação neutra equivalente;
 2. emita o marcador literal **`FALHA ESTRUTURAL DE CAPACIDADE`**, com ferramenta, operação e erro factual;
-3. pare a investigação e não apresente o caso como concluído;
-4. não gere nem valide um PDF final para avaliação comparativa; preserve somente os artefatos diagnósticos da falha para a orquestração corrigir e reiniciar o caso.
+3. pare a afirmação dependente dessa capacidade e não a apresente como concluída; preserve o diagnóstico operacional quando fontes independentes suficientes o sustentarem;
+4. sem evidência suficiente para qualquer fronteira, não gere nem valide um PDF final para avaliação comparativa; preserve os artefatos da falha. Com uma fronteira independente sustentada, entregue o PDF limitado a ela, com a falha e a consequência explícitas, sem alegar RCA completa ou execução da capacidade indisponível.
 
-Erro de sintaxe de consulta, consulta vazia, filtro incorreto ou tentativa que o próprio agente consegue reformular não é falha estrutural. Também não é falha estrutural a ausência de Slack quando o relato inicial foi fornecido integralmente e a execução já declarou essa interface como indisponível. Em contrapartida, Grafana configurado mas inacessível, ticket/trigger não recuperável quando ele é a única âncora, catálogo GitHub ausente quando código é aplicável, ou isolamento histórico incompatível invalidam a execução até correção.
+Erro de sintaxe de consulta, consulta vazia, filtro incorreto ou tentativa que o próprio agente consegue reformular não é falha estrutural. Também não é falha estrutural a ausência de Slack quando o relato inicial foi fornecido integralmente e a execução já declarou essa interface como indisponível. Grafana inacessível sem recibos primários suficientes, ticket/trigger não recuperável quando ele é a única âncora, código indisponível quando sua execução é a afirmação pretendida, ou isolamento histórico incompatível invalidam a conclusão dependente dessas fontes até correção; não alegue capacidade executada nem substitua a prova ausente por inventário.
 
 Quando o prompt trouxer um ADO, execute primeiro apenas `issue_tracker_list`. Chame `issue_tracker_get_issue` somente se a listagem retornar um contexto de work items executável e use o identificador exato devolvido. Se não houver contexto, registre ADO como `inacessível por interface`; não invoque `get_issue` com o contexto padrão ausente e não tente encontrar o ADO pela busca global do Zendesk.
 

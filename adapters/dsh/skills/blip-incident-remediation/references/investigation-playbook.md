@@ -56,6 +56,8 @@ Escolha primeiro a stack, datasource, tenant/célula e identidade física corret
 
 Não conclua “infra” só porque há saturação, nem “aplicação” só porque há stack trace. Explique o mecanismo causal.
 
+Para filas, campanhas represadas e atraso de entrega/status, aplique [dsh-processing-delays.md](dsh-processing-delays.md) antes da conclusão: Confluent no Prometheus-LGTM, consumo e HPA efetivo na célula, na mesma janela. Descubra as fontes e interprete os descritores; consulta vazia no Prometheus da célula não encerra a busca do broker.
+
 Quando a célula física estiver desconhecida, faça primeiro a mesma passagem localizadora curta em cada candidato plausível, em sequência. Compare presença do tenant/cliente ou identificador equivalente, anomalia compatível com o sintoma e proximidade temporal. Não transforme HTTP 200, tráfego genérico, deployment existente ou ausência do cliente em outro cluster em prova positiva do escopo escolhido.
 
 #### Logs: consulte a fonte, não dependa do dashboard

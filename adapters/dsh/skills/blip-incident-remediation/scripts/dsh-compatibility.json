@@ -71,6 +71,7 @@
     "call": "mcp__voidr__system_call_tool",
     "connectors": "mcp__voidr__custom_connectors_list",
     "remoteTools": "mcp__voidr__custom_connectors_list_mcp_tools",
+    "read": "mcp__voidr__custom_connectors_read_mcp_tool",
     "execute": "mcp__voidr__custom_connectors_execute_mcp_tool"
   },
   "remoteInvocation": {

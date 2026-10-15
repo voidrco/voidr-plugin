@@ -5,7 +5,7 @@ Execute antes da coleta investigativa, após carregar o input inicial fornecido 
 ## Procedimento
 
 1. Confirme organização **Blip**, contexto autorizado e identidade de acesso sem expor credenciais. Leia `dsh-compatibility.md` e descubra os conectores/ferramentas reais.
-   Nesta stack local, não invoque `observability_source`: essa operação nativa é bloqueada para a organização Blip (`Native observability access denied`). Grafana deve ser provado somente pelo conector `blip-grafana-mcp`, via `custom_connectors_list_mcp_tools` e `custom_connectors_execute_mcp_tool`.
+   Nesta stack local, não invoque `observability_source`: essa operação nativa é bloqueada para a organização Blip (`Native observability access denied`). Grafana deve ser provado somente pelo conector `blip-grafana-mcp`, via `custom_connectors_list_mcp_tools` e `custom_connectors_read_mcp_tool` para operações com `readOnlyHint=true`, conforme `dsh-compatibility.md`.
 2. Registre schema, operação, escopo, janela e fonte para cada capacidade abaixo. Só execute operações de leitura delimitadas. Não rode snapshot, alteração de assignment, rebalance, refresh de Vault ou sync de Argo.
 3. Prove cada interface com uma operação real autorizada. Quando o caso ainda não fornece o identificador necessário, marque a capacidade como **não verificada**, não como disponível. Não invente datasource UID, repo, topic, application, key, trace ID ou caminho Vault.
 4. Diferencie **interface executável** de **cobertura histórica do incidente**. Uma consulta neutra vazia pode provar que a interface aceita a operação; não prova amostras nem retenção para o incidente. Complete a cobertura ao resolver seus identificadores.
@@ -36,12 +36,15 @@ Em um smoke limitado a inventário, diga “smoke de catálogo aprovado; preflig
 | --- | --- | --- |
 | Loki | Consulta LogQL delimitada a datasource/labels autorizados, backend sem erro, resultado ou vazio explícito | Datasource listado, dashboard ou inventário de logs |
 | Prometheus | Consulta PromQL delimitada, backend sem erro | Nome do datasource, scrape configurado ou dashboard |
+| Broker Confluent, quando aplicável | Consultas delimitadas de backlog/entrada no LGTM e de consumo/HPA na célula, conforme [dsh-processing-delays.md](dsh-processing-delays.md) | Série Kafka vazia em outro datasource, fila interna vazia ou CPU baixa |
 | Tempo | TraceQL real **ou** busca de `trace_id` real autorizado; registrar qual modalidade funciona | Datasource Tempo listado, links de trace sem leitura |
 | GitHub `blip-ai` | Leitura de recurso autorizado de repo `blip-ai`, por revisão quando aplicável | Login válido, organização listada, repo público de outro owner |
 | Histórico Argo | Ler histórico de deploy/sync de application/ambiente autorizado | Manifesto Git desejado ou estado atual sem histórico |
 | Kafka assignments/rebalances | Ler histórico/registro efetivo de assignments/rebalances do group/topic autorizado | Métrica de lag, listagem de topics ou estado atual isolado |
 | Snapshots Redis | Ler snapshot/histórico existente pertinente, somente leitura; nunca criar snapshot | Ping, conectividade, contagem atual ou inventário de instâncias |
 | Configuração efetiva Vault | Ler metadados/configuração aplicada da versão e consumidor autorizados, com valores secretos redigidos | Secret declarado no Git, variável local, lista de mounts ou auth bem-sucedida |
+
+A métrica Confluent de rebalanceamento pode demonstrar períodos amostrados de rebalancing do grupo; não prova assignments, membros, eventos distintos nem sua contribuição individual na demora. Registre essas coberturas separadamente. Falta de assignment não impede consultar o backlog que já está acessível; também não transforma a análise agregada em prova por mensagem.
 
 Também verifique Slack (busca exata e pai/thread) e Docs/Drive (leitura inicial autorizada) porque são necessários para o fluxo ticket/CCH-first. Ausência de Docs pode ser não aplicável se o input não aponta para documento; explique. Não classifique indisponível como não aplicável para esconder falta de interface.
 

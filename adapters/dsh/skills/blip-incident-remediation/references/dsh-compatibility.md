@@ -26,7 +26,7 @@ Conectores da tela não expõem automaticamente uma família `mcp__grafana__*` n
 1. Se o catálogo da sessão não tiver a operação, descubra-a com `mcp__voidr__system_search_tools`, usando `query`, `detail: "full"` e um `limit` limitado. Leia o schema antes de chamar.
 2. Chame `mcp__voidr__custom_connectors_list` com `{}` para identificar os conectores realmente cadastrados no tenant.
 3. Chame `mcp__voidr__custom_connectors_list_mcp_tools` com `{ "connector": "<id ou slug retornado>" }`. Guarde `name`, `description` e `inputSchema` do servidor remoto.
-4. Para uma operação remota de leitura, chame `mcp__voidr__custom_connectors_execute_mcp_tool` com `{ "connector": "<id ou slug retornado>", "tool": "<name exato retornado>", "arguments": { ... } }`. Os argumentos obedecem ao schema remoto, não ao schema Codex.
+4. Para uma operação remota que declare `readOnlyHint=true`, chame `mcp__voidr__custom_connectors_read_mcp_tool` com `{ "connector": "<id ou slug retornado>", "tool": "<name exato retornado>", "arguments": { ... } }`. Os argumentos obedecem ao schema remoto, não ao schema Codex. Se o host não anunciar a rota de leitura ou a operação remota não declarar leitura, registre essa limitação; não presuma que o dispatcher genérico concede acesso equivalente.
 5. Se uma ferramenta Voidr existir somente na descoberta, use `mcp__voidr__system_call_tool` com `{ "name": "<valor exato de _invokeAs>", "arguments": { ... } }`. O nome interno não inclui o prefixo DSH `mcp__voidr__`.
 
 Os nomes acima foram verificados no código do Harness/Service; **a exposição real da sessão ainda precisa ser confirmada**. Não atribua um slug nem um nome remoto antes do inventário. Registre os bindings reais da sessão no preflight.
@@ -34,6 +34,8 @@ Os nomes acima foram verificados no código do Harness/Service; **a exposição 
 Na stack local Blip, não use a ferramenta nativa `observability_source`; ela é negada pelo Service. Toda telemetria deve passar por `blip-grafana-mcp`. Também não invoque a operação remota `get_annotations`, cujo backend interno expira nesta rota; use as operações de alertas, dashboards, Loki e Prometheus e registre annotations como inacessíveis.
 
 O dispatcher genérico é classificado como **escrita** pelo Service, mesmo se a operação remota for leitura. Respeite o scope e as confirmações exigidas pela plataforma. Não desative approvals, não mude para acesso irrestrito e não contorne o dispatcher via shell/HTTP. Se a permissão necessária não estiver disponível, registre `inacessível por permissão/interface`. Não execute uma ferramenta remota de escrita durante esta investigação somente leitura.
+
+Para atrasos de processamento, aplique [dsh-processing-delays.md](dsh-processing-delays.md): descoberta e leituras do Confluent no Prometheus-LGTM e do runtime/HPA no Prometheus da célula passam por esse mesmo conector autorizado. Datasource diferente não exige um novo conector; confirme seu UID, escopo e métricas antes de consultar.
 
 Se o resultado vier com `isError`, erro remoto ou envelope de falha, não marque sucesso só porque o transporte respondeu HTTP 200. Se vier offload para um artifact, leia o artifact com a operação estruturada retornada; não interprete a prévia truncada como resultado completo. Timeout não prova execução inexistente; não repita operações de efeito desconhecido.
 

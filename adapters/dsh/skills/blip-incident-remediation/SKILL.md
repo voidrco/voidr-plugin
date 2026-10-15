@@ -99,6 +99,8 @@ Antes de consultar sinais, tente resolver:
 
 Não presuma que `Take/prod` identifica sozinho um cluster físico, que o estado do Git está aplicado, ou que o `HEAD` do repositório é a versão em execução.
 
+Em atrasos de processamento, campanhas represadas ou status `Enviando`/`NOT_PROCESSED`, leia [references/dsh-processing-delays.md](references/dsh-processing-delays.md). Antes de concluir, cruze backlog e entrada do Confluent no Prometheus-LGTM com consumo e HPA efetivo no Prometheus da célula, descobrindo UIDs, labels e unidades. Registre resultados ou lacunas de cada perna; CPU baixa e fila interna vazia não provam normalidade do broker, e lag isolado não comprova o defeito iniciador.
+
 ## Escopo e segurança
 
 - A investigação é somente leitura por padrão. Não altere produção, dados, dashboards, código, PRs ou mensagens sem pedido explícito.

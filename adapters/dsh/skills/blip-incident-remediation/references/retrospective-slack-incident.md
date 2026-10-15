@@ -218,6 +218,8 @@ Use Prometheus/VictoriaMetrics para estabelecer impacto, início, recuperação 
 
 Depois correlacione com RED/USE e sinais do domínio: taxa de requisições/eventos, erros, duração, saturação, backlog, retries e DLQ. Compare com uma janela saudável equivalente e com outra célula/tenant somente quando os escopos forem compatíveis.
 
+Se o sintoma for atraso de processamento, campanha represada ou atualização tardia de status, aplique [dsh-processing-delays.md](dsh-processing-delays.md). Antes de congelar o diagnóstico, cruze backlog/entrada Confluent no Prometheus-LGTM com consumo e HPA histórico no Prometheus da célula; cada perna deve ter evidência ou lacuna explícita. Não atribua normalidade, falta de acesso ou causa raiz apenas ao resultado de uma dessas fontes.
+
 ### Encontrar o primeiro sinal
 
 Para cada datasource com histórico disponível:

@@ -1,3 +1,4 @@
+import { registerThirdPartyActor } from './third-party-actor.mjs'
 import { platformExecutionDenial } from '../../core/policies/platform-execution.mjs'
 import { agentOwnedAuthoringDenial } from '../../core/policies/agent-owned-authoring.mjs'
 import { interactiveTestDevelopmentPrompt } from '../../core/workflow/interactive-test-development.mjs'
@@ -54,7 +55,14 @@ export function registerKnownEvents(knownEventTypes) {
 export const name = 'voidr-agent-plugin-dsh'
 export const inject = ['commands', 'skills', 'systemPrompt', 'tools']
 
+function thirdPartyContext(agent) {
+  const events = agent?.session?.events ?? []
+  return events.find(event => event.type === CONTEXT_EVENT_TYPE &&
+    ['third_party_document_import', 'third_party_simulation_preparation'].includes(event.data?.intent))?.data ?? contextHint(events)
+}
+
 export function apply(ctx) {
+  registerThirdPartyActor(ctx, { getContext: thirdPartyContext })
   const callEchoTool = registerEchoActor(ctx)
   registerEchoRenderDeviations(ctx, callEchoTool)
   registerEchoRenderRegulatoryControls(ctx, callEchoTool)
@@ -93,6 +101,7 @@ export function apply(ctx) {
         const value = JSON.parse(Buffer.from(rawInput.trim(), 'base64url').toString('utf8'))
         const hint = Object.fromEntries(
           [
+            'documentImportId', 'simulationPreparationId', 'partnerId', 'integrationId', 'managementAction',
             'assistantSessionId', 'applicationId', 'testPlanId', 'testCaseSlug', 'moduleSlug',
             'suiteSlug', 'executionId', 'journeyId', 'journeyName', 'testName', 'productType',
             'environment', 'errorType', 'errorMessage', 'stackTrace', 'filePath', 'line',

@@ -30,6 +30,8 @@ Leia e aplique [dsh-scope-resolution-gate.md](dsh-scope-resolution-gate.md) ante
 
 ## 2. Triangulação das fontes
 
+Comece pelo [roteiro de diagnóstico pela telemetria](dsh-telemetry-diagnosis.md): compare aplicação, rede/infra e dependência antes de aprofundar um ramo. Não espere a causa raiz para comunicar a fronteira que já falha.
+
 ### Slack: contexto humano e cronologia
 
 Pesquise exclusivamente no canal `#comunicação-de-incidentes` (`C08MGJ6F596`) salvo se o usuário ampliar o escopo. Use combinações de:
@@ -40,7 +42,7 @@ Pesquise exclusivamente no canal `#comunicação-de-incidentes` (`C08MGJ6F596`) 
 - serviço, integração, evento ou campo;
 - termos em português e inglês.
 
-Leia threads completas. Extraia horários, primeiro relato, impacto confirmado, responsáveis, mitigação e links. Uma afirmação no Slack é contexto até ser confirmada por runtime ou código.
+Leia somente os fatos operacionais elegíveis. Atribuições de causa, diagnóstico, fornecedor responsável e solução entram em quarentena mesmo dentro de atualizações em andamento. Não derive delas termos de busca nem escolha dependências por essa conclusão. Em replay, use contexto novo sem o histórico contaminado. Compare com conclusões humanas apenas depois de congelar o diagnóstico independente e quando solicitado.
 
 ### Grafana: comprovação do comportamento
 

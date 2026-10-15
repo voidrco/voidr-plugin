@@ -113,6 +113,9 @@ Não determinada. <mecanismo sustentado e elo ausente>
 ### Próximo desbloqueio prioritário
 <um acesso ou artefato de maior poder discriminatório nesta etapa; não afirmar que será o único necessário>
 
+### Orientação técnica recomendada
+<mitigação ou correção candidata sustentada pelo diagnóstico operacional, componente da ontologia e teste de aceitação; se nenhuma for justificável, experimento mínimo para escolher a correção>
+
 ### Ao receber isso, continuar por
 <consulta, repositório, revisão ou correlação exata>
 

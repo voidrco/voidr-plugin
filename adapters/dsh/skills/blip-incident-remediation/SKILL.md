@@ -94,6 +94,8 @@ Não exija um ticket para investigar um relato livre. Quando houver ticket, reso
 
 Use a ontologia como mapa de navegação, não como prova do estado atual. Leia [references/blip-ontology-routing.md](references/blip-ontology-routing.md) para converter o sintoma em entidades consultáveis e evitar comparar escopos incompatíveis.
 
+O resultado deve orientar a resolução técnica, mesmo quando a causa raiz ainda estiver aberta. Depois de delimitar o mecanismo sustentado, leia [references/dsh-technical-remediation.md](references/dsh-technical-remediation.md): associe cada ação proposta ao componente e à relação da ontologia que ela modifica, explique como interromperia o mecanismo, separe mitigação de correção permanente e diga como validar o efeito. Se houver evidência de um gap de arquitetura da aplicação, proponha alternativas de engenharia nesse nível, com dependências e limites explícitos. Uma proposta não é solução aplicada nem eficácia comprovada.
+
 Antes de aprofundar qualquer cluster ou serviço, aplique o portão de resolução de escopo em [references/dsh-scope-resolution-gate.md](references/dsh-scope-resolution-gate.md). O primeiro datasource que responde, tráfego HTTP genérico ou a existência atual de um workload não selecionam o escopo do incidente. Quando a célula física estiver desconhecida, compare candidatos com a mesma consulta localizadora e mantenha o escopo como não confirmado até localizar o tenant/cliente ou um identificador equivalente junto de um sinal compatível com o sintoma.
 
 Antes de consultar sinais, tente resolver:

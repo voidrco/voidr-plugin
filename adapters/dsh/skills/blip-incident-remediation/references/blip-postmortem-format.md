@@ -9,6 +9,8 @@ No Assistant/Slack, a entrega final é PDF A4 pelo Service `evidence_reports_cre
 
 Na modalidade parcial, preserve todas as seções oficiais, mas seja conciso: use `não determinado` nos campos sem prova, não escreva ações futuras genéricas e inclua o próximo desbloqueio prioritário. A falta de evidência reduz o conteúdo, não remove o formato.
 
+Em ambas as modalidades, o usuário deve sair com orientação técnica para resolver o problema: ações recomendadas vinculadas ao mecanismo e à entidade da ontologia, distinção entre mitigação e correção permanente quando aplicável, e sinal ou teste que verificará cada uma. Inclua proposta arquitetural quando o gap da aplicação estiver sustentado; trate-a como recomendação até ser implementada e validada. Se nenhuma intervenção específica tiver base suficiente, indique a evidência ou experimento mínimo que permitirá escolher entre correções. Siga [dsh-technical-remediation.md](dsh-technical-remediation.md).
+
 ## Regras de classificação
 
 - Use `Classificação: INTERNA — RASCUNHO` durante a investigação.
@@ -95,7 +97,7 @@ Informar os acontecimentos identificáveis, o impacto observado e as ações tom
 <qual sinal retornou à linha de base, quando e como a não recorrência foi validada>
 
 ### Ações futuras
-<prevenção, testes, rollout, observabilidade, responsáveis e estado>
+<plano técnico recomendado: componente, mudança, mecanismo atacado, evidência/limite e validação; prevenção, testes, rollout, observabilidade, responsáveis e estado quando conhecidos>
 
 ## ANEXO TÉCNICO A — TRACE DO PROBLEMA
 

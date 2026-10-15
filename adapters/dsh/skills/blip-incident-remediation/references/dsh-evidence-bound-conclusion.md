@@ -37,6 +37,8 @@ Para atraso, priorização, limite de 8 minutos/40 chamadas e continuidade do PD
 
 Abra com o diagnóstico operacional sustentado e sua confiança, depois evidências discriminantes, hipóteses contraditas e limites por afirmação. Preserve a distinção entre recomendação e alteração aplicada. Se a causa raiz continua aberta, o PDF permanece DIAGNÓSTICO PARCIAL quanto à causa raiz e pode conter **diagnóstico operacional sustentado**; não marque todo o caso como bloqueado.
 
+Inclua orientação para resolver o problema tecnicamente segundo [dsh-technical-remediation.md](dsh-technical-remediation.md). O próximo desbloqueio de evidência e as ações de engenharia candidatas são coisas distintas: explique qual ação já pode ser testada com o diagnóstico operacional e qual decisão depende de provar o defeito iniciador. Se o gap demonstrado atravessar componentes ou contratos da aplicação, use a ontologia para propor uma correção arquitetural com critério de validação; não apresente esse desenho como topologia observada.
+
 Peça novo insumo/acesso somente com a afirmação que falta provar e a decisão que sua resposta poderia mudar. Se as fontes autorizadas já foram exploradas no nível necessário e não restar hipótese material discriminável, conclua nesse nível. Não reinicie inventários nem solicite acesso amplo para completar campos do relatório. Ausência de recuperação na janela impede declarar normalização completa, sem impedir diagnosticar o represamento.
 
 Essas regras não liberam escrita, sondas, permissões, fallback de modelo ou contorno de autenticação. Falha de capacidade essencial limita a conclusão dependente dela; sem âncora/escopo ou evidência primária suficiente, entregue somente o relato e a lacuna decisiva.

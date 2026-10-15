@@ -73,13 +73,13 @@ Registre a consulta e o resultado uma vez. Não repita buscas vazias trocando ap
 
 Depois de resolver IDs e inventariar Slack, telemetria e código, aplique o portão definido no `SKILL.md`.
 
-Se houver somente impacto declarado ou se o defeito iniciador continuar bloqueado por evidência inacessível, preserve a apresentação de post-mortem, mas mantenha-a concisa. Use esta forma:
+Aplique [o critério de lacunas por afirmação](dsh-evidence-bound-conclusion.md). Se houver fronteira operacional comprovada e defeito iniciador aberto, registre `diagnóstico operacional sustentado; causa raiz não determinada`, com limites específicos. Use `BLOQUEADO POR EVIDÊNCIA` somente para uma afirmação que dependa de evidência decisiva indisponível; não como status global por faltar RCA. Se houver somente impacto declarado, mantenha o documento conciso. Forma compatível:
 
 ```markdown
 # POST MORTEM — DIAGNÓSTICO PARCIAL — <incidente>
 
 **Classificação:** INTERNA — RASCUNHO
-**Status do diagnóstico:** BLOQUEADO POR EVIDÊNCIA
+**Status do diagnóstico:** <diagnóstico operacional sustentado / evidência insuficiente para a fronteira; causa raiz confirmada ou não>
 
 ## Conclusão executiva
 <impacto confirmado, mecanismo sustentado ou provável e defeito iniciador não determinado>
@@ -149,7 +149,7 @@ Inclua no Anexo B:
 | Código/deploy | GitHub/GitOps | revisão | diff/histórico | mecanismo/mudança | estado controlado | — |
 | Datastore | metadata/audit | janela | índices/validators/audit | estado/lacuna | estado controlado | — |
 
-Remova famílias genuinamente não aplicáveis somente com justificativa. Se um backend alternativo aparecer no inventário de datasources, consulte-o ou marque a operação como inacessível; não o omita.
+Remova famílias genuinamente não aplicáveis somente com justificativa. Se um backend alternativo puder distinguir uma hipótese material, consulte-o ou marque a operação como inacessível; não o omita. Caso não mude a afirmação ou decisão, registre `não consultada — sem poder discriminatório para <afirmação>`, justificando a escolha.
 
 ## 5. Executar em duas fases sem vazar a resposta
 

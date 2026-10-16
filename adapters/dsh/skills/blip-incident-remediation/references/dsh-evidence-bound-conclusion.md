@@ -13,7 +13,7 @@ Classifique cada lacuna pela consequência:
 
 A mesma lacuna pode ser decisiva para causa raiz e apenas de refinamento para o diagnóstico operacional. Se o usuário pede a decomposição exata, informe que essa parte permanece não determinada; não prometa completá-la usando só métricas agregadas. Não chame evidência ausente de irrelevante sem explicar qual afirmação ela poderia mudar.
 
-Reutilize recibos primários completos e sua proveniência antes de repetir consultas. Faça novas leituras quando houver lacuna material, contradição ou cobertura insuficiente. Um backend disponível não exige varredura se a operação não distingue uma hipótese material dentro do escopo; registre a justificativa. Não ignore evidência contrária acessível nem interrompa trabalho discriminatório já autorizado ao publicar um checkpoint.
+Reutilize recibos primários completos e sua proveniência antes de repetir consultas. Faça novas leituras quando houver lacuna material, contradição ou cobertura insuficiente. Um backend disponível não exige varredura se a operação não distingue uma hipótese material dentro do escopo; registre a justificativa. Não ignore evidência contrária acessível; reserve consultas para ela dentro do orçamento. Um checkpoint não autoriza coleta ilimitada: ao atingir o limite, congele as lacunas e entregue.
 
 ## Filas e atraso de processamento
 
@@ -33,7 +33,11 @@ Dividir volume por taxa produz equivalência condicional de trabalho. Não a con
 
 ## Entrega e parada
 
+Para atraso, priorização, limite de 8 minutos/40 chamadas e continuidade do PDF, siga [dsh-processing-first.md](dsh-processing-first.md). Não reinicie a investigação após congelar os achados.
+
 Abra com o diagnóstico operacional sustentado e sua confiança, depois evidências discriminantes, hipóteses contraditas e limites por afirmação. Preserve a distinção entre recomendação e alteração aplicada. Se a causa raiz continua aberta, o PDF permanece DIAGNÓSTICO PARCIAL quanto à causa raiz e pode conter **diagnóstico operacional sustentado**; não marque todo o caso como bloqueado.
+
+Inclua orientação para resolver o problema tecnicamente segundo [dsh-technical-remediation.md](dsh-technical-remediation.md). O próximo desbloqueio de evidência e as ações de engenharia candidatas são coisas distintas: explique qual ação já pode ser testada com o diagnóstico operacional e qual decisão depende de provar o defeito iniciador. Se o gap demonstrado atravessar componentes ou contratos da aplicação, use a ontologia para propor uma correção arquitetural com critério de validação; não apresente esse desenho como topologia observada.
 
 Peça novo insumo/acesso somente com a afirmação que falta provar e a decisão que sua resposta poderia mudar. Se as fontes autorizadas já foram exploradas no nível necessário e não restar hipótese material discriminável, conclua nesse nível. Não reinicie inventários nem solicite acesso amplo para completar campos do relatório. Ausência de recuperação na janela impede declarar normalização completa, sem impedir diagnosticar o represamento.
 

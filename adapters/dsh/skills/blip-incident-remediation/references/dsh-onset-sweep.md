@@ -1,6 +1,6 @@
 # Varredura determinística de onset
 
-Use esta varredura quando houver telemetria histórica. Ela transforma uma orientação abstrata em uma coleta reproduzível e impede encerrar no evento mais volumoso ou na primeira stack trace convincente.
+Use esta varredura quando a pergunta discriminatória exigir comparar famílias no onset. Para atraso de processamento e status pendente, faça primeiro a passagem de fila de [dsh-processing-first.md](dsh-processing-first.md); não execute sete famílias por serviço antes de medir entrada, consumo e backlog. Respeite o orçamento de coleta e registre famílias não aprofundadas como lacunas por afirmação. Ela transforma uma orientação abstrata em uma coleta reproduzível e impede encerrar no evento mais volumoso ou na primeira stack trace convincente.
 
 No DSH, depois de resolver conector, datasource Loki, seletor físico e janela inicial, use `incident_onset_sweep`. Consuma a matriz e as amostras retornadas como evidência, não como conclusão causal. Se `recommendations` indicar truncamento ou baseline ausente, expanda ou substitua a janela e execute novamente; a escolha da nova janela continua pertencendo à investigação.
 

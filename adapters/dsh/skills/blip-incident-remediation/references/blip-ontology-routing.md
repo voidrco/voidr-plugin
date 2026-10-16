@@ -1,6 +1,17 @@
-# Roteamento pela ontologia Blip
+# Consultar a ontologia Blip vigente
 
-Este mapa deriva de `blip-mapa-ontologia.html`, pesquisa de 05/10/2026. Use-o para formular consultas e atravessar dependências. Ele é um modelo proposto e não comprova topologia ou execução atual.
+Esta referência é orientação de consulta, não uma cópia da ontologia. Os dados vigentes vêm das ferramentas abaixo. Uma leitura desta página não conta como consulta ao grafo.
+
+1. `ontology_search_entities({query})`: a implementação atual faz correspondência **literal de substring**, sem distinguir maiúsculas, em id/label/tipo/tecnologia/nota; não é busca semântica nem busca AND de palavras. Use um nome de componente observado ou um termo curto por consulta. Uma frase concatenando conceitos pode retornar vazio mesmo com entidades pertinentes. Verifique os schemas e a semântica quando a ferramenta mudar.
+2. `ontology_get_entity({entityId,graphDigest})`: leia a entidade relevante retornada e seus contratos, fontes, versões e limites. Preserve o digest retornado para as próximas leituras.
+3. `ontology_get_dependencies({entityId,graphDigest,depth:1})`: só quando uma dependência ajuda a distinguir hipóteses. `ontology_get_product_context` e `ontology_list_products` ajudam a localizar o escopo quando necessário.
+4. Registre os callIds reais no checkpoint. `matched` exige leitura da entidade; `no_match` exige consulta bem-sucedida sem correspondência pertinente; `unavailable` exige falha efetivamente observada. Não substitua ontologia de cliente pela ontologia de Data Management ou Echo.
+
+Se a busca literal ficar vazia, tente o nome/termo específico e consulte o contexto compacto do produto descoberto por `ontology_list_products`; não percorra todas as páginas. Leia uma entidade pertinente e siga suas fontes quando houver correspondência. Só use `no_match` depois de distinguir uma limitação da consulta de ausência de entidade relevante no escopo consultado. Resultado vazio não é falta de permissão nem prova de ausência do componente na arquitetura.
+
+Semântica conferida no serviço `OntologyQueryService`, operação `search_entities`, e por consultas reais ao mesmo snapshot em 2026-10-16. Essa regra descreve a interface de busca, não uma conclusão de incidente.
+
+Conhecimento de código/versionamento não prova estado implantado nem causa histórica. Se a projeção omitir detalhes de um contrato, consulte a fonte imutável citada. Não transfira contratos de template para envio de documento, ou de um produto para outro.
 
 ## Grafo mínimo
 
@@ -23,9 +34,11 @@ Uma jornada pode usar vários serviços, e um serviço pode atender várias jorn
 2. **Resolver identidade física:** Argo destination + cloud/conta + cluster/namespace/workload.
 3. **Percorrer dependências:** serviços → APIs/eventos/schemas → bancos/tópicos/filas → consumidores.
 4. **Resolver mudança efetiva:** PR/GMUD → commit → build → digest → deployment → pod/configuração.
-5. **Consultar sinais:** Grafana na stack, datasource, tenant e janela correspondentes.
+5. **Consultar sinais:** descubra nome/UID no conector atual; vincule a candidata ao componente/célula e confirme o workload antes dos eventos. Um UID de exemplo e um datasource funcional não resolvem o escopo. Rejeite candidatos de outro domínio. Use então Grafana na stack, datasource, tenant e janela correspondentes.
 6. **Explicar o mecanismo:** código na revisão implantada, contratos e comportamento de erro/retry.
 7. **Responder:** fatos, hipóteses, fonte, escopo, validade e lacunas.
+
+A ordem se adapta à evidência: um detalhe de erro downstream justifica localizar primeiro o consumidor/produtor da resposta, sem atravessar todos os componentes da jornada. Use o menor caminho para a fronteira que pode distinguir as hipóteses.
 
 ## Invariantes de evidência
 

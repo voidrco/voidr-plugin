@@ -6,6 +6,7 @@ const RELATIVE = new Set(['echo_get_overview', 'echo_get_deviation_summary'])
 const REGULATORY = 'echo_summarize_regulatory_controls'
 const DEVIATIONS = 'echo_list_deviations'
 const CRITERION = 'echo_analyze_judge_criterion'
+const SCENARIO_GROUPS = 'echo_analyze_scenario_groups'
 const CRITERION_DETAIL = new Set(['echo_get_judge_run', 'echo_read_evidence'])
 
 function criterionSummaryRequest(events, startIndex) {
@@ -148,6 +149,19 @@ function latestAnsweredQuestion(events, startIndex) {
   return null
 }
 
+/** @param {Record<string, unknown>} args @param {Record<string, unknown> | undefined} catalog @returns {Record<string, unknown>} */
+function bindScenarioCatalog(args, catalog) {
+  if (!catalog) return args
+  const bound = { ...args }
+  for (const key of ['applicationId', 'planId', 'moduleSlug', 'environment', 'journeyQuery']) {
+    if (catalog[key] === undefined) continue
+    if (bound[key] !== undefined && bound[key] !== catalog[key])
+      throw new Error(`Keep the successful scenario catalog ${key}; a new user scope requires a new analysis`)
+    bound[key] = catalog[key]
+  }
+  return bound
+}
+
 export function createEchoAnalysisGuard() {
   const states = new Map()
   return {
@@ -195,6 +209,7 @@ export function createEchoAnalysisGuard() {
         throw new Error('The query Journey differs from the selected Echo Journey')
       if (environment && args.environment !== environment)
         throw new Error('The query environment differs from the selected Echo environment')
+      if (tool === SCENARIO_GROUPS) args = bindScenarioCatalog(args, state.scenarioCatalog)
       if (tool === 'echo_summarize_deviation_group' &&
           ((moduleSlug && args.scope && (args.scope.type !== 'journey' || args.scope.moduleSlug !== moduleSlug)) ||
             (environment && args.environment !== environment))) {
@@ -222,6 +237,12 @@ export function createEchoAnalysisGuard() {
       }
       const result = await invoke(args)
       const evidence = payload(result)
+      if (scenarioCatalog && evidence?.completeness?.complete === true &&
+          Number.isSafeInteger(evidence.data?.selectedJourneys)) {
+        state.scenarioCatalog = Object.fromEntries(
+          ['applicationId', 'planId', 'moduleSlug', 'environment', 'journeyQuery']
+            .filter(key => args[key] !== undefined).map(key => [key, args[key]]))
+      }
       if (tool === REGULATORY) {
         const pagination = evidence?.data?.pagination
         if (pagination?.page === 1 && Number.isSafeInteger(pagination.limit)) {

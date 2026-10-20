@@ -59,8 +59,10 @@ generic execution helpers. Read exact input schemas; do not guess parameters.
 - Cohort/failure/latency questions: resolve the window, then
   echo_analyze_session_cohort. Never download session pages to reconstruct totals.
 - Scenario-title groups (such as personas named in IBM scenario titles) are not
-  Echo persona entities. Resolve canonical Plan/scenario metadata and use the
-  complete scenario-group aggregate when advertised. A top-25 case ranking or one
+  Echo persona entities. Start directly with echo_analyze_scenario_groups in
+  catalog mode, retaining journeyQuery in analyze mode. Its planScopes identify
+  every selected Plan; one analysis already covers them all. Do not split by Plan
+  unless the user requests that breakdown. Use the complete aggregate. A top-25 case ranking or one
   page of sessions cannot answer the population comparison. If unavailable, state
   the missing analytical capability; do not loop over discovery or shell probes.
 - Two periods: echo_compare_periods. A comparison must retain the Plan and every

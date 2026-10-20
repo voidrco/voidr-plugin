@@ -22,6 +22,8 @@ Para outro produto, use `list_datasources` com `type=prometheus` ou `type=loki` 
 
 Para investigação geral, procure dashboard pelo nome do serviço ou sintoma, confira `get_dashboard_summary`, depois extraia apenas os painéis necessários com `get_dashboard_panel_queries`. Substitua variáveis com valores descobertos na fonte, não por nomes adivinhados. Use `run_panel_query` para executar o painel escolhido no intervalo pedido.
 
+Em perguntas sobre prontidão de pods no Kubernetes, `kube_pod_status_ready` tem a label `condition`; leia `condition="true"` para saber se o pod está pronto. Uma consulta ampla como `kube_pod_status_ready{namespace="packs-platform"} == 0` inclui também séries das condições `false` e `unknown` com valor zero e não responde se os pods do caso estão prontos. Filtre os pods exatos do registro salvo; se eles não existirem mais, verifique os pods sucessores do mesmo workload antes de concluir sobre o serviço atual.
+
 ## Ferramentas remotas úteis
 
 - Catálogo e visual: `list_datasources`, `search_dashboards`, `get_dashboard_summary`, `get_dashboard_panel_queries`, `run_panel_query`, `generate_deeplink`.

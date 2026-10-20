@@ -1,5 +1,5 @@
 /** @typedef {{label: string, occurredFrom: string, occurredToExclusive: string}} Period */
-/** @typedef {{applicationId: string, environment?: string, moduleSlug?: string, timezone: string, periods: Period[], criteria?: {criterionId: string, evaluationKind?: string}[]}} ComparisonArgs */
+/** @typedef {{applicationId: string, planId?: string, environment?: string, moduleSlug?: string, timezone: string, periods: Period[], criteria?: {criterionId: string, evaluationKind?: string}[]}} ComparisonArgs */
 /** @typedef {{content?: {type: string, text?: string}[], isError?: boolean}} ToolResult */
 /** @typedef {(tool: string, args: Record<string, unknown>) => Promise<ToolResult>} ReadTool */
 
@@ -8,6 +8,7 @@ export const comparisonSchema = {
   type: 'object', additionalProperties: false,
   properties: {
     applicationId: { type: 'string', pattern: '^[a-f\\d]{24}$' },
+    planId: { type: 'string', pattern: '^[a-f\\d]{24}$' },
     environment: { type: 'string', minLength: 1 }, moduleSlug: { type: 'string', minLength: 1 },
     timezone: { type: 'string', minLength: 1 },
     periods: { type: 'array', minItems: 2, maxItems: 2, items: {
@@ -54,6 +55,7 @@ async function readEvidence(read, tool, args) {
 /** @param {ComparisonArgs} args @param {Period} period @param {ReadTool} read */
 async function readPeriod(args, period, read) {
   const query = { applicationId: args.applicationId, timezone: args.timezone,
+    ...(args.planId ? { planId: args.planId } : {}),
     ...(args.environment ? { environment: args.environment } : {}), ...(args.moduleSlug ? { moduleSlug: args.moduleSlug } : {}),
     occurredFrom: period.occurredFrom, occurredToExclusive: period.occurredToExclusive }
   const cohort = await readEvidence(read, 'echo_analyze_session_cohort', { ...query, bucket: 'day' })

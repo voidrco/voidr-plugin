@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { echoDeviationsSchema, validateEchoDeviationsFilters } from './echo-render-deviations.mjs'
+import { echoDeviationsSchema, validateEchoDeviationsFilters, bindEchoReportFilters } from './echo-render-deviations.mjs'
 
 export const echoDeviationGroupReportSchema = {
   ...echoDeviationsSchema,
@@ -55,7 +55,7 @@ export function registerEchoRenderDeviationGroup(ctx, callEchoTool) {
     },
     execute: async (args, exec) => {
       if (args?.group !== 'improper_transfer') throw new Error('Unknown deviation group')
-      const filters = validateEchoDeviationsFilters(Object.fromEntries(Object.entries(args).filter(([key]) => key !== 'group')))
+      const filters = validateEchoDeviationsFilters(bindEchoReportFilters(Object.fromEntries(Object.entries(args).filter(([key]) => key !== 'group')), exec.agent))
       if (exec.signal?.aborted) throw new Error('Report cancelled before publication')
       const envelope = reportData(await callEchoTool(exec.agent, 'echo_summarize_deviation_group', {
         ...filters, group: args.group

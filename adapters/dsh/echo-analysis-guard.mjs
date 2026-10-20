@@ -1,6 +1,6 @@
 import { resolveAnalysisWindow, validateAnalysisInterval } from './echo-analysis-windows.mjs'
 const RESOLVE = 'echo_resolve_analysis_window'
-const EXACT = new Set(['echo_analyze_session_cohort', 'echo_analyze_judge_criterion', 'echo_summarize_regulatory_controls', 'echo_summarize_deviation_group'])
+const EXACT = new Set(['echo_analyze_session_cohort', 'echo_analyze_judge_criterion', 'echo_analyze_scenario_groups', 'echo_summarize_regulatory_controls', 'echo_summarize_deviation_group'])
 const LISTS = new Set(['echo_list_sessions', 'echo_list_deviations'])
 const RELATIVE = new Set(['echo_get_overview', 'echo_get_deviation_summary'])
 const REGULATORY = 'echo_summarize_regulatory_controls'
@@ -90,7 +90,7 @@ function regulatoryContract(evidence) {
 
 function regulatoryQueryKey(args) {
   return JSON.stringify([args.applicationId, args.occurredFrom, args.occurredToExclusive,
-    args.timezone ?? 'America/Sao_Paulo', args.scope?.type, args.scope?.moduleSlug,
+    args.timezone ?? 'America/Sao_Paulo', args.planId, args.environment, args.scope?.type, args.scope?.moduleSlug,
     args.outcome ?? 'NON_COMPLIANT'])
 }
 
@@ -178,22 +178,36 @@ export function createEchoAnalysisGuard() {
       if (tool === RESOLVE) return resolveAnalysisWindow(state, args, invoke)
       if (!EXACT.has(tool) && !LISTS.has(tool) && !RELATIVE.has(tool)) return invoke(args)
       const selected = hint.applicationId ?? hint.echoContext?.applicationId
+      const planId = hint.testPlanId ?? hint.echoContext?.planId
       const moduleSlug = hint.moduleSlug ?? hint.echoContext?.moduleSlug
       const environment = hint.echoContext?.environmentSlug
+      if (hint.testPlanId && hint.echoContext?.planId && hint.testPlanId !== hint.echoContext.planId)
+        throw new Error('Conflicting Echo Plan context; refresh the selected screen')
+      if (planId && args.planId !== undefined && args.planId !== planId)
+        throw new Error('The query Plan differs from the selected Echo Plan')
+      const supportsJourney = ![REGULATORY, 'echo_summarize_deviation_group'].includes(tool)
+      args = { ...args, ...(selected && args.applicationId === undefined ? { applicationId: selected } : {}),
+        ...(planId ? { planId } : {}),
+        ...(moduleSlug && supportsJourney && args.moduleSlug === undefined ? { moduleSlug } : {}),
+        ...(environment && args.environment === undefined ? { environment } : {}) }
       if (selected && args.applicationId !== selected) throw new Error('Keep the selected Echo application; change the screen and send a new message to switch applications.')
-      if (['echo_analyze_session_cohort', 'echo_analyze_judge_criterion'].includes(tool) &&
-          ((moduleSlug && args.moduleSlug !== moduleSlug) || (environment && args.environment !== environment))) {
-        throw new Error('Keep the selected Echo Journey and environment in the analytical query.')
-      }
+      if (supportsJourney && moduleSlug && args.moduleSlug !== moduleSlug)
+        throw new Error('The query Journey differs from the selected Echo Journey')
+      if (environment && args.environment !== environment)
+        throw new Error('The query environment differs from the selected Echo environment')
       if (tool === 'echo_summarize_deviation_group' &&
           ((moduleSlug && args.scope && (args.scope.type !== 'journey' || args.scope.moduleSlug !== moduleSlug)) ||
             (environment && args.environment !== environment))) {
         throw new Error('Keep the selected Echo Journey and environment in the deviation group query.')
       }
-      if (['echo_analyze_session_cohort', 'echo_analyze_judge_criterion', 'echo_summarize_deviation_group'].includes(tool) && !state.resolutions?.size) {
+      const scenarioCatalog = tool === 'echo_analyze_scenario_groups' && args.mode === 'catalog'
+      const allTimeScenario = tool === 'echo_analyze_scenario_groups' && args.allTime === true
+      if (['echo_analyze_session_cohort', 'echo_analyze_judge_criterion', 'echo_analyze_scenario_groups', 'echo_summarize_deviation_group'].includes(tool) &&
+          !scenarioCatalog && !allTimeScenario && !state.resolutions?.size) {
         throw new Error('Resolve the analysis window before querying this cohort; reuse its exact boundaries.')
       }
-      if (state.resolutions?.size) {
+      if (state.resolutions?.size && !scenarioCatalog) {
+        if (allTimeScenario) throw new Error('A bounded analysis interval is already fixed. Do not replace it with all-time data.')
         if (RELATIVE.has(tool)) {
           throw new Error('A relative-window tool cannot reuse the frozen interval. Use echo_analyze_session_cohort for this analysis; do not mix independently timed KPI reads.')
         }

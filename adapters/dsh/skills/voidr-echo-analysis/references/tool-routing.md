@@ -17,6 +17,11 @@ uncertainty about newer capabilities; never bypass an access denial.
 
 ## Overview and inventory
 
+- Defects screen: use `echo_list_defects` / `echo_get_defect` for tracked defects.
+  These are separate from session deviation records and knowledge findings.
+- Plans: use `echo_list_journey_plans`; preserve selected `planId` on analytical
+  reads and `testPlanId + moduleSlug` on canonical Journey/scenario operations.
+
 - Calendar-day analysis: `echo_resolve_analysis_window` returns server-clock UTC
   boundaries and local labels. Copy them unchanged into all supporting occurrence
   reads. Last N days includes today; explicit hours remain rolling. Sessions

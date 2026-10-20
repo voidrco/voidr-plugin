@@ -12,6 +12,7 @@ import { echoOverviewQuestionDenial, registerEchoProposeOverviewChange } from '.
 import { whatsappChannelDenial } from './whatsapp-channel.mjs'
 import { registerEchoMemberPolicy } from './echo-member-policy.mjs'
 import { registerToolVisibility } from './tool-visibility.mjs'
+import { TOOL_DOMAINS, TOOL_SCOPE_EVENT, expandedDomains, initialToolDomains } from './tool-profiles.mjs'
 import { echoOverviewStudioDenial } from './echo-overview-studio.mjs'
 import { registerObservabilityWidgets } from './observability-widgets.mjs'
 
@@ -58,6 +59,7 @@ function contextHint(events) {
 
 export function registerKnownEvents(knownEventTypes) {
   knownEventTypes.add(CONTEXT_EVENT_TYPE)
+  knownEventTypes.add(TOOL_SCOPE_EVENT)
 }
 
 export const name = 'voidr-agent-plugin-dsh'
@@ -73,6 +75,31 @@ export function apply(ctx) {
   registerEchoProposeOverviewChange(ctx, callEchoTool)
   const visibility = registerToolVisibility(ctx, agent => memberPolicy.restricted(agent))
   const memberPolicy = registerEchoMemberPolicy(ctx, visibility.refresh)
+  ctx.tools.register({
+    name: 'expand_tool_scope',
+    description: 'Expose one additional Voidr tool domain when the current question needs capabilities outside the active surface. Domains: radar (saved anomalies), tickets (Zendesk/issues), telemetry (Grafana and observability), code (repositories), plans (Test Plans), execution (runs and failures), authoring (test automation), echo, performance, third-party, knowledge. This only changes tool visibility for the current turn; Service permissions and approval rules still apply. Choose one domain at a time.',
+    parameters: { type: 'object', additionalProperties: false, properties: {
+      domain: { type: 'string', enum: TOOL_DOMAINS },
+    }, required: ['domain'] },
+    output: { schema: { type: 'object', additionalProperties: false, properties: {
+      activeDomains: { type: 'array', items: { type: 'string' } },
+    }, required: ['activeDomains'] },
+    render: (_args, value) => [{ type: 'text', text: `Additional domain enabled. Active domains: ${value.activeDomains.join(', ')}. Continue with the relevant read tools.` }],
+    },
+    execute: async (args, exec) => {
+      const domain = args?.domain
+      if (!TOOL_DOMAINS.includes(domain)) throw new Error('Unknown tool domain')
+      const agent = exec.agent
+      const hint = contextHint(agent?.session?.events ?? [])
+      const initial = initialToolDomains(hint)
+      if (!initial || (hint.surface === 'echo' && hint.intent === 'echo_journey_import'))
+        throw new Error('No expandable tool profile is active')
+      if (!expandedDomains(agent.session.events).includes(domain))
+        agent.session.append(TOOL_SCOPE_EVENT, { domain })
+      visibility.refresh(agent)
+      return { activeDomains: [...new Set([...initial, ...expandedDomains(agent.session.events)])].sort() }
+    },
+  })
   const skills = loadDshPluginSkills()
   for (const skill of skills) ctx.skills.register(skill)
   // DSH does not re-interpolate variable values, preserving skill examples and UI hint literals.
@@ -99,6 +126,7 @@ export function apply(ctx) {
       'For explicit Voidr Hero, platform-defect triage, or issue-tracker ticket requests on any surface, load voidr-hero-analysis. Keep the active surface skill for unrelated work. Hero access depends on the authenticated organization and available tools; a screen hint is not authorization.',
       'For explicit Voidr Gate PR, business-rule, journey-impact, or governance questions on another surface, load voidr-gate-analysis. Keep the active surface skill for unrelated work. A screen hint is not evidence or authorization.',
       'For explicit load or performance testing on any surface, load voidr-performance-setup. It routes implementation to voidr-performance-author, preflight to voidr-performance-validate, and confirmed load runs or reports to voidr-performance-execute. Never use the Playwright Test Plan workflow for a native PerformancePlan.',
+      'The active surface exposes a small tool profile. For a question that crosses into another domain, call expand_tool_scope once for that domain, then use its relevant tools. Do not expand merely to browse the catalog. Tool visibility does not grant permission to modify data.',
       ...(skill ? [`Active surface skill: ${skill.name}\nThese instructions are already loaded for this surface.\n${skill.content}`] : [])
     ].join('\n\n')
   })

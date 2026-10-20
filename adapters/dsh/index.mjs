@@ -127,6 +127,7 @@ export function apply(ctx) {
       'For explicit Voidr Gate PR, business-rule, journey-impact, or governance questions on another surface, load voidr-gate-analysis. Keep the active surface skill for unrelated work. A screen hint is not evidence or authorization.',
       'For explicit load or performance testing on any surface, load voidr-performance-setup. It routes implementation to voidr-performance-author, preflight to voidr-performance-validate, and confirmed load runs or reports to voidr-performance-execute. Never use the Playwright Test Plan workflow for a native PerformancePlan.',
       'The active surface exposes a small tool profile. For a question that crosses into another domain, call expand_tool_scope once for that domain, then use its relevant tools. Do not expand merely to browse the catalog. Tool visibility does not grant permission to modify data.',
+      'For an organization MCP connector, keep discovery small: when custom_connectors_list_mcp_tools offers name, request the one known remote tool by exact name; otherwise use query with a low limit. Read its returned schema and readOnlyHint before calling it. On older hosts that expose only connector, use the existing artifact narrowing path.',
       ...(skill ? [`Active surface skill: ${skill.name}\nThese instructions are already loaded for this surface.\n${skill.content}`] : [])
     ].join('\n\n')
   })

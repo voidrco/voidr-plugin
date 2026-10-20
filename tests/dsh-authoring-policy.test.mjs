@@ -241,7 +241,7 @@ test('DSH registers authoring skills and canonical analysis/context/generate/exe
   const skills = loadDshPluginSkills()
   assert.deepEqual(
     skills.map(skill => skill.name),
-    ['blip-incident-remediation', 'blip-preventive-monitor', 'voidr-automate', 'voidr-context', 'voidr-echo-analysis', 'voidr-evidence-report', 'voidr-execute', 'voidr-failure-analysis', 'voidr-gate-analysis', 'voidr-generate', 'voidr-hero-analysis', 'voidr-journeys', 'voidr-performance-author', 'voidr-performance-execute', 'voidr-performance-setup', 'voidr-performance-validate', 'voidr-spec']
+    ['blip-incident-remediation', 'blip-preventive-monitor', 'grafana-mcp-investigation', 'voidr-automate', 'voidr-context', 'voidr-echo-analysis', 'voidr-echo-journey-authoring', 'voidr-evidence-report', 'voidr-execute', 'voidr-failure-analysis', 'voidr-gate-analysis', 'voidr-generate', 'voidr-hero-analysis', 'voidr-journeys', 'voidr-performance-author', 'voidr-performance-execute', 'voidr-performance-setup', 'voidr-performance-validate', 'voidr-spec']
   )
   assert.equal(inject.includes('skills'), true)
   for (const skill of skills) {
@@ -347,7 +347,7 @@ test('authoring skills route persistence through deterministic Service tools', (
     new URL('../core/workflow/interactive-test-development.mjs', import.meta.url),
     'utf8'
   )
-  for (const skill of Object.keys(byName).filter(name => !['voidr-gate-analysis', 'voidr-hero-analysis'].includes(name))) {
+  for (const skill of Object.keys(byName).filter(name => !['voidr-gate-analysis', 'voidr-hero-analysis', 'voidr-echo-journey-authoring'].includes(name))) {
     assert.match(prompt, new RegExp(skill))
   }
 })

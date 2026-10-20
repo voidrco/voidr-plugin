@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { basicAuthorizationHeader } from './credentials.mjs'
 import { describeNetworkFailure } from './network-trust.mjs'
+import { PLUGIN_VERSION } from './plugin-version.mjs'
 
 export class RemoteMcpClient {
   constructor({
@@ -34,7 +35,7 @@ export class RemoteMcpClient {
       capabilities: {},
       clientInfo: {
         name: 'voidr-plugin',
-        version: '0.2.25'
+        version: PLUGIN_VERSION
       }
     })
     await this.notify('notifications/initialized', {})

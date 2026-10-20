@@ -8,6 +8,7 @@ import {
   validatedAuthStatus
 } from './lib/credentials.mjs'
 import { canonicalToolName, isWriteTool, loadPolicy } from './lib/policy.mjs'
+import { PLUGIN_VERSION } from './lib/plugin-version.mjs'
 import { RemoteMcpClient } from './lib/remote-mcp.mjs'
 import { bootstrapTestRepository } from './lib/bootstrap.mjs'
 import {
@@ -563,7 +564,7 @@ async function dispatch(method, params) {
         capabilities: { tools: { listChanged: true } },
         serverInfo: {
           name: 'voidr-safe-bridge',
-          version: '0.2.25'
+          version: PLUGIN_VERSION
         }
       }
     case 'ping':

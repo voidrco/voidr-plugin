@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { RemoteMcpClient } from '../scripts/lib/remote-mcp.mjs'
+import { readFileSync } from 'node:fs'
 
 test('credential changes create a fresh remote MCP session', async () => {
   let authorization = 'Basic first-credential'
@@ -13,7 +14,8 @@ test('credential changes create a fresh remote MCP session', async () => {
     calls.push({
       method: message.method,
       authorization: options.headers.authorization,
-      sessionId
+      sessionId,
+      clientVersion: message.params?.clientInfo?.version
     })
 
     if (message.method === 'notifications/initialized') {
@@ -53,6 +55,10 @@ test('credential changes create a fresh remote MCP session', async () => {
 
   const initializeCalls = calls.filter(call => call.method === 'initialize')
   assert.equal(initializeCalls.length, 2)
+  assert.equal(
+    initializeCalls[0].clientVersion,
+    JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version
+  )
   assert.equal(initializeCalls[0].sessionId, null)
   assert.equal(initializeCalls[1].sessionId, null)
   assert.equal(initializeCalls[1].authorization, 'Basic second-credential')

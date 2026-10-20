@@ -15,6 +15,23 @@ import { once } from 'node:events'
 
 const root = resolve(import.meta.dirname, '../..')
 const bridgePath = join(root, 'scripts/voidr-mcp-bridge.mjs')
+const echoInvestigationWrites = [
+  'echo_begin_defect_investigation',
+  'echo_commit_defect_investigation',
+  'echo_prepare_defect_review',
+  'echo_revise_defect_review',
+  'echo_decide_defect_review',
+  'echo_undo_defect_occurrence_link',
+  'echo_correct_defect_problem_link'
+]
+const echoInvestigationReads = [
+  'echo_list_sessions', 'echo_get_session', 'echo_get_session_transcript',
+  'echo_get_session_evaluation', 'echo_get_judge_run', 'echo_read_evidence',
+  'echo_list_defects', 'echo_get_defect', 'echo_get_defect_policy',
+  'echo_search_defect_candidates', 'echo_search_defect_evidence',
+  'echo_inspect_defect_candidate', 'echo_get_defect_review',
+  'echo_list_defect_reviews', 'echo_get_defect_history'
+]
 
 test('bridge filters discovery, keeps secrets local, and blocks forbidden calls', async t => {
   const received = []
@@ -71,6 +88,10 @@ test('bridge filters discovery, keeps secrets local, and blocks forbidden calls'
           toolDefinition('test_plans_populate_test_plan'),
           toolDefinition('executions_create_execution'),
           toolDefinition('playwright_get_test_timeline'),
+          ...echoInvestigationReads.map(toolDefinition),
+          ...echoInvestigationWrites.map(toolDefinition),
+          toolDefinition('echo_backfill_defects'),
+          toolDefinition('echo_verify_defect_normalization'),
           toolDefinition('agent_jobs_trigger_hive_automation'),
           toolDefinition('system_batch_execute')
         ]
@@ -78,6 +99,13 @@ test('bridge filters discovery, keeps secrets local, and blocks forbidden calls'
       return
     }
     if (message.method === 'tools/call') {
+      if (message.params.name === 'echo_commit_defect_investigation') {
+        sendResult(response, message.id, {
+          isError: true,
+          content: [{ type: 'text', text: 'Voidr-only access denied by the server' }]
+        })
+        return
+      }
       const data =
         message.params.name === 'test_plans_create_test_plan'
           ? {
@@ -152,6 +180,10 @@ test('bridge filters discovery, keeps secrets local, and blocks forbidden calls'
     clientInfo: { name: 'e2e', version: '1.0.0' }
   })
   assert.equal(initialized.serverInfo.name, 'voidr-safe-bridge')
+  assert.equal(
+    initialized.serverInfo.version,
+    JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version
+  )
   assert.equal(initialized.capabilities.tools.listChanged, true)
 
   const listed = await client.request('tools/list', {})
@@ -169,6 +201,23 @@ test('bridge filters discovery, keeps secrets local, and blocks forbidden calls'
   assert.equal(names.includes('voidr_auth_import_service_account'), false)
   assert.equal(names.includes('agent_jobs_trigger_hive_automation'), false)
   assert.equal(names.includes('system_batch_execute'), false)
+  for (const name of [...echoInvestigationReads, ...echoInvestigationWrites]) {
+    assert.equal(names.includes(name), true, `${name} must be discoverable`)
+  }
+  assert.equal(names.includes('echo_backfill_defects'), false)
+  assert.equal(names.includes('echo_verify_defect_normalization'), false)
+
+  const started = await client.request('tools/call', {
+    name: 'echo_begin_defect_investigation',
+    arguments: { requestId: 'synthetic-review-only' }
+  })
+  assert.match(started.content[0].text, /echo_begin_defect_investigation/)
+  const denied = await client.request('tools/call', {
+    name: 'echo_commit_defect_investigation',
+    arguments: { reviewId: 'synthetic-review-only' }
+  })
+  assert.equal(denied.isError, true)
+  assert.match(denied.content[0].text, /Voidr-only access denied/)
 
   const status = await client.request('tools/call', {
     name: 'voidr_auth_status',
@@ -1020,6 +1069,11 @@ test('bridge blocks writes for an account without write scope before network', a
     arguments: { testPlanId: '0123456789abcdef01234567' }
   })
   assert.match(result.error.message, /does not declare the write scope/i)
+
+  for (const name of echoInvestigationWrites) {
+    const blocked = await client.requestRaw('tools/call', { name, arguments: {} })
+    assert.match(blocked.error.message, /does not declare the write scope/i, name)
+  }
 
   const localRelease = await client.requestRaw('tools/call', {
     name: 'voidr_release_deploy_live',

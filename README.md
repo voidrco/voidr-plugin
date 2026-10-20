@@ -23,6 +23,23 @@ the application and complete civil-day range, presents the exact delivery for
 confirmation, then generates and emails the report to the signed-in member.
 The server deliberately accepts no arbitrary recipient address.
 
+Version `0.2.27` also exposes the Echo defect investigation and review tools
+through the shared MCP bridge used by Copilot and Claude. The flow reads
+official sessions, transcripts and frozen judge evidence, compares existing
+defects, and submits one grounded behavior through the server's validation
+and grouping rules. See [Echo defect routing](docs/mcp-tool-routing.md#echo-defect-investigations).
+These tools retain Voidr-only authorization on the server. Publishing the
+plugin does not grant customer users access or change their account scopes.
+Bulk backfill and retest dispatch are not added to this surface.
+
+Existing installations must update from their configured marketplace or
+checkout, then reload the host/MCP connection. A local checkout change does
+not update another user's installed plugin. MCP initialization reports the
+installed package version, so `0.2.27` identifies a connection with this fix;
+the available tools should include `echo_begin_defect_investigation` and
+`echo_commit_defect_investigation`. DSH uses its existing Assistant Runtime
+MCP scope and keeps its member visibility and server authorization rules.
+
 The current build uses Voidr production for browser authentication, application
 discovery, Test Plans, repository provisioning, deploy, and execution. Service
 Accounts use the standard production store at

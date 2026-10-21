@@ -12,6 +12,7 @@ function setup(surface, intent) {
     'mcp__voidr__echo_journeys_publish_draft',
   ])
   const hooks = new Map()
+  const variables = new Map()
   const masks = []
   const session = {
     events: [{ type: 'voidr/project-context-hint', data: { surface, ...(intent ? { intent } : {}) } }],
@@ -32,13 +33,13 @@ function setup(surface, intent) {
     agents: { list: () => [agent] },
     commands: { register() {} },
     skills: { register() {} },
-    systemPrompt: { variable() {}, section() {} },
+    systemPrompt: { variable(name, value) { variables.set(name, value) }, section() {} },
     on(event, handler) { hooks.set(event, handler) },
   }
   apply(ctx)
   hooks.get('agent/created')({ agent })
   const visible = name => masks.every(mask => mask.disposed || !mask.filter.deny.includes(name))
-  return { agent, registered, hooks, visible }
+  return { agent, registered, hooks, variables, visible }
 }
 
 test('Monitor begins with failure tools and reveals a named report tool for one turn', async () => {
@@ -69,9 +70,12 @@ test('Echo Journey Studio keeps production authoring restrictions', async () => 
 })
 
 test('ordinary Echo keeps its catalog and does not opt into tool profiles', async () => {
-  const { agent, registered, visible } = setup('echo')
+  const { agent, registered, variables, visible } = setup('echo')
   assert.equal(visible('mcp__voidr__playwright_get_execution_analytics'), true)
   assert.equal(visible('expand_tool_scope'), false)
+  const prompt = variables.get('voidr_interactive_test_development')({ agent })
+  assert.doesNotMatch(prompt, /active surface exposes tools for its primary task/)
+  assert.doesNotMatch(prompt, /For an organization MCP connector, keep discovery small/)
   await assert.rejects(registered.get('expand_tool_scope').execute({ domain: 'execution' }, { agent }),
     /not available on Echo/)
 })

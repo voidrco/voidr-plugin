@@ -10,13 +10,14 @@ const CORE = new Set([
   'mcp__voidr__artifacts_aggregate', 'mcp__voidr__files_analyze_uploaded_file',
   'mcp__voidr__assistant_help_request', 'mcp__voidr__custom_connectors_list',
 ])
+const STUDIO_CORE = new Set([
+  'skill', 'read', 'todo_write', 'ask_user_question', 'render_widget',
+  'mcp__voidr__files_analyze_uploaded_file',
+])
 
 const DOMAINS = {
   radar: [
-    'preventive_monitor_get_radar_situation',
-    'preventive_monitor_list_radar_situations',
-    'preventive_monitor_list_diagnostics',
-    'preventive_monitor_get_dashboard',
+    'preventive_monitor_',
     'monitor_', 'custom_connectors_list',
     'custom_connectors_list_mcp_tools', 'custom_connectors_read_mcp_tool',
     'source_control_list_repositories', 'source_control_search_code',
@@ -42,11 +43,16 @@ const DOMAINS = {
     'applications_list_documentation', 'applications_get_api_contract',
     'test_plans_', 'coverage_', 'recording_',
     'sessions_list_sessions', 'sessions_get_session_summary',
+    'sessions_get_session_actions', 'sessions_get_session_action_effects',
+    'sessions_get_session_digest', 'sessions_get_session_screenmap',
+    'sessions_get_session_selectors', 'file_embeddings_search_documents',
   ],
   execution: [
     'executions_', 'execution_contexts_', 'failure_analysis_',
     'failure_reports_', 'test_failures_', 'playwright_',
-    'assistant_context_', 'defects_list_defects', 'defects_get_defect',
+    'assistant_context_', 'defects_',
+    'applications_list_applications', 'test_plans_get_case',
+    'test_plans_get_tag_history', 'test_plans_update_test_case_tag',
   ],
   authoring: [
     'assistant_workspace_', 'test_plans_', 'coverage_',
@@ -54,7 +60,15 @@ const DOMAINS = {
     'applications_list_environments', 'sessions_list_sessions',
     'sessions_get_session_summary', 'sessions_get_session_actions',
   ],
+  'echo-authoring': [
+    'echo_list_applications', 'echo_list_journey_plans',
+    'echo_get_journey', 'echo_get_journey_flow', 'echo_get_journey_draft',
+    'echo_journeys_create_draft', 'echo_journeys_add_draft_sources',
+    'echo_journeys_analyze_draft', 'echo_journeys_get_draft',
+    'echo_journeys_list_drafts', 'echo_journeys_update_draft',
+  ],
   echo: ['echo_'],
+  reports: ['evidence_reports_'],
   performance: [
     'performance_', 'applications_list_applications', 'applications_get_application',
     'applications_list_environments', 'sessions_list_sessions',
@@ -84,8 +98,9 @@ function matches(name, entries) {
 export function initialToolDomains(hint) {
   if (!hint || typeof hint.surface !== 'string') return ['knowledge']
   if (hint.surface === 'slack') return hint.radarSituationId ? ['radar'] : ['knowledge']
+  if (hint.surface === 'echo' && hint.intent === 'echo_journey_import') return ['echo-authoring']
   return {
-    'preventive-monitor': ['radar'], monitor: ['radar'],
+    'preventive-monitor': ['radar'], monitor: ['execution'],
     home: ['knowledge'], 'context-graph': ['knowledge'],
     spec: ['plans'], journeys: ['plans'], 'journey-overview': ['plans'],
     automate: ['authoring'], performance: ['performance'], echo: ['echo'],
@@ -94,15 +109,27 @@ export function initialToolDomains(hint) {
   }[hint.surface] ?? null
 }
 
-export function profileToolVisible(name, domains, { development = false } = {}) {
-  if (name === 'expand_tool_scope' || CORE.has(name)) return true
+export function profileToolVisible(name, domains, { development = false, extraTools = [], authoring = false } = {}) {
+  if (name === 'expand_tool_scope') return true
+  if (CORE.has(name)) return !authoring || STUDIO_CORE.has(name) || extraTools.includes(name)
   if (development && NATIVE_DEVELOPMENT.has(name)) return true
+  if (extraTools.includes(name)) return true
   return domains.some(domain => matches(name, DOMAINS[domain] ?? []))
 }
 
-export function expandedDomains(events) {
+function currentTurnEvents(events) {
   const history = events ?? []
   const currentTurn = history.findLastIndex(event => event.type === 'turn/start')
   return history.slice(currentTurn + 1).filter(event => event.type === TOOL_SCOPE_EVENT)
+}
+
+export function expandedDomains(events) {
+  return currentTurnEvents(events)
     .map(event => event.data?.domain).filter(domain => TOOL_DOMAINS.includes(domain))
+}
+
+export function expandedToolNames(events) {
+  return currentTurnEvents(events)
+    .map(event => event.data?.toolName)
+    .filter(name => typeof name === 'string' && name.length > 0)
 }

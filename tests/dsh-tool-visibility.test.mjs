@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { registerToolVisibility, toolVisibilityFilter } from '../adapters/dsh/tool-visibility.mjs'
-import { TOOL_SCOPE_EVENT, initialToolDomains } from '../adapters/dsh/tool-profiles.mjs'
+import { TOOL_SCOPE_EVENT, expandedToolNames, initialToolDomains, profileToolVisible } from '../adapters/dsh/tool-profiles.mjs'
 
 const GLOBAL = [
   'bash', 'write', 'render_widget', 'run_code', 'echo_render_deviations', 'echo_propose_overview_change',
@@ -109,7 +109,7 @@ test('Radar, tickets and generic contexts expose different small catalogs', () =
   assert.ok(!radar.includes('mcp__voidr__preventive_monitor_get_radar_situation'))
   assert.ok(!radar.includes('mcp__voidr__custom_connectors_read_mcp_tool'))
   assert.ok(radar.includes('mcp__voidr__custom_connectors_zendesk_evidence'))
-  assert.ok(radar.includes('mcp__voidr__preventive_monitor_diagnose_radar_situation'))
+  assert.ok(!radar.includes('mcp__voidr__preventive_monitor_diagnose_radar_situation'))
   assert.ok(radar.includes('bash'))
   const tickets = toolVisibilityFilter(names, { domains: ['tickets'] }).deny
   assert.ok(!tickets.includes('mcp__voidr__custom_connectors_zendesk_evidence'))
@@ -118,6 +118,99 @@ test('Radar, tickets and generic contexts expose different small catalogs', () =
   assert.ok(!generic.includes('mcp__voidr__knowledge_search'))
   assert.ok(!generic.includes('bash'))
   assert.ok(generic.includes('mcp__voidr__test_plans_list_test_plans'))
+})
+
+test('each surface starts with the evidence tools used by its primary skill', () => {
+  const names = [
+    'mcp__voidr__playwright_get_execution_analytics',
+    'mcp__voidr__defects_create_defect',
+    'mcp__voidr__test_plans_update_test_case_tag',
+    'mcp__voidr__preventive_monitor_get_radar_situation',
+    'mcp__voidr__sessions_get_session_action_effects',
+    'mcp__voidr__sessions_get_session_screenmap',
+    'mcp__voidr__file_embeddings_search_documents',
+    'mcp__voidr__evidence_reports_create'
+  ]
+  const visible = hint => names.filter(name =>
+    !toolVisibilityFilter(names, { domains: initialToolDomains(hint) })?.deny.includes(name))
+  assert.ok(visible({ surface: 'monitor' }).includes('mcp__voidr__playwright_get_execution_analytics'))
+  assert.ok(visible({ surface: 'monitor' }).includes('mcp__voidr__defects_create_defect'))
+  assert.ok(visible({ surface: 'monitor' }).includes('mcp__voidr__test_plans_update_test_case_tag'))
+  assert.ok(!visible({ surface: 'monitor' }).includes('mcp__voidr__preventive_monitor_get_radar_situation'))
+  assert.ok(visible({ surface: 'preventive-monitor' }).includes('mcp__voidr__preventive_monitor_get_radar_situation'))
+  for (const surface of ['spec', 'journeys', 'journey-overview']) {
+    const tools = visible({ surface })
+    assert.ok(tools.includes('mcp__voidr__sessions_get_session_action_effects'))
+    assert.ok(tools.includes('mcp__voidr__sessions_get_session_screenmap'))
+    assert.ok(tools.includes('mcp__voidr__file_embeddings_search_documents'))
+  }
+  assert.ok(!visible({ surface: 'spec' }).includes('mcp__voidr__evidence_reports_create'))
+})
+
+test('every profiled surface retains its primary capability and resets an explicit switch next turn', () => {
+  const cases = [
+    [{ surface: 'home' }, 'ontology_search_entities'],
+    [{ surface: 'context-graph' }, 'knowledge_search'],
+    [{ surface: 'spec' }, 'sessions_get_session_action_effects'],
+    [{ surface: 'journeys' }, 'file_embeddings_search_documents'],
+    [{ surface: 'journey-overview' }, 'sessions_get_session_digest'],
+    [{ surface: 'automate' }, 'assistant_workspace_prepare'],
+    [{ surface: 'performance' }, 'performance_list_plans'],
+    [{ surface: 'monitor' }, 'playwright_get_execution_analytics'],
+    [{ surface: 'preventive-monitor' }, 'preventive_monitor_get_radar_situation'],
+    [{ surface: 'echo' }, 'echo_get_overview_view'],
+    [{ surface: 'echo', intent: 'echo_journey_import' }, 'echo_journeys_update_draft'],
+    [{ surface: 'voidr-gate' }, 'source_control_search_code'],
+    [{ surface: 'teams' }, 'ontology_search_entities'],
+    [{ surface: 'third-party-management' }, 'third_party_list'],
+    [{ surface: 'slack', radarSituationId: 'case' }, 'preventive_monitor_get_radar_situation'],
+    [{ surface: 'slack' }, 'knowledge_search'],
+  ]
+  const foreign = 'mcp__voidr__evidence_reports_get'
+  for (const [hint, primary] of cases) {
+    const initial = initialToolDomains(hint)
+    assert.ok(profileToolVisible(`mcp__voidr__${primary}`, initial, {
+      authoring: hint.intent === 'echo_journey_import',
+    }), `${hint.surface}: primary tool missing`)
+    assert.equal(profileToolVisible(foreign, initial), false, `${hint.surface}: foreign tool initially visible`)
+    const events = [{ type: 'voidr/project-context-hint', data: hint },
+      { type: TOOL_SCOPE_EVENT, data: { toolName: foreign } }]
+    assert.equal(profileToolVisible(foreign, initial, { extraTools: expandedToolNames(events) }), true)
+    events.push({ type: 'turn/start', data: { turn: 2 } })
+    assert.equal(profileToolVisible(foreign, initial, { extraTools: expandedToolNames(events) }), false)
+  }
+})
+
+test('explicit tools outside every domain can be revealed without opening the full catalog', () => {
+  const names = ['mcp__voidr__evidence_reports_create', 'mcp__voidr__sessions_get_session_action_effects',
+    'mcp__voidr__unmapped_future_capability']
+  const initial = initialToolDomains({ surface: 'slack', radarSituationId: 'case' })
+  const before = toolVisibilityFilter(names, { domains: initial }).deny
+  assert.ok(before.includes('mcp__voidr__unmapped_future_capability'))
+  const after = toolVisibilityFilter(names, { domains: initial,
+    extraTools: ['mcp__voidr__unmapped_future_capability'] }).deny
+  assert.ok(!after.includes('mcp__voidr__unmapped_future_capability'))
+  assert.ok(after.includes('mcp__voidr__sessions_get_session_action_effects'))
+  assert.ok(!toolVisibilityFilter(names, { domains: [...initial, 'reports'] }).deny
+    .includes('mcp__voidr__evidence_reports_create'))
+})
+
+test('Echo Journey Studio keeps draft tools and can switch to an authorized domain', () => {
+  const hint = { surface: 'echo', intent: 'echo_journey_import' }
+  const names = ['expand_tool_scope', 'mcp__voidr__echo_journeys_update_draft',
+    'mcp__voidr__playwright_get_execution_analytics', 'mcp__voidr__echo_journeys_publish_draft',
+    'mcp__voidr__system_call_tool', 'bash']
+  const initial = initialToolDomains(hint)
+  assert.deepEqual(initial, ['echo-authoring'])
+  const before = toolVisibilityFilter(names, { authoring: true, domains: initial }).deny
+  assert.ok(!before.includes('expand_tool_scope'))
+  assert.ok(!before.includes('mcp__voidr__echo_journeys_update_draft'))
+  assert.ok(before.includes('mcp__voidr__playwright_get_execution_analytics'))
+  assert.ok(before.includes('mcp__voidr__system_call_tool'))
+  assert.ok(before.includes('bash'))
+  const after = toolVisibilityFilter(names, { authoring: true, domains: [...initial, 'execution'] }).deny
+  assert.ok(!after.includes('mcp__voidr__playwright_get_execution_analytics'))
+  assert.ok(after.includes('mcp__voidr__echo_journeys_publish_draft'))
 })
 
 test('expanding a domain refreshes from the unmasked global catalog', () => {
@@ -132,5 +225,23 @@ test('expanding a domain refreshes from the unmasked global catalog', () => {
   agent.session.events.push({ type: 'turn/start', data: { turn: 2 } })
   return hooks.get('agent/pre-step')({ agent }, () => {
     assert.equal(visible(agent).includes('mcp__voidr__echo_get_overview_view'), false)
+  })
+})
+
+test('an exact tool revealed for one turn disappears on the next turn', () => {
+  const { agent, visibility, visible, hooks, global } = setup()
+  const tool = 'mcp__voidr__evidence_reports_get'
+  global.push(tool)
+  agent.session.events = [{ type: 'voidr/project-context-hint', data: { surface: 'spec' } }]
+  visibility.refresh(agent)
+  assert.equal(visible(agent).includes(tool), false)
+  agent.session.events.push({ type: TOOL_SCOPE_EVENT, data: { toolName: tool } })
+  visibility.refresh(agent)
+  assert.deepEqual(expandedToolNames(agent.session.events), [tool])
+  assert.equal(visible(agent).includes(tool), true)
+  agent.session.events.push({ type: 'turn/start', data: { turn: 2 } })
+  return hooks.get('agent/pre-step')({ agent }, () => {
+    assert.equal(visible(agent).includes(tool), false)
+    assert.deepEqual(expandedToolNames(agent.session.events), [])
   })
 })

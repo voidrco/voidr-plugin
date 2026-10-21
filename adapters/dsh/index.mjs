@@ -12,7 +12,7 @@ import { echoOverviewQuestionDenial, registerEchoProposeOverviewChange } from '.
 import { whatsappChannelDenial } from './whatsapp-channel.mjs'
 import { registerEchoMemberPolicy } from './echo-member-policy.mjs'
 import { registerToolVisibility } from './tool-visibility.mjs'
-import { TOOL_DOMAINS, TOOL_SCOPE_EVENT, expandedDomains, initialToolDomains } from './tool-profiles.mjs'
+import { TOOL_DOMAINS, TOOL_SCOPE_EVENT, expandedDomains, expandedToolNames, initialToolDomains } from './tool-profiles.mjs'
 import { echoOverviewStudioDenial } from './echo-overview-studio.mjs'
 import { registerObservabilityWidgets } from './observability-widgets.mjs'
 
@@ -77,27 +77,47 @@ export function apply(ctx) {
   const memberPolicy = registerEchoMemberPolicy(ctx, visibility.refresh)
   ctx.tools.register({
     name: 'expand_tool_scope',
-    description: 'Expose one additional Voidr tool domain when the current question needs capabilities outside the active surface. Domains: radar (saved anomalies), tickets (Zendesk/issues), telemetry (Grafana and observability), code (repositories), plans (Test Plans), execution (runs and failures), authoring (test automation), echo, performance, third-party, knowledge. This only changes tool visibility for the current turn; Service permissions and approval rules still apply. Choose one domain at a time.',
+    description: 'Expose one Voidr tool domain or one available Service tool by exact name when the current question needs capabilities outside the active surface. This changes visibility only for the current turn; Service permissions and approval rules still apply. Use an exact toolName for a capability omitted from the named domains instead of opening the whole catalog.',
     parameters: { type: 'object', additionalProperties: false, properties: {
       domain: { type: 'string', enum: TOOL_DOMAINS },
-    }, required: ['domain'] },
+      toolName: { type: 'string' },
+    }, minProperties: 1, maxProperties: 1 },
     output: { schema: { type: 'object', additionalProperties: false, properties: {
       activeDomains: { type: 'array', items: { type: 'string' } },
+      activeTools: { type: 'array', items: { type: 'string' } },
     }, required: ['activeDomains'] },
-    render: (_args, value) => [{ type: 'text', text: `Additional domain enabled. Active domains: ${value.activeDomains.join(', ')}. Continue with the relevant read tools.` }],
+    render: (_args, value) => [{ type: 'text', text: `Tool scope updated. Active domains: ${value.activeDomains.join(', ')}. Additional tools: ${value.activeTools.join(', ') || 'none'}. Continue with the relevant tools.` }],
     },
     execute: async (args, exec) => {
       const domain = args?.domain
-      if (!TOOL_DOMAINS.includes(domain)) throw new Error('Unknown tool domain')
+      const requestedTool = args?.toolName
+      if ((domain === undefined) === (requestedTool === undefined))
+        throw new Error('Choose one domain or one toolName')
+      if (domain !== undefined && !TOOL_DOMAINS.includes(domain)) throw new Error('Unknown tool domain')
       const agent = exec.agent
       const hint = contextHint(agent?.session?.events ?? [])
       const initial = initialToolDomains(hint)
-      if (!initial || (hint.surface === 'echo' && hint.intent === 'echo_journey_import'))
-        throw new Error('No expandable tool profile is active')
-      if (!expandedDomains(agent.session.events).includes(domain))
+      if (!initial) throw new Error('No expandable tool profile is active')
+      let toolName
+      if (requestedTool !== undefined) {
+        if (typeof requestedTool !== 'string' || !/^(?:mcp__voidr__)?[a-z][a-z0-9_]*$/.test(requestedTool))
+          throw new Error('Invalid Voidr tool name')
+        toolName = requestedTool.startsWith('mcp__voidr__') ? requestedTool : `mcp__voidr__${requestedTool}`
+        if (!ctx.tools.schemas().some(tool => tool.name === toolName))
+          throw new Error('Voidr tool is not available in this session')
+        if (hint.surface === 'echo' && hint.intent === 'echo_journey_import' &&
+          /^mcp__voidr__echo_journeys_(?:publish|schedule|activate|execute)(?:_|$)/.test(toolName))
+          throw new Error('Publish, schedule, activate, or execute this draft through Review and publish')
+      }
+      if (domain && !expandedDomains(agent.session.events).includes(domain))
         agent.session.append(TOOL_SCOPE_EVENT, { domain })
+      if (toolName && !expandedToolNames(agent.session.events).includes(toolName))
+        agent.session.append(TOOL_SCOPE_EVENT, { toolName })
       visibility.refresh(agent)
-      return { activeDomains: [...new Set([...initial, ...expandedDomains(agent.session.events)])].sort() }
+      return {
+        activeDomains: [...new Set([...initial, ...expandedDomains(agent.session.events)])].sort(),
+        activeTools: [...new Set(expandedToolNames(agent.session.events))].sort(),
+      }
     },
   })
   const skills = loadDshPluginSkills()
@@ -126,7 +146,7 @@ export function apply(ctx) {
       'For explicit Voidr Hero, platform-defect triage, or issue-tracker ticket requests on any surface, load voidr-hero-analysis. Keep the active surface skill for unrelated work. Hero access depends on the authenticated organization and available tools; a screen hint is not authorization.',
       'For explicit Voidr Gate PR, business-rule, journey-impact, or governance questions on another surface, load voidr-gate-analysis. Keep the active surface skill for unrelated work. A screen hint is not evidence or authorization.',
       'For explicit load or performance testing on any surface, load voidr-performance-setup. It routes implementation to voidr-performance-author, preflight to voidr-performance-validate, and confirmed load runs or reports to voidr-performance-execute. Never use the Playwright Test Plan workflow for a native PerformancePlan.',
-      'The active surface exposes a small tool profile. For a question that crosses into another domain, call expand_tool_scope once for that domain, then use its relevant tools. Do not expand merely to browse the catalog. Tool visibility does not grant permission to modify data.',
+      'The active surface exposes tools for its primary task. If the user explicitly changes task, call expand_tool_scope for that domain or for an exact available Voidr tool named by the relevant skill, then use the newly visible tools. Do not expand merely to browse the catalog. Tool visibility does not grant permission to modify data. Echo Journey Studio drafts still publish only through Review and publish in that UI; restricted Echo members retain their separate access policy.',
       'For an organization MCP connector, keep discovery small: when custom_connectors_list_mcp_tools offers name, request the one known remote tool by exact name; otherwise use query with a low limit. Read its returned schema and readOnlyHint before calling it. On older hosts that expose only connector, use the existing artifact narrowing path.',
       ...(skill ? [`Active surface skill: ${skill.name}\nThese instructions are already loaded for this surface.\n${skill.content}`] : [])
     ].join('\n\n')

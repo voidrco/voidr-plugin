@@ -28,7 +28,8 @@ function setup(surface, intent) {
   const ctx = {
     tools: {
       register(tool) { registered.set(tool.name, tool); global.add(tool.name) },
-      schemas() { return [...global].map(name => ({ name })) },
+      schemas() { return [...global].map(name => ({ name, description: '' })) },
+      view() { return { restrictableNames: new Set(global) } },
     },
     agents: { list: () => [agent] },
     commands: { register() {} },
@@ -75,13 +76,17 @@ test('Echo Journey Studio keeps production authoring restrictions', async () => 
   assert.equal(visible('mcp__voidr__echo_journeys_publish_draft'), false)
 })
 
-test('ordinary Echo keeps its catalog and does not opt into tool profiles', async () => {
+test('ordinary Echo keeps mainline discovery and does not opt into DSH profiles', async () => {
   const { agent, registered, variables, visible } = setup('echo')
-  assert.equal(visible('mcp__voidr__playwright_get_execution_analytics'), true)
+  assert.equal(visible('echo_discover_tools'), true)
+  assert.equal(visible('mcp__voidr__playwright_get_execution_analytics'), false)
   assert.equal(visible('expand_tool_scope'), false)
   const prompt = variables.get('voidr_interactive_test_development')({ agent })
   assert.doesNotMatch(prompt, /active surface exposes a small initial tool profile/)
   assert.doesNotMatch(prompt, /For an organization MCP connector, keep discovery small/)
   await assert.rejects(registered.get('expand_tool_scope').execute({ domain: 'execution' }, { agent }),
     /not available on Echo/)
+  const discovered = registered.get('echo_discover_tools').execute({ query: 'playwright_get_execution_analytics' }, { agent })
+  assert.deepEqual(discovered.tools.map(tool => tool.name), ['mcp__voidr__playwright_get_execution_analytics'])
+  assert.equal(visible('mcp__voidr__playwright_get_execution_analytics'), true)
 })

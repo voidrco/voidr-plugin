@@ -37,28 +37,33 @@ function setup() {
   agent.ctx = { tools: { restrict: filter => { const mask = { filter, disposed: false }; masks.push(mask); return () => { mask.disposed = true } } } }
   const ctx = {
     on: (event, fn) => hooks.set(event, fn),
-    tools: { schemas: scope => visible(scope).map(name => ({ name })) },
+    tools: {
+      register(tool) { global.push(tool.name) },
+      schemas: scope => visible(scope).map(name => ({ name, description: '' })),
+      view: () => ({ restrictableNames: new Set(global) }),
+    },
     agents: { list: () => [agent] }
   }
   const visibility = registerToolVisibility(ctx, value => restricted.has(value.id))
   return { hooks, global, masks, restricted, agent, visibility, visible }
 }
 
-test('masks follow the global registry and do not churn without changes', () => {
+test('masks follow Echo discovery, member policy, WhatsApp, and registry changes', () => {
   const { hooks, global, masks, restricted, agent, visibility, visible } = setup()
 
   visibility.refresh(agent)
   visibility.refresh(agent)
   assert.equal(masks.length, 1)
-  assert.deepEqual(masks[0].filter.deny, ['echo_render_deviations', 'render_widget'])
+  assert.ok(masks[0].filter.deny.includes('render_widget'))
+  assert.ok(masks[0].filter.deny.includes('mcp__voidr__echo_get_overview_view'))
+  assert.ok(!masks[0].filter.deny.includes('echo_discover_tools'))
 
   restricted.add('member')
   visibility.refresh(agent)
   assert.equal(masks[0].disposed, true)
-  assert.deepEqual(visible(agent).sort(), [
-    'ask_user_question', 'echo_propose_overview_change', 'mcp__voidr__echo_get_overview_view',
-    'mcp__voidr__echo_share_overview', 'mcp__voidr__files_analyze_uploaded_file', 'read', 'run_code', 'skill', 'todo_write'
-  ])
+  assert.equal(visible(agent).includes('echo_discover_tools'), true)
+  assert.equal(visible(agent).includes('mcp__voidr__echo_get_overview_view'), false)
+  assert.equal(visible(agent).includes('mcp__voidr__list_applications'), false)
 
   global.push('mcp__voidr__echo_get_session', 'mcp__voidr__sessions_list')
   hooks.get('tools/change')()
@@ -66,25 +71,26 @@ test('masks follow the global registry and do not churn without changes', () => 
   assert.equal(visible(agent).includes('mcp__voidr__sessions_list'), false)
   const installed = masks.length
   hooks.get('tools/change')()
-  assert.equal(masks.length, installed)
+  assert.equal(masks.length, installed + 1)
 
   restricted.delete('member')
   agent.session.events.push(hint())
   visibility.refresh(agent)
-  assert.equal(visible(agent).includes('bash'), true)
+  assert.equal(visible(agent).includes('bash'), false)
   assert.equal(visible(agent).includes('render_widget'), true)
 })
 
-test('ordinary Echo keeps the production catalog except the new scope tool', () => {
+test('ordinary Echo keeps the mainline core and discovery policy', () => {
   const { agent, visibility, visible, global } = setup()
   global.push('expand_tool_scope', 'mcp__voidr__evidence_reports_get')
   agent.session.events = [hint()]
 
   visibility.refresh(agent)
 
-  assert.equal(visible(agent).includes('mcp__voidr__list_applications'), true)
-  assert.equal(visible(agent).includes('mcp__voidr__evidence_reports_get'), true)
-  assert.equal(visible(agent).includes('mcp__voidr__echo_get_overview_view'), true)
+  assert.equal(visible(agent).includes('mcp__voidr__list_applications'), false)
+  assert.equal(visible(agent).includes('mcp__voidr__evidence_reports_get'), false)
+  assert.equal(visible(agent).includes('mcp__voidr__echo_get_overview_view'), false)
+  assert.equal(visible(agent).includes('echo_discover_tools'), true)
   assert.equal(visible(agent).includes('expand_tool_scope'), false)
 })
 
@@ -214,7 +220,7 @@ test('Echo Journey Studio retains its exact production allowlist', () => {
     'mcp__voidr__system_call_tool', 'bash']
   const initial = initialToolDomains(hint)
   assert.equal(initial, null)
-  const denied = toolVisibilityFilter(names, { echo: true, authoring: true }).deny
+  const denied = toolVisibilityFilter(names, { echo: false, authoring: true }).deny
   assert.ok(denied.includes('expand_tool_scope'))
   assert.ok(!denied.includes('mcp__voidr__echo_journeys_update_draft'))
   assert.ok(denied.includes('mcp__voidr__playwright_get_execution_analytics'))

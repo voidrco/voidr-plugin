@@ -8,9 +8,10 @@ confirmation.
 
 ## Echo exception
 
-Echo is excluded from this rollout. Ordinary Echo conversations keep the
-existing catalog and member access policy. Echo Journey Studio keeps its exact
-draft-authoring allowlist; it does not offer `expand_tool_scope`. Publishing,
+Echo is excluded from this rollout. Ordinary Echo conversations follow the
+core catalog and `echo_discover_tools` policy already on `main`, along with the
+Echo member access policy. Echo Journey Studio keeps its exact draft-authoring
+allowlist; it does not offer `expand_tool_scope`. Publishing,
 scheduling, activating, and executing a draft remain outside the Studio agent.
 The tool scope API rejects Echo calls even if invoked directly. Supporting a
 change of task from Echo requires a separate product and access review.

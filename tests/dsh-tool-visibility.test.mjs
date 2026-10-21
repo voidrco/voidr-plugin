@@ -122,6 +122,20 @@ test('Radar, tickets and generic contexts expose different small catalogs', () =
   assert.ok(generic.includes('mcp__voidr__test_plans_list_test_plans'))
 })
 
+test('an unrelated Slack channel starts general and can reveal ticket tools', () => {
+  const names = ['mcp__voidr__knowledge_search', 'mcp__voidr__custom_connectors_list',
+    'mcp__voidr__custom_connectors_search_tickets', 'expand_tool_scope']
+  const initial = initialToolDomains({ surface: 'slack' })
+  assert.deepEqual(initial, ['knowledge'])
+  const before = toolVisibilityFilter(names, { domains: initial }).deny
+  assert.ok(!before.includes('mcp__voidr__knowledge_search'))
+  assert.ok(!before.includes('mcp__voidr__custom_connectors_list'))
+  assert.ok(before.includes('mcp__voidr__custom_connectors_search_tickets'))
+  assert.ok(!before.includes('expand_tool_scope'))
+  const after = toolVisibilityFilter(names, { domains: [...initial, 'tickets'] })?.deny ?? []
+  assert.ok(!after.includes('mcp__voidr__custom_connectors_search_tickets'))
+})
+
 test('each surface starts with the evidence tools used by its primary skill', () => {
   const names = [
     'mcp__voidr__playwright_get_execution_analytics',

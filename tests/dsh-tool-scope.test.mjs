@@ -58,6 +58,12 @@ test('Monitor begins with failure tools and reveals a named report tool for one 
     /not available/)
 })
 
+test('generic Slack explains how to reveal a capability on its first question', () => {
+  const { agent, variables } = setup('slack')
+  const prompt = variables.get('voidr_interactive_test_development')({ agent })
+  assert.match(prompt, /including the first question in a generic Slack channel/)
+})
+
 test('Echo Journey Studio keeps production authoring restrictions', async () => {
   const { agent, registered, visible } = setup('echo', 'echo_journey_import')
   assert.equal(visible('mcp__voidr__echo_journeys_update_draft'), true)
@@ -74,7 +80,7 @@ test('ordinary Echo keeps its catalog and does not opt into tool profiles', asyn
   assert.equal(visible('mcp__voidr__playwright_get_execution_analytics'), true)
   assert.equal(visible('expand_tool_scope'), false)
   const prompt = variables.get('voidr_interactive_test_development')({ agent })
-  assert.doesNotMatch(prompt, /active surface exposes tools for its primary task/)
+  assert.doesNotMatch(prompt, /active surface exposes a small initial tool profile/)
   assert.doesNotMatch(prompt, /For an organization MCP connector, keep discovery small/)
   await assert.rejects(registered.get('expand_tool_scope').execute({ domain: 'execution' }, { agent }),
     /not available on Echo/)

@@ -57,14 +57,21 @@ test('Monitor begins with failure tools and reveals a named report tool for one 
     /not available/)
 })
 
-test('Echo Journey Studio can change task without exposing draft publication', async () => {
+test('Echo Journey Studio keeps production authoring restrictions', async () => {
   const { agent, registered, visible } = setup('echo', 'echo_journey_import')
   assert.equal(visible('mcp__voidr__echo_journeys_update_draft'), true)
   assert.equal(visible('mcp__voidr__playwright_get_execution_analytics'), false)
   const expansion = registered.get('expand_tool_scope')
-  await expansion.execute({ domain: 'execution' }, { agent })
-  assert.equal(visible('mcp__voidr__playwright_get_execution_analytics'), true)
-  await assert.rejects(expansion.execute({ toolName: 'echo_journeys_publish_draft' }, { agent }),
-    /Review and publish/)
+  assert.equal(visible('expand_tool_scope'), false)
+  await assert.rejects(expansion.execute({ domain: 'execution' }, { agent }), /not available on Echo/)
+  assert.equal(visible('mcp__voidr__playwright_get_execution_analytics'), false)
   assert.equal(visible('mcp__voidr__echo_journeys_publish_draft'), false)
+})
+
+test('ordinary Echo keeps its catalog and does not opt into tool profiles', async () => {
+  const { agent, registered, visible } = setup('echo')
+  assert.equal(visible('mcp__voidr__playwright_get_execution_analytics'), true)
+  assert.equal(visible('expand_tool_scope'), false)
+  await assert.rejects(registered.get('expand_tool_scope').execute({ domain: 'execution' }, { agent }),
+    /not available on Echo/)
 })

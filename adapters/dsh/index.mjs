@@ -96,6 +96,7 @@ export function apply(ctx) {
       if (domain !== undefined && !TOOL_DOMAINS.includes(domain)) throw new Error('Unknown tool domain')
       const agent = exec.agent
       const hint = contextHint(agent?.session?.events ?? [])
+      if (hint?.surface === 'echo') throw new Error('Tool scope expansion is not available on Echo')
       const initial = initialToolDomains(hint)
       if (!initial) throw new Error('No expandable tool profile is active')
       let toolName
@@ -105,9 +106,6 @@ export function apply(ctx) {
         toolName = requestedTool.startsWith('mcp__voidr__') ? requestedTool : `mcp__voidr__${requestedTool}`
         if (!ctx.tools.schemas().some(tool => tool.name === toolName))
           throw new Error('Voidr tool is not available in this session')
-        if (hint.surface === 'echo' && hint.intent === 'echo_journey_import' &&
-          /^mcp__voidr__echo_journeys_(?:publish|schedule|activate|execute)(?:_|$)/.test(toolName))
-          throw new Error('Publish, schedule, activate, or execute this draft through Review and publish')
       }
       if (domain && !expandedDomains(agent.session.events).includes(domain))
         agent.session.append(TOOL_SCOPE_EVENT, { domain })
@@ -146,8 +144,8 @@ export function apply(ctx) {
       'For explicit Voidr Hero, platform-defect triage, or issue-tracker ticket requests on any surface, load voidr-hero-analysis. Keep the active surface skill for unrelated work. Hero access depends on the authenticated organization and available tools; a screen hint is not authorization.',
       'For explicit Voidr Gate PR, business-rule, journey-impact, or governance questions on another surface, load voidr-gate-analysis. Keep the active surface skill for unrelated work. A screen hint is not evidence or authorization.',
       'For explicit load or performance testing on any surface, load voidr-performance-setup. It routes implementation to voidr-performance-author, preflight to voidr-performance-validate, and confirmed load runs or reports to voidr-performance-execute. Never use the Playwright Test Plan workflow for a native PerformancePlan.',
-      'The active surface exposes tools for its primary task. If the user explicitly changes task, call expand_tool_scope for that domain or for an exact available Voidr tool named by the relevant skill, then use the newly visible tools. Do not expand merely to browse the catalog. Tool visibility does not grant permission to modify data. Echo Journey Studio drafts still publish only through Review and publish in that UI; restricted Echo members retain their separate access policy.',
-      'For an organization MCP connector, keep discovery small: when custom_connectors_list_mcp_tools offers name, request the one known remote tool by exact name; otherwise use query with a low limit. Read its returned schema and readOnlyHint before calling it. On older hosts that expose only connector, use the existing artifact narrowing path.',
+      ...(hint?.surface === 'echo' ? [] : ['The active surface exposes tools for its primary task. If the user explicitly changes task, call expand_tool_scope for that domain or for an exact available Voidr tool named by the relevant skill, then use the newly visible tools. Do not expand merely to browse the catalog. Tool visibility does not grant permission to modify data.']),
+      ...(hint?.surface === 'echo' ? [] : ['For an organization MCP connector, keep discovery small: when custom_connectors_list_mcp_tools offers name, request the one known remote tool by exact name; otherwise use query with a low limit. Read its returned schema and readOnlyHint before calling it. On older hosts that expose only connector, use the existing artifact narrowing path.']),
       ...(skill ? [`Active surface skill: ${skill.name}\nThese instructions are already loaded for this surface.\n${skill.content}`] : [])
     ].join('\n\n')
   })

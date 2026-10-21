@@ -10,11 +10,6 @@ const CORE = new Set([
   'mcp__voidr__artifacts_aggregate', 'mcp__voidr__files_analyze_uploaded_file',
   'mcp__voidr__assistant_help_request', 'mcp__voidr__custom_connectors_list',
 ])
-const STUDIO_CORE = new Set([
-  'skill', 'read', 'todo_write', 'ask_user_question', 'render_widget',
-  'mcp__voidr__files_analyze_uploaded_file',
-])
-
 const DOMAINS = {
   radar: [
     'preventive_monitor_',
@@ -60,13 +55,6 @@ const DOMAINS = {
     'applications_list_environments', 'sessions_list_sessions',
     'sessions_get_session_summary', 'sessions_get_session_actions',
   ],
-  'echo-authoring': [
-    'echo_list_applications', 'echo_list_journey_plans',
-    'echo_get_journey', 'echo_get_journey_flow', 'echo_get_journey_draft',
-    'echo_journeys_create_draft', 'echo_journeys_add_draft_sources',
-    'echo_journeys_analyze_draft', 'echo_journeys_get_draft',
-    'echo_journeys_list_drafts', 'echo_journeys_update_draft',
-  ],
   echo: ['echo_'],
   reports: ['evidence_reports_'],
   performance: [
@@ -98,20 +86,22 @@ function matches(name, entries) {
 export function initialToolDomains(hint) {
   if (!hint || typeof hint.surface !== 'string') return ['knowledge']
   if (hint.surface === 'slack') return hint.radarSituationId ? ['radar'] : ['knowledge']
-  if (hint.surface === 'echo' && hint.intent === 'echo_journey_import') return ['echo-authoring']
+  // Echo keeps its existing member and Studio policies; tool profiles are
+  // intentionally scoped to the other DSH surfaces.
+  if (hint.surface === 'echo') return null
   return {
     'preventive-monitor': ['radar'], monitor: ['execution'],
     home: ['knowledge'], 'context-graph': ['knowledge'],
     spec: ['plans'], journeys: ['plans'], 'journey-overview': ['plans'],
-    automate: ['authoring'], performance: ['performance'], echo: ['echo'],
+    automate: ['authoring'], performance: ['performance'],
     'voidr-gate': ['code'], teams: ['knowledge'],
     'third-party-management': ['third-party'],
   }[hint.surface] ?? null
 }
 
-export function profileToolVisible(name, domains, { development = false, extraTools = [], authoring = false } = {}) {
+export function profileToolVisible(name, domains, { development = false, extraTools = [] } = {}) {
   if (name === 'expand_tool_scope') return true
-  if (CORE.has(name)) return !authoring || STUDIO_CORE.has(name) || extraTools.includes(name)
+  if (CORE.has(name)) return true
   if (development && NATIVE_DEVELOPMENT.has(name)) return true
   if (extraTools.includes(name)) return true
   return domains.some(domain => matches(name, DOMAINS[domain] ?? []))

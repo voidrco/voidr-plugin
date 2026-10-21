@@ -50,7 +50,7 @@ test('masks follow the global registry and do not churn without changes', () => 
   visibility.refresh(agent)
   visibility.refresh(agent)
   assert.equal(masks.length, 1)
-  assert.deepEqual(masks[0].filter.deny, ['echo_render_deviations', 'mcp__voidr__list_applications', 'render_widget'])
+  assert.deepEqual(masks[0].filter.deny, ['echo_render_deviations', 'render_widget'])
 
   restricted.add('member')
   visibility.refresh(agent)
@@ -75,15 +75,17 @@ test('masks follow the global registry and do not churn without changes', () => 
   assert.equal(visible(agent).includes('render_widget'), true)
 })
 
-test('ordinary Echo sessions use the Echo profile', () => {
-  const { masks, agent, visibility } = setup()
+test('ordinary Echo keeps the production catalog except the new scope tool', () => {
+  const { agent, visibility, visible, global } = setup()
+  global.push('expand_tool_scope', 'mcp__voidr__evidence_reports_get')
   agent.session.events = [hint()]
 
   visibility.refresh(agent)
 
-  assert.equal(masks.length, 1)
-  assert.ok(masks[0].filter.deny.includes('mcp__voidr__list_applications'))
-  assert.ok(!masks[0].filter.deny.includes('mcp__voidr__echo_get_overview_view'))
+  assert.equal(visible(agent).includes('mcp__voidr__list_applications'), true)
+  assert.equal(visible(agent).includes('mcp__voidr__evidence_reports_get'), true)
+  assert.equal(visible(agent).includes('mcp__voidr__echo_get_overview_view'), true)
+  assert.equal(visible(agent).includes('expand_tool_scope'), false)
 })
 
 test('a mask the runtime rejects never fails the conversation', () => {
@@ -158,8 +160,6 @@ test('every profiled surface retains its primary capability and resets an explic
     [{ surface: 'performance' }, 'performance_list_plans'],
     [{ surface: 'monitor' }, 'playwright_get_execution_analytics'],
     [{ surface: 'preventive-monitor' }, 'preventive_monitor_get_radar_situation'],
-    [{ surface: 'echo' }, 'echo_get_overview_view'],
-    [{ surface: 'echo', intent: 'echo_journey_import' }, 'echo_journeys_update_draft'],
     [{ surface: 'voidr-gate' }, 'source_control_search_code'],
     [{ surface: 'teams' }, 'ontology_search_entities'],
     [{ surface: 'third-party-management' }, 'third_party_list'],
@@ -169,9 +169,7 @@ test('every profiled surface retains its primary capability and resets an explic
   const foreign = 'mcp__voidr__evidence_reports_get'
   for (const [hint, primary] of cases) {
     const initial = initialToolDomains(hint)
-    assert.ok(profileToolVisible(`mcp__voidr__${primary}`, initial, {
-      authoring: hint.intent === 'echo_journey_import',
-    }), `${hint.surface}: primary tool missing`)
+    assert.ok(profileToolVisible(`mcp__voidr__${primary}`, initial), `${hint.surface}: primary tool missing`)
     assert.equal(profileToolVisible(foreign, initial), false, `${hint.surface}: foreign tool initially visible`)
     const events = [{ type: 'voidr/project-context-hint', data: hint },
       { type: TOOL_SCOPE_EVENT, data: { toolName: foreign } }]
@@ -195,22 +193,20 @@ test('explicit tools outside every domain can be revealed without opening the fu
     .includes('mcp__voidr__evidence_reports_create'))
 })
 
-test('Echo Journey Studio keeps draft tools and can switch to an authorized domain', () => {
+test('Echo Journey Studio retains its exact production allowlist', () => {
   const hint = { surface: 'echo', intent: 'echo_journey_import' }
   const names = ['expand_tool_scope', 'mcp__voidr__echo_journeys_update_draft',
     'mcp__voidr__playwright_get_execution_analytics', 'mcp__voidr__echo_journeys_publish_draft',
     'mcp__voidr__system_call_tool', 'bash']
   const initial = initialToolDomains(hint)
-  assert.deepEqual(initial, ['echo-authoring'])
-  const before = toolVisibilityFilter(names, { authoring: true, domains: initial }).deny
-  assert.ok(!before.includes('expand_tool_scope'))
-  assert.ok(!before.includes('mcp__voidr__echo_journeys_update_draft'))
-  assert.ok(before.includes('mcp__voidr__playwright_get_execution_analytics'))
-  assert.ok(before.includes('mcp__voidr__system_call_tool'))
-  assert.ok(before.includes('bash'))
-  const after = toolVisibilityFilter(names, { authoring: true, domains: [...initial, 'execution'] }).deny
-  assert.ok(!after.includes('mcp__voidr__playwright_get_execution_analytics'))
-  assert.ok(after.includes('mcp__voidr__echo_journeys_publish_draft'))
+  assert.equal(initial, null)
+  const denied = toolVisibilityFilter(names, { echo: true, authoring: true }).deny
+  assert.ok(denied.includes('expand_tool_scope'))
+  assert.ok(!denied.includes('mcp__voidr__echo_journeys_update_draft'))
+  assert.ok(denied.includes('mcp__voidr__playwright_get_execution_analytics'))
+  assert.ok(denied.includes('mcp__voidr__system_call_tool'))
+  assert.ok(denied.includes('bash'))
+  assert.ok(denied.includes('mcp__voidr__echo_journeys_publish_draft'))
 })
 
 test('expanding a domain refreshes from the unmasked global catalog', () => {

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { echoDeviationsSchema, validateEchoDeviationsFilters } from './echo-render-deviations.mjs'
+import { echoDeviationsSchema, validateEchoDeviationsFilters, bindEchoReportFilters } from './echo-render-deviations.mjs'
 
 export const echoRegulatoryReportSchema = echoDeviationsSchema
 
@@ -58,7 +58,7 @@ export function registerEchoRenderRegulatoryControls(ctx, callEchoTool) {
       render: (_args, value) => [{ type: 'text', text: `Published a read-only regulatory table with ${value.controlsRendered} of ${value.controlsTotal} observed violated controls. The rows were copied from the Service in code; do not recreate, shorten or renumber them in prose. Violation occurrences: ${value.violationOccurrences}; critical occurrences: ${value.criticalOccurrences}; affected sessions: ${value.affectedSessions}. Most recurrent: ${JSON.stringify(value.mostRecurrentControls)}. Most critical: ${JSON.stringify(value.mostCriticalControls)}. As of ${value.asOf}; consistency: ${value.consistency}. Coverage: ${JSON.stringify(value.coverage)}. Complete control rows do not mean every selected session had readable evaluation.` }]
     },
     execute: async (args, exec) => {
-      const filters = validateEchoDeviationsFilters(args)
+      const filters = validateEchoDeviationsFilters(bindEchoReportFilters(args, exec.agent))
       const controls = []
       let first
       let page = 1

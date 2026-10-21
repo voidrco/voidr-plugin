@@ -4,6 +4,8 @@ export const echoDeviationsSchema = {
   type: 'object', additionalProperties: false,
   properties: {
     applicationId: { type: 'string', pattern: '^[a-fA-F0-9]{24}$' },
+    planId: { type: 'string', pattern: '^[a-fA-F0-9]{24}$' },
+    moduleSlug: { type: 'string', minLength: 1, maxLength: 160 },
     occurredFrom: { type: 'string', format: 'date-time', description: 'Inclusive start, with timezone offset.' },
     occurredToExclusive: { type: 'string', format: 'date-time', description: 'Exclusive end, with timezone offset.' },
     timezone: { type: 'string', description: 'Display timezone; defaults to America/Sao_Paulo.' },
@@ -12,12 +14,27 @@ export const echoDeviationsSchema = {
   required: ['applicationId', 'occurredFrom', 'occurredToExclusive']
 }
 
+export function bindEchoReportFilters(args, agent) {
+  const hint = agent?.session?.events.findLast(event => event.type === 'voidr/project-context-hint')?.data
+  const selected = { applicationId: hint?.applicationId ?? hint?.echoContext?.applicationId,
+    planId: hint?.testPlanId ?? hint?.echoContext?.planId,
+    moduleSlug: hint?.moduleSlug ?? hint?.echoContext?.moduleSlug,
+    environment: hint?.echoContext?.environmentSlug }
+  const defaults = Object.fromEntries(Object.entries(selected).filter(([, value]) => value !== undefined && value !== null))
+  for (const [key, value] of Object.entries(defaults)) {
+    if (args[key] !== undefined && args[key] !== value) throw new Error(`The report ${key} differs from the selected Echo scope`)
+  }
+  return { ...args, ...defaults }
+}
+
 export function validateEchoDeviationsFilters(args) {
   if (!args || typeof args !== 'object' || Array.isArray(args) ||
     Object.keys(args).some(key => !Object.hasOwn(echoDeviationsSchema.properties, key))) {
     throw new Error('Use only applicationId, occurredFrom, occurredToExclusive, timezone and environment. Do not supply rows, spec, SQL, URLs or organizationId.')
   }
   if (!/^[a-f\d]{24}$/i.test(args.applicationId ?? '')) throw new Error('applicationId must be an ObjectId')
+  if (args.planId !== undefined && !/^[a-f\d]{24}$/i.test(args.planId)) throw new Error('planId must be an ObjectId')
+  if (args.moduleSlug !== undefined && (typeof args.moduleSlug !== 'string' || !args.moduleSlug.trim() || args.moduleSlug.length > 160)) throw new Error('Invalid moduleSlug')
   for (const key of ['occurredFrom', 'occurredToExclusive']) {
     if (typeof args[key] !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(args[key]) || !Number.isFinite(Date.parse(args[key]))) {
       throw new Error(key + ' must be an ISO timestamp with timezone offset')
@@ -30,6 +47,8 @@ export function validateEchoDeviationsFilters(args) {
   try { new Intl.DateTimeFormat('pt-BR', { timeZone: timezone }).format(0) } catch { throw new Error('Invalid timezone') }
   return { applicationId: args.applicationId, occurredFrom: new Date(args.occurredFrom).toISOString(),
     occurredToExclusive: new Date(args.occurredToExclusive).toISOString(), timezone,
+    ...(args.planId !== undefined ? { planId: args.planId } : {}),
+    ...(args.moduleSlug !== undefined ? { moduleSlug: args.moduleSlug } : {}),
     ...(args.environment !== undefined ? { environment: args.environment } : {}) }
 }
 
@@ -46,7 +65,7 @@ export function registerEchoRenderDeviations(ctx, callEchoTool) {
       render: (_args, value) => [{ type: 'text', text: `Published a read-only paginated deviations widget. Query found ${value.total} records, ${value.pages} pages of up to ${value.pageSize}. The UI loads pages with the viewer's current authorization. This confirms publication, not browser rendering or analysis of every record. Do not copy the rows or ask for a selection. Counts are live within the fixed interval.` }]
     },
     execute: async (args, exec) => {
-      const filters = validateEchoDeviationsFilters(args)
+      const filters = validateEchoDeviationsFilters(bindEchoReportFilters(args, exec.agent))
       const { timezone, ...query } = filters
       const response = await callEchoTool(exec.agent, 'echo_list_deviations', { ...query, page: 1, limit: 20, sort: 'recent' }, exec.signal)
       const envelope = response.structuredContent?.data ?? JSON.parse(response.content.find(item => item.type === 'text').text)

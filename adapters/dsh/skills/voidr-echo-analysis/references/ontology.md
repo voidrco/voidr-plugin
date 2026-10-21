@@ -2,7 +2,9 @@
 
 ## Canonical hierarchy
 
-`Organization → Application → Environment | Journey | Persona | Voice | Schedule`
+`Organization → Application → Plan → Journey → Scenario`
+
+`Application → Environment | Persona | Voice | Schedule`
 
 `Journey (TestPlan module) → JourneyFlowVersion | Scenario | ExecutionProfile | DataProfile | JudgePolicy`
 

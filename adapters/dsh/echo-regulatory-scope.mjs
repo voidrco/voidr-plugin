@@ -13,6 +13,13 @@ export function regulatoryScopeArguments(tool, args, hint) {
   }
   const applicationId = hint.applicationId ?? nested.applicationId
   const moduleSlug = hint.moduleSlug ?? nested.moduleSlug ?? null
+  const planId = hint.testPlanId ?? nested.planId
+  if (hint.testPlanId != null && nested.planId != null && hint.testPlanId !== nested.planId)
+    throw new Error('Conflicting Echo Plan context; refresh the selected screen')
+  if (planId !== undefined && (typeof planId !== 'string' || !/^[a-f\d]{24}$/i.test(planId)))
+    throw new Error('Invalid Echo Plan context; no query was sent')
+  if (planId && args.planId !== undefined && args.planId !== planId)
+    throw new Error('Keep the selected Echo Plan in the query')
   if (typeof applicationId !== 'string' || !/^[a-f\d]{24}$/i.test(applicationId) ||
       (moduleSlug !== null && (typeof moduleSlug !== 'string' || !moduleSlug.trim() || moduleSlug.length > 200))) {
     throw new Error('Invalid Echo screen context; no regulatory query was sent')
@@ -21,7 +28,8 @@ export function regulatoryScopeArguments(tool, args, hint) {
     throw new Error('Application differs from the selected Echo screen')
   }
   const scope = args.scope === undefined
-    ? moduleSlug === null ? { type: 'application' } : { type: 'journey', moduleSlug }
+    ? (args.moduleSlug ?? moduleSlug) === null || (args.moduleSlug ?? moduleSlug) === undefined
+      ? { type: 'application' } : { type: 'journey', moduleSlug: args.moduleSlug ?? moduleSlug }
     : args.scope
   if (!scope || typeof scope !== 'object' || Array.isArray(scope) ||
       !['journey', 'application'].includes(scope.type) ||
@@ -31,5 +39,8 @@ export function regulatoryScopeArguments(tool, args, hint) {
   if (moduleSlug !== null && (scope.type !== 'journey' || scope.moduleSlug !== moduleSlug)) {
     throw new Error('Keep the selected Echo Journey. To query all Journeys, remove the Journey filter on the screen and send a new message.')
   }
-  return { ...args, applicationId, scope }
+  if (args.moduleSlug !== undefined && (scope.type !== 'journey' || args.moduleSlug !== scope.moduleSlug))
+    throw new Error('Conflicting Echo Journey query filters')
+  const { moduleSlug: _moduleSlug, ...forwarded } = args
+  return { ...forwarded, applicationId, ...(planId ? { planId } : {}), scope }
 }

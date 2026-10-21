@@ -1,5 +1,6 @@
 import { memberToolVisible } from './echo-member-policy.mjs'
 import { WIDGET_TOOLS, contextChannel } from './whatsapp-channel.mjs'
+import { expandedDomains, expandedToolNames, initialToolDomains, profileToolVisible } from './tool-profiles.mjs'
 
 const RESERVED = new Set(['run_code'])
 const ECHO_CORE_TOOLS = new Set([
@@ -27,11 +28,13 @@ const AUTHORING_TOOLS = new Set([
   'mcp__voidr__echo_journeys_list_drafts', 'mcp__voidr__echo_journeys_update_draft'
 ])
 
-export function toolVisibilityFilter(names, { restricted, whatsapp, authoring, echo, discovered = new Set() }) {
+export function toolVisibilityFilter(names, { restricted, whatsapp, authoring, echo, discovered = new Set(),
+  domains = null, development = false, extraTools = [] }) {
   const deny = names.filter(name => !RESERVED.has(name) &&
     ((restricted && !memberToolVisible(name)) || (whatsapp && WIDGET_TOOLS.has(name)) ||
       (authoring && !AUTHORING_TOOLS.has(name)) ||
-      (echo && !ECHO_CORE_TOOLS.has(name) && !name.startsWith('mcp__voidr__artifacts_') && !discovered.has(name))))
+      (echo && !ECHO_CORE_TOOLS.has(name) && !name.startsWith('mcp__voidr__artifacts_') && !discovered.has(name)) ||
+      (domains && !profileToolVisible(name, domains, { development, extraTools }))))
   return deny.length ? { deny } : null
 }
 
@@ -39,27 +42,38 @@ export function registerToolVisibility(ctx, isRestricted) {
   const masks = new Map()
   const discoveries = new Map()
   let refreshing = false
+  // The unmasked registry lets a scope expansion reveal a tool hidden by the
+  // previous mask. Agent schemas are read only after disposing that mask.
+  const globalNames = () => ctx.tools.schemas().map(tool => tool.name).sort()
   const visibleNames = agent => ctx.tools.schemas(agent).map(tool => tool.name).sort()
-  function install(agent, state) {
+  const maskKey = (state, names) => `${state.restricted}|${state.whatsapp}|${state.authoring}|${state.echo}|${state.development}|${state.domains?.join(',')}|${state.extraTools.join(',')}|${[...state.discovered].sort().join(',')}|${names.join(',')}`
+  function install(agent, state, key) {
     masks.get(agent)?.dispose()
     masks.delete(agent)
     const restrictable = ctx.tools.view(agent).restrictableNames
     const filter = toolVisibilityFilter(visibleNames(agent).filter(name => restrictable.has(name)), state)
     const dispose = filter ? agent.ctx.tools.restrict(filter) : () => {}
-    masks.set(agent, { dispose })
+    masks.set(agent, { dispose, key })
   }
-  function refresh(agent) {
+  function refresh(agent, force = false) {
     if (!agent?.ctx?.tools || refreshing) return
     const hint = agent.session?.events.findLast(event => event.type === 'voidr/project-context-hint')?.data
+    const echoSurface = hint?.surface === 'echo'
+    const initial = echoSurface ? null : initialToolDomains(hint)
+    const domains = initial ? [...new Set([...initial, ...expandedDomains(agent.session?.events)])].sort() : null
     const state = { restricted: isRestricted(agent), whatsapp: contextChannel(agent.session?.events) === 'whatsapp',
-      authoring: hint?.surface === 'echo' && hint.intent === 'echo_journey_import',
-      echo: hint?.surface === 'echo' && hint.intent !== 'echo_journey_import',
-      discovered: discoveries.get(agent.id) ?? new Set() }
+      authoring: echoSurface && hint.intent === 'echo_journey_import',
+      echo: echoSurface && hint.intent !== 'echo_journey_import',
+      discovered: discoveries.get(agent.id) ?? new Set(), domains,
+      extraTools: echoSurface ? [] : [...new Set(expandedToolNames(agent.session?.events))].sort(),
+      development: hint?.surface !== 'slack' && hint?.surface !== 'teams' }
     const previous = masks.get(agent)
-    if (!previous && !state.restricted && !state.whatsapp && !state.authoring && !state.echo) return
+    if (!previous && !state.restricted && !state.whatsapp && !state.authoring && !state.echo && !domains) return
+    const key = maskKey(state, globalNames())
+    if (!force && previous?.key === key) return
     refreshing = true
     try {
-      install(agent, state)
+      install(agent, state, key)
     } catch (error) {
       ctx.logger?.warn('tool visibility mask was not applied', { agentId: agent.id, error: error instanceof Error ? error.message : String(error) })
     } finally {
@@ -94,7 +108,8 @@ export function registerToolVisibility(ctx, isRestricted) {
     }
   })
   ctx.on('agent/created', ({ agent }) => refresh(agent), { global: true })
-  ctx.on('tools/change', () => { if (!refreshing) for (const agent of ctx.agents.list()) refresh(agent) })
+  ctx.on('agent/pre-step', async ({ agent }, next) => { refresh(agent); return next() })
+  ctx.on('tools/change', () => { if (!refreshing) for (const agent of ctx.agents.list()) refresh(agent, true) })
   ctx.on('agent/disposed', ({ agent }) => { masks.delete(agent); discoveries.delete(agent.id) }, { global: true })
   return { refresh }
 }

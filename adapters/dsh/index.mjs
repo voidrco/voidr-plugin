@@ -12,6 +12,7 @@ import { echoOverviewQuestionDenial, registerEchoProposeOverviewChange } from '.
 import { whatsappChannelDenial } from './whatsapp-channel.mjs'
 import { registerEchoMemberPolicy } from './echo-member-policy.mjs'
 import { registerToolVisibility } from './tool-visibility.mjs'
+import { TOOL_DOMAINS, TOOL_SCOPE_EVENT, expandedDomains, expandedToolNames, initialToolDomains } from './tool-profiles.mjs'
 import { echoOverviewStudioDenial } from './echo-overview-studio.mjs'
 import { registerObservabilityWidgets } from './observability-widgets.mjs'
 
@@ -60,6 +61,7 @@ function contextHint(events) {
 
 export function registerKnownEvents(knownEventTypes) {
   knownEventTypes.add(CONTEXT_EVENT_TYPE)
+  knownEventTypes.add(TOOL_SCOPE_EVENT)
 }
 
 export const name = 'voidr-agent-plugin-dsh'
@@ -75,6 +77,49 @@ export function apply(ctx) {
   registerEchoProposeOverviewChange(ctx, callEchoTool)
   const visibility = registerToolVisibility(ctx, agent => memberPolicy.restricted(agent))
   const memberPolicy = registerEchoMemberPolicy(ctx, visibility.refresh)
+  ctx.tools.register({
+    name: 'expand_tool_scope',
+    description: 'Expose one Voidr tool domain or one available Service tool by exact name when the current question needs capabilities outside the active surface. This changes visibility only for the current turn; Service permissions and approval rules still apply. Use an exact toolName for a capability omitted from the named domains instead of opening the whole catalog.',
+    parameters: { type: 'object', additionalProperties: false, properties: {
+      domain: { type: 'string', enum: TOOL_DOMAINS },
+      toolName: { type: 'string' },
+    }, minProperties: 1, maxProperties: 1 },
+    output: { schema: { type: 'object', additionalProperties: false, properties: {
+      activeDomains: { type: 'array', items: { type: 'string' } },
+      activeTools: { type: 'array', items: { type: 'string' } },
+    }, required: ['activeDomains'] },
+    render: (_args, value) => [{ type: 'text', text: `Tool scope updated. Active domains: ${value.activeDomains.join(', ')}. Additional tools: ${value.activeTools.join(', ') || 'none'}. Continue with the relevant tools.` }],
+    },
+    execute: async (args, exec) => {
+      const domain = args?.domain
+      const requestedTool = args?.toolName
+      if ((domain === undefined) === (requestedTool === undefined))
+        throw new Error('Choose one domain or one toolName')
+      if (domain !== undefined && !TOOL_DOMAINS.includes(domain)) throw new Error('Unknown tool domain')
+      const agent = exec.agent
+      const hint = contextHint(agent?.session?.events ?? [])
+      if (hint?.surface === 'echo') throw new Error('Tool scope expansion is not available on Echo')
+      const initial = initialToolDomains(hint)
+      if (!initial) throw new Error('No expandable tool profile is active')
+      let toolName
+      if (requestedTool !== undefined) {
+        if (typeof requestedTool !== 'string' || !/^(?:mcp__voidr__)?[a-z][a-z0-9_]*$/.test(requestedTool))
+          throw new Error('Invalid Voidr tool name')
+        toolName = requestedTool.startsWith('mcp__voidr__') ? requestedTool : `mcp__voidr__${requestedTool}`
+        if (!ctx.tools.schemas().some(tool => tool.name === toolName))
+          throw new Error('Voidr tool is not available in this session')
+      }
+      if (domain && !expandedDomains(agent.session.events).includes(domain))
+        agent.session.append(TOOL_SCOPE_EVENT, { domain })
+      if (toolName && !expandedToolNames(agent.session.events).includes(toolName))
+        agent.session.append(TOOL_SCOPE_EVENT, { toolName })
+      visibility.refresh(agent)
+      return {
+        activeDomains: [...new Set([...initial, ...expandedDomains(agent.session.events)])].sort(),
+        activeTools: [...new Set(expandedToolNames(agent.session.events))].sort(),
+      }
+    },
+  })
   const skills = loadDshPluginSkills()
   for (const skill of skills) ctx.skills.register(skill)
   // DSH does not re-interpolate variable values, preserving skill examples and UI hint literals.
@@ -103,6 +148,8 @@ export function apply(ctx) {
       'For explicit Voidr Hero, platform-defect triage, or issue-tracker ticket requests on any surface, load voidr-hero-analysis. Keep the active surface skill for unrelated work. Hero access depends on the authenticated organization and available tools; a screen hint is not authorization.',
       'For explicit Voidr Gate PR, business-rule, journey-impact, or governance questions on another surface, load voidr-gate-analysis. Keep the active surface skill for unrelated work. A screen hint is not evidence or authorization.',
       'For explicit load or performance testing on any surface, load voidr-performance-setup. It routes implementation to voidr-performance-author, preflight to voidr-performance-validate, and confirmed load runs or reports to voidr-performance-execute. Never use the Playwright Test Plan workflow for a native PerformancePlan.',
+      ...(hint?.surface === 'echo' ? [] : ['The active surface exposes a small initial tool profile. When the user asks for a capability outside that profile, including the first question in a generic Slack channel, call expand_tool_scope for the relevant domain or for an exact available Voidr tool named by the relevant skill, then use the newly visible tools. Do not expand merely to browse the catalog. Tool visibility does not grant permission to modify data.']),
+      ...(hint?.surface === 'echo' ? [] : ['For an organization MCP connector, keep discovery small: when custom_connectors_list_mcp_tools offers name, request the one known remote tool by exact name; otherwise use query with a low limit. Read its returned schema and readOnlyHint before calling it. On older hosts that expose only connector, use the existing artifact narrowing path.']),
       ...(skill ? [`Active surface skill: ${skill.name}\nThese instructions are already loaded for this surface.\n${skill.content}`] : [])
     ].join('\n\n')
   })

@@ -8,6 +8,7 @@ function setup(surface, intent) {
     'mcp__voidr__playwright_get_execution_analytics',
     'mcp__voidr__preventive_monitor_get_radar_situation',
     'mcp__voidr__evidence_reports_get',
+    'mcp__voidr__defects_create_defect',
     'mcp__voidr__echo_journeys_update_draft',
     'mcp__voidr__echo_journeys_publish_draft',
   ])
@@ -63,6 +64,17 @@ test('generic Slack explains how to reveal a capability on its first question', 
   const { agent, variables } = setup('slack')
   const prompt = variables.get('voidr_interactive_test_development')({ agent })
   assert.match(prompt, /including the first question in a generic Slack channel/)
+})
+
+test('Monitor reveals confirmed-action capabilities on demand and resets them on the next turn', async () => {
+  const { agent, registered, hooks, visible } = setup('monitor')
+  const tool = 'mcp__voidr__defects_create_defect'
+  assert.equal(visible(tool), false)
+  await registered.get('expand_tool_scope').execute({ domain: 'execution' }, { agent })
+  assert.equal(visible(tool), true)
+  agent.session.append('turn/start', { turn: 2 })
+  await hooks.get('agent/pre-step')({ agent }, () => {})
+  assert.equal(visible(tool), false)
 })
 
 test('Echo Journey Studio keeps production authoring restrictions', async () => {

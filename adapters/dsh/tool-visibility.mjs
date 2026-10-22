@@ -66,7 +66,8 @@ export function registerToolVisibility(ctx, isRestricted) {
       echo: echoSurface && hint.intent !== 'echo_journey_import',
       discovered: discoveries.get(agent.id) ?? new Set(), domains,
       extraTools: echoSurface ? [] : [...new Set(expandedToolNames(agent.session?.events))].sort(),
-      development: hint?.surface !== 'slack' && hint?.surface !== 'teams' }
+      development: hint?.surface !== 'slack' && hint?.surface !== 'teams' &&
+        (hint?.surface !== 'monitor' || domains?.includes('authoring')) }
     const previous = masks.get(agent)
     if (!previous && !state.restricted && !state.whatsapp && !state.authoring && !state.echo && !domains) return
     const key = maskKey(state, globalNames())

@@ -1,0 +1,259 @@
+import { createHash } from 'node:crypto'
+
+const PREFIX = 'mcp__voidr__'
+const identity = value => typeof value === 'string' && /^[a-f0-9]{24}$/.test(value)
+const countBy = (rows, key) => {
+  const counts = new Map()
+  for (const row of rows) {
+    const value = String(row[key])
+    counts.set(value, (counts.get(value) ?? 0) + 1)
+  }
+  return Object.fromEntries(counts)
+}
+
+export function evidencePayload(result) {
+  if (result?.isError) throw new Error('Evidence read rejected')
+  const value = result?.value ?? result
+  if (value?.isError) throw new Error('Evidence read rejected')
+  const structured = value?.structuredContent
+  if (structured !== undefined) return structured.data ?? structured
+  for (const part of value?.content ?? []) {
+    if (part.type !== 'text') continue
+    try { return JSON.parse(part.text) } catch {}
+  }
+  throw new Error('Evidence read returned no structured data')
+}
+
+export async function resolveEvidence(value, read) {
+  if (!value?.artifactId) return value
+  if (!/^art_[a-f0-9]{18}$/.test(value.artifactId)) throw new Error('Invalid evidence artifact')
+  let reads = 0, items = 0
+  const walk = async (path, depth = 0) => {
+    if (++reads > 40 || depth > 4) throw new Error('Evidence artifact exceeds bounded hydration')
+    const first = await read({ artifactId: value.artifactId, path, offset: 0, limit: 500 })
+    if (first.error) throw new Error('Evidence artifact path unavailable')
+    if (Array.isArray(first.items)) {
+      if (!Number.isSafeInteger(first.total) || first.total < first.items.length || first.offset !== 0)
+        throw new Error('Invalid evidence artifact page')
+      const rows = [...first.items]
+      while (rows.length < first.total) {
+        if (++reads > 40 || items + rows.length > 5000) throw new Error('Evidence artifact exceeds bounded hydration')
+        const next = await read({ artifactId: value.artifactId, path, offset: rows.length, limit: 500 })
+        if (next.total !== first.total || next.offset !== rows.length || !Array.isArray(next.items) || !next.items.length)
+          throw new Error('Evidence artifact pagination changed')
+        rows.push(...next.items)
+      }
+      if (rows.length !== first.total || (items += rows.length) > 5000) throw new Error('Evidence artifact item limit exceeded')
+      return rows
+    }
+    if (!Object.hasOwn(first, 'value')) throw new Error('Evidence artifact value unavailable')
+    const output = first.value
+    if (output && typeof output === 'object' && !Array.isArray(output)) {
+      for (const [key, child] of Object.entries(output)) {
+        if (child === '{…}' || typeof child === 'string' && /^array\[\d+\]$/.test(child)) {
+          if (!/^[A-Za-z0-9_-]+$/.test(key)) throw new Error('Unsupported evidence artifact key')
+          output[key] = await walk(path === '$' ? key : `${path}.${key}`, depth + 1)
+        }
+      }
+    }
+    return output
+  }
+  const output = await walk('$')
+  if (Buffer.byteLength(JSON.stringify(output)) > 2_000_000) throw new Error('Evidence artifact byte limit exceeded')
+  return output
+}
+
+function sampledTimeline(value) {
+  if (!Array.isArray(value?.steps) || !Array.isArray(value.console) || !Array.isArray(value.network))
+    throw new Error('Timeline sections unavailable')
+  return {
+    steps: value.steps,
+    console: { sampledMessages: value.console.length, byLevel: countBy(value.console, 'level'), byMessage: countBy(value.console, 'message') },
+    network: { sampledRequests: value.network.length, byStatus: countBy(value.network, 'status'),
+      failures: value.network.filter(row => row.error || Number(row.status) >= 400) },
+    stdout: value.stdout, stderr: value.stderr,
+    coverage: 'Returned samples only; counts do not establish complete execution coverage.',
+  }
+}
+
+export function compactFailureEvidence(bundle) {
+  const omissions = []
+  const text = (value, limit, path) => {
+    if (typeof value !== 'string' || value.length <= limit) return value
+    omissions.push({ path, originalCharacters: value.length, returnedCharacters: limit })
+    return value.slice(0, limit)
+  }
+  const pick = (row, keys) => Object.fromEntries(keys.filter(key => row?.[key] !== undefined).map(key => [key, row[key]]))
+  const steps = (rows, path) => {
+    if (!Array.isArray(rows)) return null
+    const failed = new Set(), indices = new Set()
+    rows.forEach((row, i) => { if (/fail|error|timed.?out/i.test(row.status ?? '') || row.error) {
+      failed.add(i)
+      for (let j = Math.max(0, i - 1); j <= Math.min(rows.length - 1, i + 1); j++) indices.add(j)
+    } })
+    if (!indices.size) for (let i = Math.max(0, rows.length - 4); i < rows.length; i++) indices.add(i)
+    const selected = [...new Set([...failed, ...[...indices].filter(i => !failed.has(i)).slice(0, Math.max(0, 12 - failed.size))])].sort((a, b) => a - b)
+    if (selected.length !== rows.length) omissions.push({ path, originalRows: rows.length, returnedRows: selected.length })
+    return { sampledSteps: rows.length, failedSteps: failed.size, rows: selected.map(sourceRow => ({ sourceRow,
+      ...pick(rows[sourceRow], ['stepIndex', 'name', 'status', 'durationMs', 'startedAt', 'selector']),
+      error: text(rows[sourceRow].error, 1800, `${path}.${sourceRow}.error`) })) }
+  }
+  const failures = { ...bundle.failures, selected: bundle.failures.selected.map(row => ({
+    ...pick(row, ['sourceRow', 'testCaseSlug', 'title', 'failureSignature', 'startedAt', 'durationMs', 'filePath', 'line', 'selector', 'hasDomSnapshot']),
+    errorMessage: text(row.errorMessage, 2400, `failures.selected.${row.sourceRow}.errorMessage`),
+    errorStack: text(row.errorStack, 1000, `failures.selected.${row.sourceRow}.errorStack`),
+  })) }
+  const original = bundle.evidence, evidence = { ...original }
+  if (original.timeline) {
+    const network = original.timeline.network
+    const seen = new Set()
+    const examples = network.failures.map((row, sourceRow) => ({ ...row, sourceRow })).filter(row => {
+      const key = String(row.status) + ':' + String(row.error)
+      if (seen.has(key)) return false
+      seen.add(key); return true
+    }).slice(0, 6).map(row => ({ ...pick(row, ['sourceRow', 'status', 'method', 'timestampMs']),
+      url: text(row.url, 300, `timeline.network.failures.${row.sourceRow}.url`),
+      error: text(row.error, 400, `timeline.network.failures.${row.sourceRow}.error`) }))
+    evidence.timeline = { steps: steps(original.timeline.steps, 'timeline.steps'), console: original.timeline.console,
+      network: { sampledRequests: network.sampledRequests, byStatus: network.byStatus, sampledFailedRequests: network.failures.length,
+        examples, examplesCoverage: 'Distinct status/error examples, at most six; not the full failed-request list.' }, coverage: original.timeline.coverage }
+  }
+  if (original.trace) evidence.trace = { steps: steps(original.trace.steps, 'trace.steps'), traceEvidence: original.trace.traceEvidence,
+    sampledConsoleMessages: original.trace.console?.length ?? null, sampledNetworkRequests: original.trace.network?.length ?? null,
+    detailCoverage: 'Trace console/network/DOM are available from the exact trace source; not repeated in this compact view.' }
+  if (original.history) evidence.history = { ...pick(original.history, ['total', 'testCaseSlug', 'planId']),
+    returnedRecords: original.history.rows.length, byStatus: countBy(original.history.rows, 'status'),
+    rows: original.history.rows.map((row, sourceRow) => ({ sourceRow,
+      ...pick(row, ['executionId', 'status', 'retry', 'durationMs', 'startedAt']),
+      errorSummary: text(row.errorSummary, 350, `history.rows.${sourceRow}.errorSummary`) }))
+      .filter((row, i, rows) => !/^passed$/i.test(row.status ?? '') || i === 0 || i === rows.length - 1),
+    rowsCoverage: 'All non-passing records plus first/last returned record. byStatus counts every returned history record; rows are not the full series.' }
+  if (original.tagHistory) {
+    const rows = original.tagHistory.data ?? original.tagHistory.rows ?? []
+    evidence.tagHistory = { ...pick(original.tagHistory, ['total', 'page', 'limit', 'pages']), returnedRecords: rows.length,
+      rows: rows.map(row => pick(row, ['from_tag', 'to_tag', 'origin', 'created_at', 'caseDeleted'])) }
+  }
+  const result = { ...bundle, execution: pick(bundle.execution, ['executionId', 'applicationId', 'planId', 'environment', 'provider', 'status', 'startedAt', 'finishedAt', 'durationMs', 'totalTests', 'passedCount', 'failedCount', 'flakyCount', 'timedOutCount']),
+    failures, evidence, view: { kind: 'compact', omissions, instruction: 'This view is not the full source payload. For a concrete unresolved question, read the exact source and scope listed in sources. Never infer absence from an omitted field or treat a prefix as complete text.' } }
+  for (const key of ['tagHistory', 'dom', 'testCase']) {
+    if (JSON.stringify(result).length <= 38_000) break
+    if (evidence[key] !== null && evidence[key] !== undefined) {
+      evidence[key] = { detailOmitted: true, reason: 'Compact view size limit; read this exact authorized source if needed.' }
+      omissions.push({ path: `evidence.${key}`, reason: 'View size limit' })
+    }
+  }
+  if (JSON.stringify(result).length > 38_000) throw new Error('Evidence exceeds compact view size; use the exact individual source tools')
+  return result
+}
+
+export async function collectFailureEvidence({ executionId, testCaseSlug }, read, { signal, now = Date.now } = {}) {
+  if (!identity(executionId) || typeof testCaseSlug !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,119}$/.test(testCaseSlug))
+    throw new Error('An exact executionId and testCaseSlug are required')
+  signal?.throwIfAborted()
+  const sources = [], gaps = [], startedAt = now()
+  const call = async (name, args) => {
+    signal?.throwIfAborted()
+    const started = now()
+    const value = await read(name, args, signal)
+    signal?.throwIfAborted()
+    sources.push({ name, arguments: args, elapsedMs: now() - started,
+      sha256: createHash('sha256').update(JSON.stringify(value)).digest('hex') })
+    return value
+  }
+  const optional = async (name, args, validate = value => value) => {
+    try { return validate(await call(name, args)) }
+    catch (error) {
+      signal?.throwIfAborted()
+      gaps.push({ name, reason: 'Read unavailable or returned an invalid scope/shape; no empty-result inference is allowed.' })
+      return null
+    }
+  }
+  const analytics = await call('playwright_get_execution_analytics', { executionId })
+  if (analytics?.executionId !== executionId || !identity(analytics.applicationId) || !identity(analytics.planId))
+    throw new Error('Execution identity was not validated')
+  const scope = { executionId, applicationId: analytics.applicationId, planId: analytics.planId, testCaseSlug }
+  const rows = []
+  let total, complete = false
+  for (let page = 1; page <= 10; page++) {
+    const value = await call('playwright_list_execution_failures', { executionId, page, limit: 200 })
+    if (!Array.isArray(value?.rows) || !Number.isSafeInteger(value.total) || value.total < 0 ||
+      value.page !== page || value.limit !== 200 || value.rows.length > 200 ||
+      total !== undefined && total !== value.total) throw new Error('Failure pagination changed or was invalid')
+    total = value.total
+    rows.push(...value.rows)
+    if (rows.length > total) throw new Error('Failure pagination exceeded its declared total')
+    if (rows.length === total) { complete = true; break }
+    if (!value.rows.length) break
+  }
+  if (!complete) throw new Error('Complete failure pagination is required before selecting a case')
+  const selected = rows.map((row, sourceRow) => ({ ...row, sourceRow })).filter(row => row.testCaseSlug === testCaseSlug)
+  if (!selected.length) throw new Error('The selected case has no recorded failure in this execution')
+  const args = { executionId, testCaseSlug }
+  const tasks = [
+    ['timeline', () => optional('playwright_get_test_timeline', { ...args, limit: 500 }, sampledTimeline)],
+    ['trace', () => optional('playwright_get_trace_events', { ...args, limit: 200 })],
+    ['history', () => optional('playwright_get_test_history', { applicationId: scope.applicationId, planId: scope.planId, testCaseSlug, limit: 25 }, value => {
+      if (!Array.isArray(value?.rows) || value.testCaseSlug !== testCaseSlug || value.planId !== scope.planId ||
+        value.rows.some(row => row.planId !== scope.planId || row.applicationId !== scope.applicationId)) throw new Error('History scope mismatch')
+      return value
+    })],
+    ['dom', () => optional('playwright_get_test_dom', { ...args, limit: 12 })],
+    ['mapping', async () => {
+      for (let page = 1; page <= 10; page++) {
+        const result = await optional('playwright_list_test_results', { executionId, page, limit: 200 })
+        if (!Array.isArray(result?.rows) || result.page !== page || result.limit !== 200 || !Number.isSafeInteger(result.total)) return null
+        const row = result.rows.find(row => row.testCaseSlug === testCaseSlug)
+        if (row?.moduleSlug && row.suiteSlug) return { moduleSlug: row.moduleSlug, suiteSlug: row.suiteSlug }
+        if (!result.rows.length || page * 200 >= result.total) return null
+      }
+      return null
+    }],
+    ['integrations', () => optional('connectors_context_list_active_integrations', {})],
+  ]
+  const evidence = {}
+  let cursor = 0
+  await Promise.all(Array.from({ length: 3 }, async () => {
+    while (cursor < tasks.length) {
+      const [name, task] = tasks[cursor++]
+      evidence[name] = await task()
+    }
+  }))
+  if (evidence.mapping) evidence.testCase = await optional('test_plans_get_case', { planId: scope.planId, ...evidence.mapping, caseSlug: testCaseSlug })
+  else gaps.push({ name: 'test_plans_get_case', reason: 'Module/suite mapping was not resolved; expected behavior is unverified.' })
+  evidence.tagHistory = await optional('test_plans_get_tag_history', { planId: scope.planId, caseSlug: testCaseSlug, page: 1, limit: 20 })
+  signal?.throwIfAborted()
+  return { scope, execution: analytics, failures: { totalRecords: rows.length,
+    distinctCases: Object.keys(countBy(rows, 'testCaseSlug')).length, recordsByCase: countBy(rows, 'testCaseSlug'), selected, complete },
+    evidence, gaps, sources, elapsedMs: now() - startedAt,
+    rules: [
+      'The bounded initial evidence pass is complete. Answer the current question from observed failures and explicit gaps. Distinguish the observed failure mechanism from its unconfirmed underlying cause; propose a specific follow-up when the cause cannot be established. Do not repeat successful initial reads merely to obtain larger dumps.',
+      'Every selected source row is a separate record; never deduplicate signatures or infer retry/project indices.',
+      'Preserve each record’s startedAt, durationMs, errorMessage and errorStack associations; conflicting fields remain separate.',
+      'Console and HTTP counts describe samples, not root cause; a DOM snapshot does not prove continuous visibility during an assertion.',
+      'A passing later run does not exclude an intermittent application defect. Confirm a cause only with supporting evidence and an established contract.',
+      'Unavailable sources are gaps, not empty results. External connector logs remain a separate bounded read when required.',
+    ] }
+}
+
+export function registerFailureEvidence(ctx) {
+  ctx.tools.register({
+    name: 'failure_analysis_read_bundle',
+    description: 'Read the evidence for one exact failed test in an execution through the existing authorized tools. Validates execution identity, reads every failure page, preserves all matching records and gathers timeline, trace, plan-scoped history, DOM, Test Plan mapping/case and tag history with at most three concurrent reads. Returns source hashes and explicit gaps. Read-only; does not diagnose, modify data or run tests.',
+    parameters: { type: 'object', additionalProperties: false, properties: {
+      executionId: { type: 'string', pattern: '^[a-f0-9]{24}$' },
+      testCaseSlug: { type: 'string', pattern: '^[A-Za-z0-9][A-Za-z0-9_-]{0,119}$' },
+    }, required: ['executionId', 'testCaseSlug'] },
+    output: { schema: { type: 'object' }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
+    execute: async (args, exec) => {
+      if (Object.keys(args).some(key => !['executionId', 'testCaseSlug'].includes(key))) throw new Error('Unexpected evidence arguments')
+      const signal = exec.signal ? AbortSignal.any([exec.signal, AbortSignal.timeout(60_000)]) : AbortSignal.timeout(60_000)
+      let sequence = 0
+      return compactFailureEvidence(await collectFailureEvidence(args, async (name, arguments_, signal) => {
+        const dispatch = async (tool, arguments_) => evidencePayload(await ctx.tools.execute({
+          callId: `${exec.callId}:evidence:${++sequence}`, rootCallId: exec.rootCallId,
+          name: PREFIX + tool, arguments: arguments_, agent: exec.agent, parent: exec.token, signal }))
+        return resolveEvidence(await dispatch(name, arguments_), args => dispatch('artifacts_read', args))
+      }, { signal }))
+    },
+  })
+}

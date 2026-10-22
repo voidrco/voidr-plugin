@@ -17,30 +17,24 @@ export const failureChecks = {
 }
 const escape = value => String(value ?? 'não informado').replace(/[\\`*_[\]<>|]/g, char => `&#${char.charCodeAt(0)};`).replace(/[\r\n]+/g, ' ')
 
+function hypothesisRefs(kind, bundle) {
+  const rows = bundle.failures.selected.map(row => `rows:${row.sourceRow}`)
+  const section = key => bundle.evidence[key] ? [key] : []
+  return kind === 'console_origin' ? section('timeline') : kind === 'integration_test_data'
+    ? [...section('timeline'), ...section('trace')] : [...rows, ...section(kind === 'navigation_timing' ? 'timeline' : 'dom')]
+}
+
 export function validateFailureReport(args, bundle) {
-  if (!args || Object.keys(args).sort().join(',') !== 'executionId,hypotheses,nextChecks,selectedSourceRows,testCaseSlug' ||
+  if (!args || Object.keys(args).sort().join(',') !== 'executionId,hypotheses,nextChecks,testCaseSlug' ||
     args.executionId !== bundle.scope.executionId || args.testCaseSlug !== bundle.scope.testCaseSlug)
-    throw new Error('Use only the selected scope, source rows, bounded hypotheses and proposed checks')
-  const expected = bundle.failures.selected.map(row => row.sourceRow).sort((a, b) => a - b)
-  if (!bundle.failures.complete || !expected.length || !Array.isArray(args.selectedSourceRows) ||
-    JSON.stringify([...args.selectedSourceRows].sort((a, b) => a - b)) !== JSON.stringify(expected))
-    throw new Error('Every selected source record must occur exactly once')
-  if (!Array.isArray(args.hypotheses) || args.hypotheses.length > 5 || new Set(args.hypotheses.map(row => row?.kind)).size !== args.hypotheses.length)
-    throw new Error('Use at most five distinct unconfirmed hypotheses')
-  const refs = new Set([...expected.map(row => `rows:${row}`), ...Object.entries(bundle.evidence)
-    .filter(([, value]) => value !== null && value !== undefined).map(([key]) => key)])
-  for (const row of args.hypotheses) {
-    if (!row || Object.keys(row).sort().join(',') !== 'evidenceRefs,kind' || !Object.hasOwn(failureHypotheses, row.kind) ||
-      !Array.isArray(row.evidenceRefs) || !row.evidenceRefs.length || row.evidenceRefs.some(ref => !refs.has(ref)))
-      throw new Error('Hypotheses require an allowed kind and existing evidence references; no free-form causal claims')
-    if (row.kind === 'console_origin' && !row.evidenceRefs.includes('timeline') ||
-      row.kind === 'integration_test_data' && !row.evidenceRefs.some(ref => ['timeline', 'trace'].includes(ref)) ||
-      ['navigation_timing', 'locator_accessibility', 'frame_document'].includes(row.kind) && !row.evidenceRefs.some(ref => ref.startsWith('rows:')))
-      throw new Error('Hypothesis references do not match the evidence category')
-  }
+    throw new Error('Supply only the exact selected scope, hypothesis kinds and proposed checks; facts and references are computed from the authorized bundle')
+  if (!bundle.failures.complete || !bundle.failures.selected.length) throw new Error('Complete selected failure records are required')
+  if (!Array.isArray(args.hypotheses) || args.hypotheses.length > 5 || new Set(args.hypotheses).size !== args.hypotheses.length ||
+    args.hypotheses.some(kind => !Object.hasOwn(failureHypotheses, kind) || !hypothesisRefs(kind, bundle).length))
+    throw new Error('Choose distinct hypothesis kinds with available evidence: ' + Object.keys(failureHypotheses).filter(kind => hypothesisRefs(kind, bundle).length).join(', ') + '; use [] when evidence is insufficient')
   if (!Array.isArray(args.nextChecks) || !args.nextChecks.length || args.nextChecks.length > 3 ||
     new Set(args.nextChecks).size !== args.nextChecks.length || args.nextChecks.some(key => !Object.hasOwn(failureChecks, key)))
-    throw new Error('Choose one to three distinct proposed checks; this does not authorize execution')
+    throw new Error('Choose one to three distinct proposed checks: ' + Object.keys(failureChecks).join(', ') + '; no check is executed')
 }
 
 export function renderFailureReport(args, bundle) {
@@ -70,7 +64,7 @@ export function renderFailureReport(args, bundle) {
     ...trace.rows.filter(row => /fail|error|timed.?out/i.test(row.status ?? '') || row.error).map(row =>
       `- Passo ${escape(row.stepIndex ?? row.sourceRow)}: ${escape(row.name)} — ${escape(row.status)}; ${escape(row.durationMs)} ms; ${escape(String(row.error ?? '').slice(0, 220))} (prefixo).`), '')
   if (bundle.evidence.testCase) output.push('Comportamento esperado: existe um caso no Test Plan consultado, disponível na fonte test_plans_get_case. Sua existência não comprova a causa da divergência observada.', '')
-  output.push('Hipóteses não confirmadas:', '', ...(args.hypotheses.length ? args.hypotheses.map(row => `- ${failureHypotheses[row.kind]} Referências: ${row.evidenceRefs.map(escape).join(', ')}.`) : ['- Evidência insuficiente para priorizar uma hipótese.']), '',
+  output.push('Hipóteses não confirmadas:', '', ...(args.hypotheses.length ? args.hypotheses.map(kind => `- ${failureHypotheses[kind]} Referências: ${hypothesisRefs(kind, bundle).map(escape).join(', ')}.`) : ['- Evidência insuficiente para priorizar uma hipótese.']), '',
     'Próximas verificações propostas:', '', ...args.nextChecks.map(key => `- ${failureChecks[key]}`), '',
     'Uma captura de DOM não prova visibilidade contínua, contexto de frame ou associação temporal a cada registro. Os registros de falha não fornecem índices de retry/projeto; não foram inferidos. Esta coleta não realiza uma reprodução controlada nem confirma BUG de produto. Problemas do código de automação são uma classificação separada.', '',
     `Lacunas explícitas: ${bundle.gaps.length ? bundle.gaps.map(gap => escape(gap.name)).join(', ') : 'nenhuma falha de leitura no pacote inicial'}. A ausência de falha de leitura não prova causa nem cobertura integral das fontes. A visão é compacta; há ${bundle.view.omissions.length} reduções de detalhe declaradas, e stdout/stderr não foram incluídos.`, '',
@@ -82,16 +76,16 @@ export function renderFailureReport(args, bundle) {
 export function registerFailureReport(ctx, window) {
   ctx.tools.register({
     name: 'failure_analysis_render_report',
-    description: 'Publish the completed source-bound failure report and end this read-only turn. Supply selected source row indices, unconfirmed hypothesis kinds with existing evidence references, and proposed checks only. All facts, counts, timestamps, independent error fields and uncertainty are rendered from the authorized bundle; never supply report prose, a classification, a confirmed cause or widget JSON. This does not prove a root cause, execute checks, mutate tags or open defects.',
+    description: 'Publish the completed source-bound failure report and end this read-only turn. Supply unconfirmed hypothesis kinds and proposed checks only. Every selected record and all source references are included automatically; never supply row indices or evidence references. All facts, counts, timestamps, independent error fields and uncertainty are rendered from the authorized bundle; never supply report prose, a classification, a confirmed cause or widget JSON. This does not prove a root cause, execute checks, mutate tags or open defects.',
     parameters: { type: 'object', additionalProperties: false, properties: {
-      executionId: { type: 'string' }, testCaseSlug: { type: 'string' }, selectedSourceRows: { type: 'array', items: { type: 'integer' } },
-      hypotheses: { type: 'array', maxItems: 5, items: { type: 'object', additionalProperties: false, properties: {
-        kind: { type: 'string', enum: Object.keys(failureHypotheses) }, evidenceRefs: { type: 'array', items: { type: 'string' } },
-      }, required: ['kind', 'evidenceRefs'] } }, nextChecks: { type: 'array', minItems: 1, maxItems: 3, items: { type: 'string', enum: Object.keys(failureChecks) } },
-    }, required: ['executionId', 'testCaseSlug', 'selectedSourceRows', 'hypotheses', 'nextChecks'] },
+      executionId: { type: 'string' }, testCaseSlug: { type: 'string' },
+      hypotheses: { type: 'array', maxItems: 5, uniqueItems: true, items: { type: 'string', enum: Object.keys(failureHypotheses) } },
+      nextChecks: { type: 'array', minItems: 1, maxItems: 3, uniqueItems: true, items: { type: 'string', enum: Object.keys(failureChecks) } },
+    }, required: ['executionId', 'testCaseSlug', 'hypotheses', 'nextChecks'] },
     output: { schema: { type: 'object' }, render: (_args, value) => [{ type: 'text', text: `Published the source-bound failure report for ${value.selectedRecords} records. Cause remains inconclusive; proposed checks were not executed.` }] },
     execute: async (args, exec) => {
       exec.signal?.throwIfAborted()
+      if (typeof exec.concludeTurn !== 'function') throw new Error('Runtime does not support terminal report publication')
       const state = window.forReport(exec.agent, args)
       const content = renderFailureReport(args, state.bundle)
       if (content.length > 30_000) throw new Error('Report exceeds the bounded presentation limit; no report published')

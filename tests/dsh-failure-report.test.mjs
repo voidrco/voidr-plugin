@@ -13,8 +13,7 @@ function fixture() {
       history: { returnedRecords: 2, byStatus: { PASSED: 1, FAILED: 1 } }, dom: { snapshots: [] } },
     gaps: [], view: { omissions: [{ path: 'steps' }] }, sources: [{ name: 'playwright_get_test_timeline', sha256: 'd'.repeat(64) }] }
 }
-const args = () => ({ executionId: scope.executionId, testCaseSlug: scope.testCaseSlug, selectedSourceRows: [1, 2],
-  hypotheses: [{ kind: 'locator_accessibility', evidenceRefs: ['rows:1'] }, { kind: 'console_origin', evidenceRefs: ['timeline'] }],
+const args = () => ({ executionId: scope.executionId, testCaseSlug: scope.testCaseSlug, hypotheses: ['locator_accessibility', 'console_origin'],
   nextChecks: ['trace_assertion_window', 'controlled_reproduction'] })
 
 test('source-backed report retains exact records, distinct sample counts, independent errors and inconclusive causality', () => {
@@ -36,13 +35,12 @@ test('source-backed report retains exact records, distinct sample counts, indepe
 test('the model cannot supply prose, classify a cause, merge records or forge evidence references', () => {
   const bundle = fixture()
   for (const altered of [{ ...args(), classification: 'environment' }, { ...args(), cause: 'confirmed' },
-    { ...args(), selectedSourceRows: [1] }, { ...args(), selectedSourceRows: [1, 1] },
-    { ...args(), hypotheses: [{ kind: 'console_origin', evidenceRefs: ['foreign-source'] }] },
-    { ...args(), hypotheses: [{ kind: 'console_origin', evidenceRefs: ['rows:1'] }] },
-    { ...args(), hypotheses: [{ kind: 'locator_accessibility', evidenceRefs: ['dom'] }] },
-    { ...args(), hypotheses: [{ kind: 'locator_accessibility', evidenceRefs: ['rows:1'], explanation: 'selector disproven' }] },
+    { ...args(), selectedSourceRows: [1] }, { ...args(), evidenceRefs: ['foreign-source'] },
+    { ...args(), hypotheses: [{ kind: 'console_origin', evidenceRefs: ['timeline'] }] },
+    { ...args(), hypotheses: ['console_origin', 'console_origin'] },
     { ...args(), nextChecks: ['execute_now'] }]) assert.throws(() => validateFailureReport(altered, bundle))
-  assert.throws(() => validateFailureReport(args(), { ...bundle, failures: { ...bundle.failures, complete: false } }), /exactly once/)
+  assert.throws(() => validateFailureReport(args(), { ...bundle, failures: { ...bundle.failures, complete: false } }), /Complete selected/)
+
 })
 
 test('evidence text remains data and declared gaps cannot become empty-source or causal claims', () => {
@@ -68,7 +66,7 @@ test('native publication uses the existing Markdown widget and concludes exactly
   assert.equal(events[0].type, 'voidr/widget')
   assert.equal(events[0].data.widget.spec.elements.report.type, 'Markdown')
   assert.match(events[0].data.widget.spec.elements.report.props.content, /rows\[1\]/)
-  await assert.rejects(tool.execute(args(), { agent: a }), /already published/)
+  await assert.rejects(tool.execute(args(), { agent: a, concludeTurn() {} }), /already published/)
   assert.equal(events.length, 1)
 })
 

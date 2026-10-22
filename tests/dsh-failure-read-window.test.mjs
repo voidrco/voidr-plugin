@@ -54,6 +54,7 @@ test('literal excerpts retain source row positions, exact filtering, pagination 
   const first = evidenceExcerpt(value, { path: 'network', contains: '404', limit: 1 })
   assert.deepEqual([first.sourceRows, first.matchedRows, first.nextOffset], [4, 2, 1])
   assert.deepEqual(first.items, [{ sourceRow: 2, value: { status: 404 } }])
+  assert.deepEqual(evidenceExcerpt(value, { path: '$.network', contains: '404', limit: 1 }).items, first.items)
   assert.deepEqual(evidenceExcerpt(value, { path: 'network', contains: '404', limit: 1, offset: 1 }).items,
     [{ sourceRow: 3, value: { status: 404 } }])
   assert.match(first.coverage, /not the full source/)

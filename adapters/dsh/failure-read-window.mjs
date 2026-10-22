@@ -75,7 +75,7 @@ export function createFailureReadWindow() {
 }
 
 export function validateExcerptArguments({ path = '$', contains, offset = 0, limit = 12 }) {
-  if (typeof path !== 'string' || !/^(?:\$|[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+){0,3})$/.test(path) ||
+  if (typeof path !== 'string' || !/^(?:\$|(?:\$\.)?[A-Za-z0-9_-]+(?:\.[A-Za-z0-9_-]+){0,3})$/.test(path) ||
     path.split('.').some(key => ['__proto__', 'prototype', 'constructor'].includes(key)) ||
     !Number.isSafeInteger(offset) || offset < 0 || !Number.isSafeInteger(limit) || limit < 1 || limit > 50 ||
     contains !== undefined && (typeof contains !== 'string' || !contains.trim() || contains.length > 120))
@@ -85,7 +85,8 @@ export function validateExcerptArguments({ path = '$', contains, offset = 0, lim
 export function evidenceExcerpt(value, { path = '$', contains, offset = 0, limit = 12 }) {
   validateExcerptArguments({ path, contains, offset, limit })
   let section = value
-  if (path !== '$') for (const key of path.split('.')) {
+  const fieldPath = path.startsWith('$.') ? path.slice(2) : path
+  if (fieldPath !== '$') for (const key of fieldPath.split('.')) {
     if (!section || !Object.hasOwn(section, key)) throw new Error('Evidence path is absent; absence is not an empty result')
     section = section[key]
   }

@@ -63,6 +63,7 @@ function contextHint(events) {
 export function registerKnownEvents(knownEventTypes) {
   knownEventTypes.add(CONTEXT_EVENT_TYPE)
   knownEventTypes.add(TOOL_SCOPE_EVENT)
+  knownEventTypes.add('voidr/widget')
 }
 
 export const name = 'voidr-agent-plugin-dsh'

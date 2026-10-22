@@ -1,10 +1,11 @@
 const BUNDLE = 'failure_analysis_read_bundle'
 const DETAIL = 'failure_analysis_read_detail'
+const REPORT = 'failure_analysis_render_report'
 const COMMON = new Set(['skill', 'read', 'todo_write', 'ask_user_question', 'render_widget', 'expand_tool_scope', 'mcp__voidr__assistant_help_request'])
 
 export function failureWindowToolVisible(name, stage) {
   if (!stage) return true
-  return COMMON.has(name) || stage === 'collect' && name === BUNDLE || stage === 'answer' && name === DETAIL
+  return COMMON.has(name) || stage === 'collect' && name === BUNDLE || stage !== 'collect' && name === REPORT || stage === 'answer' && name === DETAIL
 }
 
 export function registerFailureReadPresentation(ctx, window) {
@@ -50,6 +51,7 @@ export function createFailureReadWindow() {
       state.completed = true
       state.scope = value.scope
       state.sources = value.sources
+      state.bundle = value
     },
     fail(agent, state) { if (current(agent) === state) state.failed = true },
     stage(agent) {
@@ -70,6 +72,13 @@ export function createFailureReadWindow() {
       if (state.reads >= 3) throw new Error('Three detail reads attempted; answer from the evidence or explicitly expand one exact tool for an unresolved question')
       state.reads++
       return source
+    },
+    forReport(agent, args) {
+      const state = current(agent)
+      if (!state?.completed || state.scope.executionId !== args.executionId || state.scope.testCaseSlug !== args.testCaseSlug)
+        throw new Error('Read a successful evidence bundle for this exact case in the current turn first')
+      if (state.reported) throw new Error('The evidence report is already published for this turn')
+      return state
     },
   }
 }

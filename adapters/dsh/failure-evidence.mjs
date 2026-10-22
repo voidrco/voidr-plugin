@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { createFailureReadWindow, evidenceExcerpt, registerFailureReadPresentation, validateExcerptArguments } from './failure-read-window.mjs'
+import { registerFailureReport } from './failure-report.mjs'
 
 const PREFIX = 'mcp__voidr__'
 const identity = value => typeof value === 'string' && /^[a-f0-9]{24}$/.test(value)
@@ -312,5 +313,6 @@ export function registerFailureEvidence(ctx) {
         source: { ...source, collectedSha256: source.sha256, sha256, changedSinceCollection: sha256 !== source.sha256 }, ...evidenceExcerpt(value, args) }
     },
   })
+  registerFailureReport(ctx, window)
   return window
 }

@@ -12,7 +12,7 @@ const CORE = new Set([
 ])
 const DOMAINS = {
   failure: [
-    'failure_analysis_read_bundle', 'playwright_get_execution_analytics',
+    'failure_analysis_read_bundle', 'failure_analysis_read_detail', 'playwright_get_execution_analytics',
     'playwright_list_execution_failures', 'playwright_get_test_timeline',
     'playwright_get_trace_events', 'playwright_get_test_history',
     'playwright_get_test_dom', 'playwright_list_test_results',

@@ -25,6 +25,7 @@ test('the loaded Monitor skill routes to the registered native bundle without in
 function fixture(overrides = {}) {
   const calls = []
   const readers = {
+    applications_get_application: () => ({ _id: applicationId }),
     playwright_get_execution_analytics: () => ({ executionId, applicationId, planId }),
     playwright_list_execution_failures: args => ({ page: args.page, limit: args.limit, total: 3, rows: [
       { testCaseSlug: 'OTHER-1' },
@@ -55,7 +56,7 @@ test('keeps repeated signatures, source row/error associations and exact sample 
   assert.deepEqual(value.evidence.timeline.console.byMessage, { '__name is not defined': 1, different: 1 })
   assert.deepEqual(value.evidence.timeline.network.byStatus, { 0: 1, 404: 1 })
   assert.equal(value.gaps.length, 0)
-  assert.equal(value.sources.length, 10)
+  assert.equal(value.sources.length, 11)
   assert.ok(value.sources.every(row => /^[a-f0-9]{64}$/.test(row.sha256)))
   assert.deepEqual(f.calls.find(call => call.name === 'playwright_get_test_history').args,
     { applicationId, planId, testCaseSlug: 'CASE-1', limit: 25 })
@@ -121,7 +122,7 @@ test('registered tool dispatches through runtime authorization with parent, agen
   } } })
   const tool = registered[0]
   await tool.execute(input, { agent, token, callId: 'bundle', rootCallId: 'root', signal: controller.signal })
-  assert.equal(f.calls.length, 10)
+  assert.equal(f.calls.length, 11)
   assert.ok(f.calls.every(call => !/create|update|run|delete/.test(call.name)))
   await assert.rejects(tool.execute({ ...input, organizationId: 'foreign' }, {}), /Unexpected/)
   await assert.rejects(tool.execute(input, { signal: AbortSignal.abort() }), { name: 'AbortError' })
@@ -163,6 +164,10 @@ test('the compact view preserves selected records and counts while marking every
   assert.deepEqual(view.evidence.history.rows.map(row => row.sourceRow), [0, 10, 24])
   assert.match(view.evidence.history.rowsCoverage, /not the full series/)
   assert.equal(view.sources, bundle.sources)
+  assert.equal(view.failures.recordLedger.length, 2)
+  assert.deepEqual(view.failures.recordLedger.map(row => [row.sourceRow, row.startedAt, row.durationMs]),
+    bundle.failures.selected.map(row => [row.sourceRow, row.startedAt, row.durationMs]))
+  assert.match(view.evidence.timeline.outputCoverage, /stdout\/stderr are not included/)
   assert.ok(JSON.stringify(view).length < 38_000)
   bundle.failures.selected[0].errorStack = 'x'.repeat(5000)
   const shortened = compactFailureEvidence(bundle)
@@ -179,4 +184,15 @@ test('a late failed assertion is retained even when earlier timeouts fill the co
   assert.equal(view.evidence.timeline.steps.failedSteps, 16)
   assert.equal(view.evidence.timeline.steps.rows.length, 16)
   assert.ok(view.evidence.timeline.steps.rows.some(row => row.sourceRow === 79 && row.error === 'final assertion failed'))
+})
+
+test('the record ledger preserves independent message and stack timeout classes without inferring retries', async () => {
+  const f = fixture({ playwright_list_execution_failures: args => ({ ...args, total: 2, rows: [
+    { testCaseSlug: input.testCaseSlug, startedAt: '2026-10-22T13:31:39Z', durationMs: 97842, errorMessage: 'Timed out 10000ms waiting for expect(locator).toBeVisible()', errorStack: 'Timed out 10000ms waiting for expect(locator).toBeVisible()' },
+    { testCaseSlug: input.testCaseSlug, startedAt: '2026-10-22T13:33:18Z', durationMs: 128204, errorMessage: 'Test timeout of 120000ms exceeded', errorStack: 'Timed out 10000ms waiting for expect(locator).toBeVisible()' },
+  ] }) })
+  const ledger = compactFailureEvidence(await collectFailureEvidence(input, f.read)).failures.recordLedger
+  assert.deepEqual(ledger.map(row => [row.errorMessage.kind, row.errorMessage.timeoutMs]), [['locator-assertion-timeout', 10000], ['test-timeout', 120000]])
+  assert.deepEqual(ledger[1].errorStack, { kind: 'locator-assertion-timeout', timeoutMs: 10000 })
+  assert.equal(Object.hasOwn(ledger[0], 'retry'), false)
 })

@@ -27,7 +27,7 @@ const VOIDR_MCP_FAMILIES = [
   'test_plan_generation',
   'test_plans'
 ]
-const DSH_NATIVE_FAMILY_TOOLS = new Set(['failure_analysis_read_bundle', 'echo_execution_confirmation', 'echo_render_deviations', 'echo_render_regulatory_controls', 'echo_render_deviation_group', 'echo_propose_overview_change'])
+const DSH_NATIVE_FAMILY_TOOLS = new Set(['failure_analysis_read_bundle', 'failure_analysis_read_detail', 'echo_execution_confirmation', 'echo_render_deviations', 'echo_render_regulatory_controls', 'echo_render_deviation_group', 'echo_propose_overview_change'])
 const voidrMcpToolPattern = new RegExp(
   `(?<!${VOIDR_MCP_PREFIX})\\b(?:${VOIDR_MCP_FAMILIES.join('|')})_[a-z0-9_]*[a-z0-9]\\b`,
   'g'
@@ -217,6 +217,7 @@ Preserve credential placeholders and all evidence/provenance requirements below.
 - Treat Monitor and Home context as lookup hints. Validate execution, application, Test Plan and case with Voidr read tools in this turn.
 - When an exact executionId and testCaseSlug are already selected, start with failure_analysis_read_bundle if available. It performs the execution, complete failure pagination, timeline, trace, plan-scoped history, DOM, mapping/case, tag-history and active-integration reads below through the same authorized tools. These returned sources satisfy those reads; do not repeat successful reads or search for their tools. Continue only for a concrete unanswered question or an explicit source gap. If the integrations source identifies relevant Better Stack access, follow the workflow's bounded external-log reads. Never broaden scope or replace a denied read with another identity.
 - Preserve every matching failure record and its own timestamp, duration and error fields. Source aggregates are authoritative; never label all console messages as one error when byMessage has multiple values. Conflicting errorMessage/errorStack fields are an evidence discrepancy, not permission to merge them or infer a cause. Missing evidence can support an indeterminate diagnosis; it never supports eliminating an untested explanation.
+- After a successful bundle, answer from it. For a specific unresolved question, use failure_analysis_read_detail with the exact source, field path and literal filter; at most three bounded excerpts precede the answer. Do not reopen full timeline/trace dumps, search for local file tools or treat spill files as a new evidence source. A cause that remains unproven must stay inconclusive. For a justified deeper investigation, a missing connector capability or an explicit task change, expand only the exact tool or domain needed; the initial profile does not remove authorized capabilities.
 - The bundle is a compact evidence view with explicit omissions and exact authorized source references. Its full counts are separate from its bounded examples. Do not repeat its successful sources merely to obtain a larger dump. Read an exact source again only for a concrete unresolved question; never inspect the local runtime or credentials to replace platform evidence.
 - Visual analysis is optional, even for one exact execution and test.
 - Open execution_analysis_viewer only for an explicit visual request or a specific visual question unresolved by initial read tools.

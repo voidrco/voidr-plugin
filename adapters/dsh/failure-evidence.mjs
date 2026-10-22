@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { createFailureReadWindow, evidenceExcerpt, registerFailureReadPresentation, validateExcerptArguments } from './failure-read-window.mjs'
 
 const PREFIX = 'mcp__voidr__'
 const identity = value => typeof value === 'string' && /^[a-f0-9]{24}$/.test(value)
@@ -76,6 +77,14 @@ function sampledTimeline(value) {
   }
 }
 
+function failureErrorFacts(value) {
+  const text = typeof value === 'string' ? value : ''
+  const test = text.match(/^Test timeout of (\d+)ms exceeded/m)
+  const assertion = text.match(/Timed out (\d+)ms waiting for expect\(locator\)\./)
+  return { kind: test ? 'test-timeout' : assertion ? 'locator-assertion-timeout' : 'other',
+    timeoutMs: test || assertion ? Number((test ?? assertion)[1]) : null }
+}
+
 export function compactFailureEvidence(bundle) {
   const omissions = []
   const text = (value, limit, path) => {
@@ -103,6 +112,8 @@ export function compactFailureEvidence(bundle) {
     errorMessage: text(row.errorMessage, 2400, `failures.selected.${row.sourceRow}.errorMessage`),
     errorStack: text(row.errorStack, 1000, `failures.selected.${row.sourceRow}.errorStack`),
   })) }
+  failures.recordLedger = bundle.failures.selected.map(row => ({ sourceRow: row.sourceRow, startedAt: row.startedAt,
+    durationMs: row.durationMs, errorMessage: failureErrorFacts(row.errorMessage), errorStack: failureErrorFacts(row.errorStack) }))
   const original = bundle.evidence, evidence = { ...original }
   if (original.timeline) {
     const network = original.timeline.network
@@ -116,7 +127,9 @@ export function compactFailureEvidence(bundle) {
       error: text(row.error, 400, `timeline.network.failures.${row.sourceRow}.error`) }))
     evidence.timeline = { steps: steps(original.timeline.steps, 'timeline.steps'), console: original.timeline.console,
       network: { sampledRequests: network.sampledRequests, byStatus: network.byStatus, sampledFailedRequests: network.failures.length,
-        examples, examplesCoverage: 'Distinct status/error examples, at most six; not the full failed-request list.' }, coverage: original.timeline.coverage }
+        examples, examplesCoverage: 'Distinct status/error examples, at most six; not the full failed-request list.' },
+      outputCoverage: 'stdout/stderr are not included in this compact view; request a bounded excerpt from the exact timeline source if needed.',
+      coverage: original.timeline.coverage }
   }
   if (original.trace) evidence.trace = { steps: steps(original.trace.steps, 'trace.steps'), traceEvidence: original.trace.traceEvidence,
     sampledConsoleMessages: original.trace.console?.length ?? null, sampledNetworkRequests: original.trace.network?.length ?? null,
@@ -190,6 +203,10 @@ export async function collectFailureEvidence({ executionId, testCaseSlug }, read
   if (!selected.length) throw new Error('The selected case has no recorded failure in this execution')
   const args = { executionId, testCaseSlug }
   const tasks = [
+    ['application', () => optional('applications_get_application', { applicationId: scope.applicationId }, value => {
+      if (value?._id !== scope.applicationId && value?.id !== scope.applicationId) throw new Error('Application scope mismatch')
+      return value
+    })],
     ['timeline', () => optional('playwright_get_test_timeline', { ...args, limit: 500 }, sampledTimeline)],
     ['trace', () => optional('playwright_get_trace_events', { ...args, limit: 200 })],
     ['history', () => optional('playwright_get_test_history', { applicationId: scope.applicationId, planId: scope.planId, testCaseSlug, limit: 25 }, value => {
@@ -236,6 +253,8 @@ export async function collectFailureEvidence({ executionId, testCaseSlug }, read
 }
 
 export function registerFailureEvidence(ctx) {
+  const window = createFailureReadWindow()
+  registerFailureReadPresentation(ctx, window)
   ctx.tools.register({
     name: 'failure_analysis_read_bundle',
     description: 'Read the evidence for one exact failed test in an execution through the existing authorized tools. Validates execution identity, reads every failure page, preserves all matching records and gathers timeline, trace, plan-scoped history, DOM, Test Plan mapping/case and tag history with at most three concurrent reads. Returns source hashes and explicit gaps. Read-only; does not diagnose, modify data or run tests.',
@@ -248,12 +267,50 @@ export function registerFailureEvidence(ctx) {
       if (Object.keys(args).some(key => !['executionId', 'testCaseSlug'].includes(key))) throw new Error('Unexpected evidence arguments')
       const signal = exec.signal ? AbortSignal.any([exec.signal, AbortSignal.timeout(60_000)]) : AbortSignal.timeout(60_000)
       let sequence = 0
-      return compactFailureEvidence(await collectFailureEvidence(args, async (name, arguments_, signal) => {
-        const dispatch = async (tool, arguments_) => evidencePayload(await ctx.tools.execute({
-          callId: `${exec.callId}:evidence:${++sequence}`, rootCallId: exec.rootCallId,
-          name: PREFIX + tool, arguments: arguments_, agent: exec.agent, parent: exec.token, signal }))
-        return resolveEvidence(await dispatch(name, arguments_), args => dispatch('artifacts_read', args))
-      }, { signal }))
+      const state = window.begin(exec.agent)
+      try {
+        const value = compactFailureEvidence(await collectFailureEvidence(args, async (name, arguments_, signal) => {
+          const dispatch = async (tool, arguments_) => evidencePayload(await ctx.tools.execute({
+            callId: `${exec.callId}:evidence:${++sequence}`, rootCallId: exec.rootCallId,
+            name: PREFIX + tool, arguments: arguments_, agent: exec.agent, parent: exec.token, signal }))
+          return resolveEvidence(await dispatch(name, arguments_), args => dispatch('artifacts_read', args))
+        }, { signal }))
+        window.complete(exec.agent, state, value)
+        return value
+      } catch (error) { window.fail(exec.agent, state); throw error }
     },
   })
+  ctx.tools.register({
+    name: 'failure_analysis_read_detail',
+    description: 'Read a bounded excerpt for one concrete unanswered question after a successful failure evidence bundle. Reuses the exact authorized source arguments and calls the original tool again under current permissions. Choose a field path and optional literal filter instead of requesting a complete timeline or trace dump. At most three detail reads per turn; expand an exact tool for a justified deeper investigation.',
+    parameters: { type: 'object', additionalProperties: false, properties: {
+      executionId: { type: 'string', pattern: '^[a-f0-9]{24}$' }, testCaseSlug: { type: 'string' },
+      source: { type: 'string', enum: ['playwright_get_test_timeline', 'playwright_get_trace_events', 'playwright_get_test_dom', 'playwright_get_test_history', 'test_plans_get_case', 'test_plans_get_tag_history', 'connectors_context_list_active_integrations'] },
+      question: { type: 'string', minLength: 12, maxLength: 400 },
+      path: { type: 'string', default: '$' }, contains: { type: 'string', maxLength: 120 },
+      offset: { type: 'integer', minimum: 0, default: 0 }, limit: { type: 'integer', minimum: 1, maximum: 50, default: 12 },
+    }, required: ['executionId', 'testCaseSlug', 'source', 'question', 'path'] },
+    output: { schema: { type: 'object' }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },
+    execute: async (args, exec) => {
+      if (typeof args.question !== 'string' || args.question.trim().length < 12 || args.question.length > 400 ||
+        Object.keys(args).some(key => !['executionId', 'testCaseSlug', 'source', 'question', 'path', 'contains', 'offset', 'limit'].includes(key)))
+        throw new Error('Name one concrete unresolved question using only the declared excerpt arguments')
+      validateExcerptArguments(args)
+      const source = window.reserve(exec.agent, args)
+      const signal = exec.signal ? AbortSignal.any([exec.signal, AbortSignal.timeout(60_000)]) : AbortSignal.timeout(60_000)
+      signal.throwIfAborted()
+      let sequence = 0
+      const dispatch = async (name, arguments_) => evidencePayload(await ctx.tools.execute({
+        callId: `${exec.callId}:detail:${++sequence}`, rootCallId: exec.rootCallId,
+        name: PREFIX + name, arguments: arguments_, agent: exec.agent, parent: exec.token, signal }))
+      const value = await resolveEvidence(await dispatch(source.name, source.arguments), args => dispatch('artifacts_read', args))
+      signal.throwIfAborted()
+      const serialized = JSON.stringify(value)
+      if (Buffer.byteLength(serialized) > 2_000_000) throw new Error('Evidence source exceeds the bounded detail limit')
+      const sha256 = createHash('sha256').update(serialized).digest('hex')
+      return { scope: { executionId: args.executionId, testCaseSlug: args.testCaseSlug }, question: args.question,
+        source: { ...source, collectedSha256: source.sha256, sha256, changedSinceCollection: sha256 !== source.sha256 }, ...evidenceExcerpt(value, args) }
+    },
+  })
+  return window
 }

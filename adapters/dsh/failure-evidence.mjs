@@ -79,7 +79,7 @@ function sampledTimeline(value) {
 }
 
 function failureErrorFacts(value) {
-  const text = typeof value === 'string' ? value : ''
+  const text = typeof value === 'string' ? value.replace(/\x1b\[[0-9;]*m/g, '') : ''
   const test = text.match(/^Test timeout of (\d+)ms exceeded/m)
   const assertion = text.match(/Timed out (\d+)ms waiting for expect\(locator\)\./)
   return { kind: test ? 'test-timeout' : assertion ? 'locator-assertion-timeout' : 'other',

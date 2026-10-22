@@ -189,7 +189,7 @@ test('a late failed assertion is retained even when earlier timeouts fill the co
 test('the record ledger preserves independent message and stack timeout classes without inferring retries', async () => {
   const f = fixture({ playwright_list_execution_failures: args => ({ ...args, total: 2, rows: [
     { testCaseSlug: input.testCaseSlug, startedAt: '2026-10-22T13:31:39Z', durationMs: 97842, errorMessage: 'Timed out 10000ms waiting for expect(locator).toBeVisible()', errorStack: 'Timed out 10000ms waiting for expect(locator).toBeVisible()' },
-    { testCaseSlug: input.testCaseSlug, startedAt: '2026-10-22T13:33:18Z', durationMs: 128204, errorMessage: 'Test timeout of 120000ms exceeded', errorStack: 'Timed out 10000ms waiting for expect(locator).toBeVisible()' },
+    { testCaseSlug: input.testCaseSlug, startedAt: '2026-10-22T13:33:18Z', durationMs: 128204, errorMessage: 'Test timeout of 120000ms exceeded', errorStack: 'Error: \x1b[31mTimed out 10000ms waiting for \x1b[39m\x1b[2mexpect(\x1b[22m\x1b[31mlocator\x1b[39m\x1b[2m).\x1b[22mtoBeVisible()' },
   ] }) })
   const ledger = compactFailureEvidence(await collectFailureEvidence(input, f.read)).failures.recordLedger
   assert.deepEqual(ledger.map(row => [row.errorMessage.kind, row.errorMessage.timeoutMs]), [['locator-assertion-timeout', 10000], ['test-timeout', 120000]])

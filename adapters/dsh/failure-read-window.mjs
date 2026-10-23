@@ -5,7 +5,9 @@ const COMMON = new Set(['skill', 'read', 'todo_write', 'ask_user_question', 'ren
 
 export function failureWindowToolVisible(name, stage) {
   if (!stage) return true
-  return COMMON.has(name) || stage === 'collect' && name === BUNDLE || stage !== 'collect' && name === REPORT || stage === 'answer' && name === DETAIL
+  return COMMON.has(name) || stage === 'collect' && name === BUNDLE ||
+    ['answer', 'done'].includes(stage) && name === REPORT ||
+    ['answer', 'synthesis'].includes(stage) && name === DETAIL
 }
 
 export function registerFailureReadPresentation(ctx, window) {
@@ -60,6 +62,7 @@ export function createFailureReadWindow() {
         !/^[A-Za-z0-9][A-Za-z0-9_-]{0,119}$/.test(hint.testCaseSlug ?? '')) return null
       const state = current(agent)
       if (state?.failed) return null
+      if (state?.reported) return state.reads >= 3 ? 'final' : 'synthesis'
       if (state?.reads >= 3) return 'done'
       return state?.completed ? 'answer' : 'collect'
     },

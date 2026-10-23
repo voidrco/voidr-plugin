@@ -53,7 +53,7 @@ test('evidence text remains data and declared gaps cannot become empty-source or
   assert.match(content, /Lacunas explícitas: playwright/)
 })
 
-test('native publication uses the existing Markdown widget and concludes exactly once after validation', async () => {
+test('native publication preserves a final analysis after the initial evidence panel', async () => {
   const window = createFailureReadWindow(), events = [], a = { session: { events, append: (type, data) => events.push({ type, data }) } }
   const state = window.begin(a)
   window.complete(a, state, fixture())
@@ -61,13 +61,14 @@ test('native publication uses the existing Markdown widget and concludes exactly
   registerFailureReport({ tools: { register: value => { tool = value } } }, window)
   const result = await tool.execute(args(), { agent: a, concludeTurn: () => { concluded++ } })
   assert.equal(result.causeStatus, 'inconclusive')
-  assert.equal(concluded, 1)
+  assert.equal(concluded, 0)
   assert.equal(events.length, 1)
   assert.equal(events[0].type, 'voidr/widget')
   assert.equal(events[0].data.widget.spec.elements.report.type, 'Markdown')
   assert.match(events[0].data.widget.spec.elements.report.props.content, /rows\[1\]/)
   await assert.rejects(tool.execute(args(), { agent: a, concludeTurn() {} }), /already published/)
   assert.equal(events.length, 1)
+  assert.match(tool.output.render(args(), result)[0].text, /not the final answer/)
 })
 
 test('invalid data, cancellation, foreign scopes and newer turns publish nothing and do not conclude', async () => {

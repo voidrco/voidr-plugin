@@ -37,6 +37,20 @@ test('a new turn, new user steering or changed context cannot reuse an old bundl
   }
 })
 
+test('an initial panel leaves bounded investigation available without publishing it twice', () => {
+  const window = createFailureReadWindow(), a = agent(), state = window.begin(a)
+  window.complete(a, state, { scope, sources: [source] })
+  window.forReport(a, scope).reported = true
+  assert.equal(window.stage(a), 'synthesis')
+  assert.equal(failureWindowToolVisible('failure_analysis_render_report', window.stage(a)), false)
+  assert.equal(failureWindowToolVisible('failure_analysis_read_detail', window.stage(a)), true)
+  for (let i = 0; i < 3; i++) window.reserve(a, { ...scope, source: source.name })
+  assert.equal(window.stage(a), 'final')
+  assert.equal(failureWindowToolVisible('failure_analysis_read_detail', window.stage(a)), false)
+  assert.equal(failureWindowToolVisible('expand_tool_scope', window.stage(a)), true)
+  assert.throws(() => window.forReport(a, scope), /already published/)
+})
+
 test('failed collection releases ordinary reads and unrelated surfaces never enter the selected-case window', () => {
   const window = createFailureReadWindow(), a = agent(), state = window.begin(a)
   window.fail(a, state)

@@ -76,16 +76,15 @@ export function renderFailureReport(args, bundle) {
 export function registerFailureReport(ctx, window) {
   ctx.tools.register({
     name: 'failure_analysis_render_report',
-    description: 'Publish the completed source-bound failure report and end this read-only turn. Supply unconfirmed hypothesis kinds and proposed checks only. Every selected record and all source references are included automatically; never supply row indices or evidence references. All facts, counts, timestamps, independent error fields and uncertainty are rendered from the authorized bundle; never supply report prose, a classification, a confirmed cause or widget JSON. This does not prove a root cause, execute checks, mutate tags or open defects.',
+    description: 'Publish an optional initial evidence panel and continue the investigation. This does not end the turn or answer the user by itself. Supply unconfirmed hypothesis kinds and proposed checks only. Every selected record and all source references are included automatically; never supply row indices or evidence references. All panel facts, counts, timestamps, independent error fields and uncertainty are rendered from the authorized bundle; never supply panel prose, a classification, a confirmed cause or widget JSON. Complete the user’s answer from the evidence and any necessary authorized detail reads. This does not prove a root cause, execute checks, mutate tags or open defects.',
     parameters: { type: 'object', additionalProperties: false, properties: {
       executionId: { type: 'string' }, testCaseSlug: { type: 'string' },
       hypotheses: { type: 'array', maxItems: 5, uniqueItems: true, items: { type: 'string', enum: Object.keys(failureHypotheses) } },
       nextChecks: { type: 'array', minItems: 1, maxItems: 3, uniqueItems: true, items: { type: 'string', enum: Object.keys(failureChecks) } },
     }, required: ['executionId', 'testCaseSlug', 'hypotheses', 'nextChecks'] },
-    output: { schema: { type: 'object' }, render: (_args, value) => [{ type: 'text', text: `Published the source-bound failure report for ${value.selectedRecords} records. Cause remains inconclusive; proposed checks were not executed.` }] },
+    output: { schema: { type: 'object' }, render: (_args, value) => [{ type: 'text', text: `Initial evidence panel published for ${value.selectedRecords} records. This is not the final answer. Complete the user's analysis using the collected evidence and bounded reads for concrete gaps. The panel does not confirm a cause or execute proposed checks.` }] },
     execute: async (args, exec) => {
       exec.signal?.throwIfAborted()
-      if (typeof exec.concludeTurn !== 'function') throw new Error('Runtime does not support terminal report publication')
       const state = window.forReport(exec.agent, args)
       const content = renderFailureReport(args, state.bundle)
       if (content.length > 30_000) throw new Error('Report exceeds the bounded presentation limit; no report published')
@@ -95,7 +94,6 @@ export function registerFailureReport(ctx, window) {
         title: 'Diagnóstico inicial com evidências', interactive: false, status: 'resolved',
         spec: { root: 'report', elements: { report: { type: 'Markdown', props: { content } } } } } })
       state.reported = true
-      exec.concludeTurn()
       return { widgetId: id, selectedRecords: state.bundle.failures.selected.length, causeStatus: 'inconclusive' }
     },
   })

@@ -6,13 +6,6 @@ starts with the tools for its primary task. An explicit change of task may use
 the current turn. Visibility does not grant Service permission or skip a
 confirmation.
 
-Context lookup reuses the latest hint event for an immutable session-events
-snapshot. Appending an event creates a new SDK snapshot and triggers a new
-lookup. Mutable arrays, mutable event types, and accessor-backed entries are
-read again. The cache holds weak references to snapshots and does not cache
-membership, tool discovery, scope expansions, or authorization decisions.
-Permission checks and visibility updates continue on every refresh.
-
 ## Echo exception
 
 Echo is excluded from this rollout. Ordinary Echo conversations follow the

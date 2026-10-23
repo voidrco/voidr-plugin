@@ -31,7 +31,6 @@ function setup() {
   const global = [...GLOBAL, ...PRESET]
   const masks = []
   const restricted = new Set()
-  const tools = new Map()
   const agent = { id: 'member', session: { events: [hint('whatsapp')] } }
   const visible = scope => [...global]
     .filter(name => scope !== agent || masks.every(mask => mask.disposed || !mask.filter.deny.includes(name)))
@@ -39,61 +38,15 @@ function setup() {
   const ctx = {
     on: (event, fn) => hooks.set(event, fn),
     tools: {
-      register(tool) { global.push(tool.name); tools.set(tool.name, tool) },
+      register(tool) { global.push(tool.name) },
       schemas: scope => visible(scope).map(name => ({ name, description: '' })),
       view: () => ({ restrictableNames: new Set(global) }),
     },
     agents: { list: () => [agent] }
   }
   const visibility = registerToolVisibility(ctx, value => restricted.has(value.id))
-  return { hooks, global, masks, restricted, agent, visibility, visible, tools }
+  return { hooks, global, masks, restricted, agent, visibility, visible }
 }
-
-test('cached context keeps member changes, discoveries and registry refreshes live', () => {
-  const { agent, visibility, visible, restricted, tools, hooks, global } = setup()
-  agent.session.events = Object.freeze([Object.freeze({ type: 'voidr/project-context-hint',
-    data: Object.freeze({ surface: 'echo' }) })])
-  const snapshot = agent.session.events
-  const discovery = tools.get('echo_discover_tools')
-  const name = 'mcp__voidr__list_applications'
-  visibility.refresh(agent)
-  assert.equal(visible(agent).includes(name), false)
-  assert.deepEqual(discovery.execute({ query: name }, { agent }).tools.map(tool => tool.name), [name])
-  assert.equal(visible(agent).includes(name), true)
-  restricted.add(agent.id)
-  visibility.refresh(agent)
-  assert.equal(visible(agent).includes(name), false)
-  assert.deepEqual(discovery.execute({ query: name }, { agent }).tools, [])
-  global.push('mcp__voidr__echo_get_session')
-  hooks.get('tools/change')()
-  assert.equal(visible(agent).includes('mcp__voidr__echo_get_session'), true)
-  assert.equal(visible(agent).includes(name), false)
-  restricted.delete(agent.id)
-  visibility.refresh(agent)
-  assert.equal(visible(agent).includes(name), true)
-  assert.equal(agent.session.events, snapshot)
-})
-
-test('appended immutable hints change WhatsApp and authoring restrictions immediately', () => {
-  const { agent, visibility, visible, hooks, global } = setup()
-  const snapshot = data => Object.freeze([...agent.session.events,
-    Object.freeze({ type: 'voidr/project-context-hint', data: Object.freeze(data) })])
-  agent.session.events = snapshot({ surface: 'echo', channel: 'whatsapp' })
-  visibility.refresh(agent)
-  assert.equal(visible(agent).includes('render_widget'), false)
-  agent.session.events = snapshot({ surface: 'echo' })
-  hooks.get('tools/change')()
-  assert.equal(visible(agent).includes('render_widget'), true)
-  global.push('mcp__voidr__echo_journeys_update_draft', 'mcp__voidr__echo_get_session')
-  agent.session.events = snapshot({ surface: 'echo', intent: 'echo_journey_import' })
-  visibility.refresh(agent)
-  assert.equal(visible(agent).includes('mcp__voidr__echo_journeys_update_draft'), true)
-  assert.equal(visible(agent).includes('mcp__voidr__echo_get_session'), false)
-  agent.session.events = snapshot({ surface: 'echo' })
-  visibility.refresh(agent)
-  assert.equal(visible(agent).includes('mcp__voidr__echo_journeys_update_draft'), false)
-  assert.equal(visible(agent).includes('mcp__voidr__echo_get_session'), true)
-})
 
 test('masks follow Echo discovery, member policy, WhatsApp, and registry changes', () => {
   const { hooks, global, masks, restricted, agent, visibility, visible } = setup()

@@ -1,5 +1,4 @@
 import { memberToolVisible } from './echo-member-policy.mjs'
-import { projectContextHint } from './project-context.mjs'
 import { WIDGET_TOOLS, contextChannel } from './whatsapp-channel.mjs'
 import { expandedDomains, expandedToolNames, initialToolDomains, profileToolVisible } from './tool-profiles.mjs'
 
@@ -58,7 +57,7 @@ export function registerToolVisibility(ctx, isRestricted) {
   }
   function refresh(agent, force = false) {
     if (!agent?.ctx?.tools || refreshing) return
-    const hint = projectContextHint(agent.session?.events)
+    const hint = agent.session?.events.findLast(event => event.type === 'voidr/project-context-hint')?.data
     const echoSurface = hint?.surface === 'echo'
     const initial = echoSurface ? null : initialToolDomains(hint)
     const domains = initial ? [...new Set([...initial, ...expandedDomains(agent.session?.events)])].sort() : null

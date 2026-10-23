@@ -1,5 +1,3 @@
-import { projectContextHint } from './project-context.mjs'
-
 export const WIDGET_TOOLS = new Set([
   'render_widget',
   'echo_render_deviations',
@@ -8,7 +6,7 @@ export const WIDGET_TOOLS = new Set([
 ])
 
 export function contextChannel(events) {
-  return projectContextHint(events)?.channel ?? null
+  return (events ?? []).findLast(event => event.type === 'voidr/project-context-hint')?.data?.channel ?? null
 }
 
 export function whatsappChannelDenial(name, events) {

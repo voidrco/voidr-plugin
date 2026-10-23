@@ -29,7 +29,7 @@ function fixture(overrides = {}) {
     playwright_get_execution_analytics: () => ({ executionId, applicationId, planId }),
     playwright_list_execution_failures: args => ({ page: args.page, limit: args.limit, total: 3, rows: [
       { testCaseSlug: 'OTHER-1' },
-      { testCaseSlug: 'CASE-1', startedAt: '2026-10-22T13:31:39Z', durationMs: 97842, failureSignature: 'same', errorMessage: 'locator timeout', errorStack: 'locator timeout' },
+      { testCaseSlug: 'CASE-1', startedAt: '2026-10-22T13:31:39Z', durationMs: 97842, failureSignature: 'same', errorMessage: 'locator timeout', errorStack: 'locator timeout', traceRef: 'private-trace', screenshotRef: 'private-screenshot' },
       { testCaseSlug: 'CASE-1', startedAt: '2026-10-22T13:33:18Z', durationMs: 128204, failureSignature: 'same', errorMessage: 'test timeout', errorStack: 'locator timeout' },
     ] }),
     playwright_get_test_timeline: () => ({ steps: [], console: [{ level: 'error', message: '__name is not defined' }, { level: 'error', message: 'different' }], network: [{ status: 404 }, { status: 0, error: 'aborted' }], stdout: [], stderr: [] }),
@@ -53,6 +53,9 @@ test('keeps repeated signatures, source row/error associations and exact sample 
   assert.deepEqual(value.failures.selected.map(row => [row.sourceRow, row.startedAt, row.durationMs]), [[1, '2026-10-22T13:31:39Z', 97842], [2, '2026-10-22T13:33:18Z', 128204]])
   assert.equal(value.failures.selected[1].errorMessage, 'test timeout')
   assert.equal(value.failures.selected[1].errorStack, 'locator timeout')
+  const compact = compactFailureEvidence(value)
+  assert.equal(compact.failures.selected[0].traceRef, 'private-trace')
+  assert.equal(compact.failures.selected[0].screenshotRef, 'private-screenshot')
   assert.deepEqual(value.evidence.timeline.console.byMessage, { '__name is not defined': 1, different: 1 })
   assert.deepEqual(value.evidence.timeline.network.byStatus, { 0: 1, 404: 1 })
   assert.equal(value.gaps.length, 0)
@@ -82,6 +85,24 @@ test('detail paths refer to the original source rather than the compact wrapper'
   assert.ok(source.fieldPaths.length <= 12)
   assert.deepEqual(evidencePayload({ structuredContent: trace }), trace)
   assert.equal(value.gaps.length, 0)
+})
+
+test('network failure examples retain their original timeline positions after filtering', async () => {
+  const network = [
+    { status: 200, url: 'https://example.test/ready' },
+    { status: 404, url: 'https://example.test/missing' },
+    { status: 200, url: 'https://example.test/loaded' },
+    { status: 0, error: 'aborted', url: 'https://example.test/cancelled' },
+    { status: 404, url: 'https://example.test/another-missing' },
+  ]
+  const f = fixture({ playwright_get_test_timeline: () => ({ steps: [], console: [], network }) })
+  const value = compactFailureEvidence(await collectFailureEvidence(input, f.read))
+  assert.deepEqual(value.evidence.timeline.network.examples.map(row => row.sourceRow), [1, 3])
+  for (const row of value.evidence.timeline.network.examples) {
+    assert.equal(row.url, network[row.sourceRow].url)
+  }
+  assert.equal(value.evidence.timeline.network.sampledFailedRequests, 3)
+  assert.deepEqual(value.evidence.timeline.network.byStatus, { 0: 1, 200: 2, 404: 2 })
 })
 
 test('pages failures without deduplication and rejects changed totals, short and unbounded collections', async () => {

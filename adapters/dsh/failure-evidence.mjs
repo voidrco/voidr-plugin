@@ -87,7 +87,8 @@ function sampledTimeline(value) {
     steps: value.steps,
     console: { sampledMessages: value.console.length, byLevel: countBy(value.console, 'level'), byMessage: countBy(value.console, 'message') },
     network: { sampledRequests: value.network.length, byStatus: countBy(value.network, 'status'),
-      failures: value.network.filter(row => row.error || Number(row.status) >= 400) },
+      failures: value.network.map((row, sourceRow) => ({ ...row, sourceRow }))
+        .filter(row => row.error || Number(row.status) >= 400) },
     stdout: value.stdout, stderr: value.stderr,
     coverage: 'Returned samples only; counts do not establish complete execution coverage.',
   }
@@ -124,7 +125,7 @@ export function compactFailureEvidence(bundle) {
       error: text(rows[sourceRow].error, 1800, `${path}.${sourceRow}.error`) })) }
   }
   const failures = { ...bundle.failures, selected: bundle.failures.selected.map(row => ({
-    ...pick(row, ['sourceRow', 'testCaseSlug', 'title', 'failureSignature', 'startedAt', 'durationMs', 'filePath', 'line', 'selector', 'hasDomSnapshot']),
+    ...pick(row, ['sourceRow', 'testCaseSlug', 'title', 'failureSignature', 'startedAt', 'durationMs', 'filePath', 'line', 'selector', 'hasDomSnapshot', 'traceRef', 'screenshotRef']),
     errorMessage: text(row.errorMessage, 2400, `failures.selected.${row.sourceRow}.errorMessage`),
     errorStack: text(row.errorStack, 1000, `failures.selected.${row.sourceRow}.errorStack`),
   })) }
@@ -134,7 +135,7 @@ export function compactFailureEvidence(bundle) {
   if (original.timeline) {
     const network = original.timeline.network
     const seen = new Set()
-    const examples = network.failures.map((row, sourceRow) => ({ ...row, sourceRow })).filter(row => {
+    const examples = network.failures.filter(row => {
       const key = String(row.status) + ':' + String(row.error)
       if (seen.has(key)) return false
       seen.add(key); return true

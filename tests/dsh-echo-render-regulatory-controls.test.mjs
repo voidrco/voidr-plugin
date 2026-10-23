@@ -40,7 +40,10 @@ function setup(call) {
   let tool
   const events = []
   registerEchoRenderRegulatoryControls({ tools: { register: value => { tool = value } } }, call)
-  return { tool, events, exec: { agent: { session: { append: (type, data) => events.push({ type, data }) } } } }
+  return { tool, events, exec: { agent: { session: {
+    events: [{ type: 'voidr/project-context-hint', data: { surface: 'echo', applicationId: filters.applicationId } }],
+    append: (type, data) => events.push({ type, data })
+  } } } }
 }
 
 test('publishes all 23 canonical controls without converting zero to unavailable', async () => {

@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { registerEchoActor } from '../adapters/dsh/echo-actor.mjs'
 import { interactiveTestDevelopmentPrompt } from '../core/workflow/interactive-test-development.mjs'
-import { loadDshPluginSkills } from '../adapters/dsh/plugin-skills.mjs'
+import { loadEchoWorkflowPolicy } from './helpers/dsh-echo-policy.mjs'
 import { apply } from '../adapters/dsh/index.mjs'
 
 test('Echo distinguishes upstream denial from integration failures without exposing credentials', async () => {
@@ -69,7 +69,7 @@ test('Echo loads its own evidence and confirmation policy instead of web authori
   const prompt = interactiveTestDevelopmentPrompt({ hint: { surface: 'echo', echoContext: { echoScreen: 'deviations' } } })
   assert.match(prompt, /deviations/)
   assert.doesNotMatch(prompt, /AUTHORING OWNERSHIP/)
-  const skill = loadDshPluginSkills().find(item => item.name === 'voidr-echo-analysis')
+  const skill = loadEchoWorkflowPolicy()
   assert.match(skill.content, /mcp__voidr__echo_get_ontology/)
   assert.match(skill.content, /confirmation turn/)
   assert.match(skill.content, /`echo_execution_confirmation`/)
@@ -77,7 +77,7 @@ test('Echo loads its own evidence and confirmation policy instead of web authori
 })
 
 test('Echo completes read-only reports without empty selection probes', () => {
-  const skill = loadDshPluginSkills().find(item => item.name === 'voidr-echo-analysis')
+  const skill = loadEchoWorkflowPolicy()
   assert.match(skill.content, /at most 20 evidence rows/)
   assert.match(skill.content, /Never switch it to `multi_select`/)
   assert.match(skill.content, /at most one smaller corrected attempt/)
@@ -101,22 +101,27 @@ test('Echo renders the latest selected period with an explicit query and answer 
   select('7d')
   select('14d')
   const prompt = render(context)
+  const policy = loadEchoWorkflowPolicy().content
   assert.match(prompt, /"echoContext":\{"echoScreen":"overview","window":"14d"\}/)
   assert.doesNotMatch(prompt, /"window":"7d"/)
-  assert.match(prompt, /requires `window: "14d"`/)
-  assert.match(prompt, /mcp__voidr__echo_get_overview/)
-  assert.match(prompt, /mcp__voidr__echo_get_deviation_summary/)
-  assert.match(prompt, /same resolved interval/)
-  assert.match(prompt, /complete response for `7d` does not answer a\s+selected `14d`/)
-  assert.match(prompt, /explicit\s+composer or custom-form period wins/)
-  assert.match(prompt, /Never widen the period after a valid empty result/)
-  assert.match(prompt, /Nos últimos 14 dias/)
-  assert.match(prompt, /all-time inventory\s+separately/)
+  assert.match(prompt, /Active surface skill: voidr-echo-analysis/)
+  assert.match(prompt, /Use the user's explicit period, otherwise echoContext.window/)
+  assert.match(prompt, /Resolve requested calendar windows once/)
+  assert.match(prompt, /never silently replace\s+all with seven days/)
+  assert.match(policy, /requires `window: "14d"`/)
+  assert.match(policy, /mcp__voidr__echo_get_overview/)
+  assert.match(policy, /mcp__voidr__echo_get_deviation_summary/)
+  assert.match(policy, /same resolved interval/)
+  assert.match(policy, /complete response for `7d` does not answer a\s+selected `14d`/)
+  assert.match(policy, /explicit\s+composer or custom-form period wins/)
+  assert.match(policy, /Never widen the period after a valid empty result/)
+  assert.match(policy, /Nos últimos 14 dias/)
+  assert.match(policy, /all-time inventory\s+separately/)
   select('30d')
   assert.match(render(context), /"window":"30d"/)
   assert.doesNotMatch(render(context), /"window":"14d"/)
   select()
   assert.doesNotMatch(render(context), /"window":"30d"/)
-  assert.match(render(context), /neither the user nor current context supplies a period/)
-  assert.match(render(context), /specifically\s+requested session or static configuration/)
+  assert.match(policy, /neither the user nor current context supplies a period/)
+  assert.match(policy, /specifically\s+requested session or static configuration/)
 })

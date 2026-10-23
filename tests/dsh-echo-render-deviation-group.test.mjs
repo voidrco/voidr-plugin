@@ -18,7 +18,10 @@ function fixture(data, completeness = { complete: true }) {
     calls.push({ name, args })
     return { content: [{ type: 'text', text: JSON.stringify({ asOf: '2026-09-16T18:34:10.000Z', completeness, data }) }] }
   })
-  const exec = { agent: { session: { append(_type, value) { widgets.push(value.widget) } } } }
+  const exec = { agent: { session: {
+    events: [{ type: 'voidr/project-context-hint', data: { surface: 'echo', applicationId: filters.applicationId } }],
+    append(_type, value) { widgets.push(value.widget) }
+  } } }
   return { command, widgets, calls, exec }
 }
 

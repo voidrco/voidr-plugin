@@ -1,10 +1,10 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
-import { loadDshPluginSkills } from '../adapters/dsh/plugin-skills.mjs'
+import { loadEchoWorkflowPolicy } from './helpers/dsh-echo-policy.mjs'
 
 test('Echo distinguishes Deviations and Journeys summary windows from full lists', () => {
-  const text = loadDshPluginSkills().find(skill => skill.name === 'voidr-echo-analysis').content
+  const text = loadEchoWorkflowPolicy().content
   assert.match(text, /windowScope: "summary"/)
   assert.match(text, /listWindow: "all"/)
   assert.match(text, /fixed rolling 7d summary, not a user-selected period picker/)
@@ -12,7 +12,7 @@ test('Echo distinguishes Deviations and Journeys summary windows from full lists
 })
 
 test('Echo resolves civil days in code and honors the Sessions window', () => {
-  const text = loadDshPluginSkills().find(skill => skill.name === 'voidr-echo-analysis').content
+  const text = loadEchoWorkflowPolicy().content
   assert.match(text, /mcp__voidr__echo_resolve_analysis_window/)
   assert.match(text, /Today counts as one day/)
   assert.match(text, /September 9–15, not September 8–15/)
@@ -24,7 +24,7 @@ test('Echo resolves civil days in code and honors the Sessions window', () => {
 })
 
 test('Echo copies computed zero-pass counts without grouping low approvals as zero', () => {
-  const text = loadDshPluginSkills().find(skill => skill.name === 'voidr-echo-analysis').content
+  const text = loadEchoWorkflowPolicy().content
   assert.match(text, /summary\.rubricSummary\.zeroPass\.count/)
   assert.match(text, /`withPass` includes every criterion with at least one/)
   assert.match(text, /`noConclusiveEvaluation`/)
@@ -33,7 +33,7 @@ test('Echo copies computed zero-pass counts without grouping low approvals as ze
 })
 
 test('the loaded Echo skill routes regulatory counts to canonical control aggregation', () => {
-  const text = loadDshPluginSkills().find(skill => skill.name === 'voidr-echo-analysis').content
+  const text = loadEchoWorkflowPolicy().content
   assert.match(text, /use\s+`mcp__voidr__echo_summarize_regulatory_controls` as the canonical aggregate/)
   assert.match(text, /call native\s+`echo_render_regulatory_controls`/)
   assert.doesNotMatch(text, /mcp__voidr__echo_render_regulatory_controls/)
@@ -62,7 +62,7 @@ test('the loaded Echo skill routes regulatory counts to canonical control aggreg
 })
 
 test('Echo scope preserves root and nested Journey filters and does not widen empty results', () => {
-  const text = loadDshPluginSkills().find(skill => skill.name === 'voidr-echo-analysis').content
+  const text = loadEchoWorkflowPolicy().content
   assert.match(text, /whether at the context root or in `echoContext`/)
   assert.match(text, /"all" alone\s+means all matching records inside the selected scope/)
   assert.match(text, /Never silently omit a Journey filter/)
@@ -77,7 +77,7 @@ test('Echo scope preserves root and nested Journey filters and does not widen em
 })
 
 test('Echo does not infer causes from marginal totals or block optional follow-ups', () => {
-  const text = loadDshPluginSkills().find(skill => skill.name === 'voidr-echo-analysis').content
+  const text = loadEchoWorkflowPolicy().content
   const routing = readFileSync(new URL('../adapters/dsh/skills/voidr-echo-analysis/references/tool-routing.md', import.meta.url), 'utf8')
   assert.match(text, /Aggregate fields are separate totals unless the tool explicitly returns their\s+intersection/)
   assert.match(text, /do not establish that audio caused silence or a\s+transfer/)

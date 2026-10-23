@@ -4,7 +4,7 @@ import { join } from 'node:path'
 import { registerEchoProposeOverviewChange, buildPreviewArguments, echoProposeOverviewChangeSchema, echoOverviewQuestionDenial } from '../adapters/dsh/echo-propose-overview-change.mjs'
 import { registerEchoMemberPolicy, echoMemberToolDenial } from '../adapters/dsh/echo-member-policy.mjs'
 import { registerEchoActor } from '../adapters/dsh/echo-actor.mjs'
-import { loadDshPluginSkills } from '../adapters/dsh/plugin-skills.mjs'
+import { loadEchoWorkflowPolicy } from './helpers/dsh-echo-policy.mjs'
 import { echoOverviewStudioDenial } from '../adapters/dsh/echo-overview-studio.mjs'
 
 const APP = '6a6cfa72d43cf76203eaf843'
@@ -204,7 +204,7 @@ test('the overview studio routes changes to the open draft', () => {
 })
 
 test('native overview tool is part of the Echo family and documented in the skill', () => {
-  const skill = loadDshPluginSkills().find(item => item.name === 'voidr-echo-analysis')
+  const skill = loadEchoWorkflowPolicy()
   assert.match(skill.content, /## Overview customization/)
   assert.match(skill.content, /`echo_propose_overview_change`/)
   assert.doesNotMatch(skill.content, /mcp__voidr__echo_propose_overview_change/)

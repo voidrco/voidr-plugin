@@ -2,7 +2,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { createEchoAnalysisGuard } from '../adapters/dsh/echo-analysis-guard.mjs'
 import { registerEchoActor } from '../adapters/dsh/echo-actor.mjs'
-import { loadDshPluginSkills } from '../adapters/dsh/plugin-skills.mjs'
+import { loadEchoWorkflowPolicy } from './helpers/dsh-echo-policy.mjs'
 
 const applicationId = '6a6cfa72d43cf76203eaf843'
 const hint = { surface: 'echo', applicationId }
@@ -208,13 +208,41 @@ test('scope, inclusive list bounds, metadata exceptions and helper routing are e
   const ok = async args => args
   await assert.rejects(call('echo_analyze_session_cohort', { applicationId, ...window }, ok), /Resolve the analysis window/)
   await resolve()
-  await assert.rejects(call('echo_analyze_session_cohort', { applicationId, ...window }, ok,
-    { ...hint, moduleSlug: 'vivo-autopilot-consulta-debitos' }), /Journey/)
+  const selectedJourney = { ...hint, moduleSlug: 'fixture-journey' }
+  assert.deepEqual(await call('echo_analyze_session_cohort', { applicationId, ...window }, ok,
+    selectedJourney), { applicationId, ...window, moduleSlug: 'fixture-journey' })
+  await assert.rejects(call('echo_analyze_session_cohort', { applicationId, ...window, moduleSlug: 'other-journey' },
+    () => assert.fail('must reject before transport'), selectedJourney), /Journey/)
   await assert.rejects(call('system_call_tool', { name: 'echo_analyze_session_cohort', arguments: { applicationId } }, ok), /native Echo tools/)
   await assert.rejects(call('system_run_script', { script: 'ignored' }, ok), /native Echo tools/)
   const list = { applicationId, occurredFrom: window.occurredFrom, occurredTo: '2026-09-15T21:48:18.046Z' }
   assert.deepEqual(await call('echo_list_sessions', list, ok), list)
   assert.deepEqual(await call('echo_get_session', { sessionId: 'exact' }, ok), { sessionId: 'exact' })
+})
+
+test('Journey defaults retain the selected Plan and environment and reject explicit scope changes', async () => {
+  const planId = '111111111111111111111111'
+  const selected = { applicationId, planId, moduleSlug: 'fixture-journey', environmentSlug: 'synthetic' }
+  for (const context of [
+    { ...hint, testPlanId: planId, moduleSlug: selected.moduleSlug, echoContext: { environmentSlug: selected.environmentSlug } },
+    { surface: 'echo', echoContext: selected }
+  ]) {
+    const { call, resolve } = fixture()
+    await resolve()
+    const args = Object.freeze({ applicationId, ...window })
+    const bound = await call('echo_analyze_session_cohort', args, async query => query, context)
+    assert.deepEqual(bound, { ...args, planId, moduleSlug: selected.moduleSlug, environment: selected.environmentSlug })
+    assert.equal(args.planId, undefined)
+    assert.equal(args.moduleSlug, undefined)
+    for (const change of [
+      { applicationId: '222222222222222222222222' },
+      { planId: '222222222222222222222222' },
+      { moduleSlug: 'other-journey' }, { environment: 'other-environment' }
+    ]) {
+      await assert.rejects(call('echo_analyze_session_cohort', { ...args, ...change },
+        () => assert.fail('scope changes must be rejected before transport'), context), /selected Echo/)
+    }
+  }
 })
 
 test('actor direct and widget calls share the same frozen window', async () => {
@@ -237,7 +265,7 @@ test('actor direct and widget calls share the same frozen window', async () => {
 })
 
 test('loaded Echo policy prevents connector detours, empty fallback and status substitution', () => {
-  const text = loadDshPluginSkills().find(skill => skill.name === 'voidr-echo-analysis').content
+  const text = loadEchoWorkflowPolicy().content
   assert.match(text, /Autopilot is the application, not a connector ID/)
   assert.match(text, /When complete results contain zero sessions, stop/)
   assert.match(text, /sessionLifecycle\.passed=0 and judgeLifecycle\.officialPass=2 means two official/)

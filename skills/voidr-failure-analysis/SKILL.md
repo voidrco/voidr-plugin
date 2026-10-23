@@ -87,9 +87,9 @@ execution.
 - If multiple failures exist, show slug, title, classification, error summary,
   and file/line; ask the user to select one.
 - Do not group or deduplicate rows by `failureSignature`: the selection is the
-  user's and every row stays visible. Do say, next to the rows that share one,
-  how many cases that signature covers — cases failing for the same reason are
-  one problem, and diagnosing the representative one answers for all of them.
+  user's and every row stays visible. Say how many cases share a signature,
+  without assuming a shared cause. Each record keeps its own time and error
+  fields; a record is not a retry, project, or attempt unless its source says so.
 
 Treat `failureSignature` only as an identifier from the analytical store. Do
 not pass it to tools that require another signature format.
@@ -136,6 +136,24 @@ Use these cause labels in the response:
 - **Environment instability**: network, dependency, authentication, or timing
   failed outside the product behavior under test.
 - **Indeterminate**: available evidence does not support one cause.
+
+A timeout in application navigation does not establish environment instability.
+That label requires a failure outside the product under test and evidence linking
+it to the selected failing operation. When product behavior, test logic, frame,
+locator, or prerequisite explanations remain causally unresolved, use Indeterminate
+and explain the observed failure mechanism separately from those hypotheses.
+
+An element present in one DOM snapshot does not rule out an outdated or incorrect
+locator: document, frame, accessible name, and the assertion interval must match.
+A later passing run does not exclude an intermittent application defect. Console
+counts or HTTP statuses alone cannot establish origin, harmlessness, or causality.
+Do not add durations from different trace branches or assign a trace step to every
+failure record without an explicit source mapping.
+
+Confirm a product BUG only with documented expected behavior, a reproducible
+objective inconsistency, and functional impact. Otherwise use PROVÁVEL BUG when
+that hypothesis is supported, or Indeterminate when the cause remains unresolved.
+Problems in test automation are a separate classification from product defects.
 
 Do not classify a missing selector as an outdated test unless DOM or trace
 evidence shows the intended element changed or moved. Do not call a failure

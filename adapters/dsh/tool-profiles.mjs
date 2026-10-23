@@ -11,6 +11,15 @@ const CORE = new Set([
   'mcp__voidr__assistant_help_request', 'mcp__voidr__custom_connectors_list',
 ])
 const DOMAINS = {
+  failure: [
+    'failure_analysis_read_bundle', 'failure_analysis_read_detail', 'failure_analysis_render_report', 'playwright_get_execution_analytics',
+    'playwright_list_execution_failures', 'playwright_get_test_timeline',
+    'playwright_get_trace_events', 'playwright_get_test_history',
+    'playwright_get_test_dom', 'playwright_list_test_results',
+    'test_plans_get_case', 'test_plans_get_tag_history',
+    'applications_list_applications', 'applications_get_application',
+    'connectors_context_list_active_integrations',
+  ],
   radar: [
     'preventive_monitor_',
     'monitor_', 'custom_connectors_list',
@@ -90,7 +99,7 @@ export function initialToolDomains(hint) {
   // intentionally scoped to the other DSH surfaces.
   if (hint.surface === 'echo') return null
   return {
-    'preventive-monitor': ['radar'], monitor: ['execution'],
+    'preventive-monitor': ['radar'], monitor: ['failure'],
     home: ['knowledge'], 'context-graph': ['knowledge'],
     spec: ['plans'], journeys: ['plans'], 'journey-overview': ['plans'],
     automate: ['authoring'], performance: ['performance'],

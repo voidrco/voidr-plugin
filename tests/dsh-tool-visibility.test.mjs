@@ -156,8 +156,10 @@ test('each surface starts with the evidence tools used by its primary skill', ()
   const visible = hint => names.filter(name =>
     !toolVisibilityFilter(names, { domains: initialToolDomains(hint) })?.deny.includes(name))
   assert.ok(visible({ surface: 'monitor' }).includes('mcp__voidr__playwright_get_execution_analytics'))
-  assert.ok(visible({ surface: 'monitor' }).includes('mcp__voidr__defects_create_defect'))
-  assert.ok(visible({ surface: 'monitor' }).includes('mcp__voidr__test_plans_update_test_case_tag'))
+  assert.ok(!visible({ surface: 'monitor' }).includes('mcp__voidr__defects_create_defect'))
+  assert.ok(profileToolVisible('mcp__voidr__defects_create_defect', ['failure', 'execution']))
+  assert.ok(!visible({ surface: 'monitor' }).includes('mcp__voidr__test_plans_update_test_case_tag'))
+  assert.ok(profileToolVisible('mcp__voidr__test_plans_update_test_case_tag', ['failure', 'execution']))
   assert.ok(!visible({ surface: 'monitor' }).includes('mcp__voidr__preventive_monitor_get_radar_situation'))
   assert.ok(visible({ surface: 'preventive-monitor' }).includes('mcp__voidr__preventive_monitor_get_radar_situation'))
   for (const surface of ['spec', 'journeys', 'journey-overview']) {

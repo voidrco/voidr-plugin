@@ -15,6 +15,7 @@ import { registerToolVisibility } from './tool-visibility.mjs'
 import { TOOL_DOMAINS, TOOL_SCOPE_EVENT, expandedDomains, expandedToolNames, initialToolDomains } from './tool-profiles.mjs'
 import { echoOverviewStudioDenial } from './echo-overview-studio.mjs'
 import { registerObservabilityWidgets } from './observability-widgets.mjs'
+import { registerFailureEvidence } from './failure-evidence.mjs'
 
 const CONTEXT_EVENT_TYPE = 'voidr/project-context-hint'
 const SPEND_CONTEXTS_KEY = Symbol.for('voidr.dsh.litellm-contexts.v1')
@@ -62,12 +63,14 @@ function contextHint(events) {
 export function registerKnownEvents(knownEventTypes) {
   knownEventTypes.add(CONTEXT_EVENT_TYPE)
   knownEventTypes.add(TOOL_SCOPE_EVENT)
+  knownEventTypes.add('voidr/widget')
 }
 
 export const name = 'voidr-agent-plugin-dsh'
 export const inject = ['agents', 'commands', 'skills', 'systemPrompt', 'tools']
 
 export function apply(ctx) {
+  registerFailureEvidence(ctx)
   registerObservabilityWidgets(ctx)
   const callEchoTool = registerEchoActor(ctx)
   registerChannelActor(ctx)

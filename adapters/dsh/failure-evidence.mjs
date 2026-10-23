@@ -3,6 +3,21 @@ import { createFailureReadWindow, evidenceExcerpt, registerFailureReadPresentati
 import { registerFailureReport } from './failure-report.mjs'
 
 const PREFIX = 'mcp__voidr__'
+const DETAIL_SOURCES = new Set(['playwright_get_test_timeline', 'playwright_get_trace_events', 'playwright_get_test_dom',
+  'playwright_get_test_history', 'test_plans_get_case', 'test_plans_get_tag_history', 'connectors_context_list_active_integrations'])
+const sourceFieldPaths = value => {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return ['$']
+  const paths = Object.keys(value).filter(key => /^[A-Za-z0-9_-]+$/.test(key)).slice(0, 12)
+  for (const key of [...paths]) {
+    const child = Array.isArray(value[key]) ? value[key][0] : value[key]
+    if (!child || typeof child !== 'object' || Array.isArray(child)) continue
+    for (const field of Object.keys(child)) {
+      if (paths.length >= 12) break
+      if (/^[A-Za-z0-9_-]+$/.test(field)) paths.push(`${key}${Array.isArray(value[key]) ? '.0' : ''}.${field}`)
+    }
+  }
+  return paths
+}
 const identity = value => typeof value === 'string' && /^[a-f0-9]{24}$/.test(value)
 const countBy = (rows, key) => {
   const counts = new Map()
@@ -171,7 +186,8 @@ export async function collectFailureEvidence({ executionId, testCaseSlug }, read
     const value = await read(name, args, signal)
     signal?.throwIfAborted()
     sources.push({ name, arguments: args, elapsedMs: now() - started,
-      sha256: createHash('sha256').update(JSON.stringify(value)).digest('hex') })
+      sha256: createHash('sha256').update(JSON.stringify(value)).digest('hex'),
+      ...(DETAIL_SOURCES.has(name) ? { fieldPaths: sourceFieldPaths(value) } : {}) })
     return value
   }
   const optional = async (name, args, validate = value => value) => {
@@ -288,7 +304,7 @@ export function registerFailureEvidence(ctx) {
       executionId: { type: 'string', pattern: '^[a-f0-9]{24}$' }, testCaseSlug: { type: 'string' },
       source: { type: 'string', enum: ['playwright_get_test_timeline', 'playwright_get_trace_events', 'playwright_get_test_dom', 'playwright_get_test_history', 'test_plans_get_case', 'test_plans_get_tag_history', 'connectors_context_list_active_integrations'] },
       question: { type: 'string', minLength: 12, maxLength: 400 },
-      path: { type: 'string', default: '$', description: 'Exact field path such as $.network, $.steps, steps or snapshots.0.html. No JSONPath expressions or wildcards.' }, contains: { type: 'string', maxLength: 120 },
+      path: { type: 'string', default: '$', description: 'Use a fieldPaths entry from this source descriptor, such as steps or snapshots.0.html. These refer to the original source, not the compact evidence.trace or evidence.timeline wrapper. An optional $. prefix is accepted. No JSONPath expressions or wildcards.' }, contains: { type: 'string', maxLength: 120 },
       offset: { type: 'integer', minimum: 0, default: 0 }, limit: { type: 'integer', minimum: 1, maximum: 50, default: 12 },
     }, required: ['executionId', 'testCaseSlug', 'source', 'question', 'path'] },
     output: { schema: { type: 'object' }, render: (_args, value) => [{ type: 'text', text: JSON.stringify(value) }] },

@@ -71,6 +71,19 @@ test('rejects foreign execution before any further reads and never accepts an un
   assert.equal(absent.calls.length, 2)
 })
 
+test('detail paths refer to the original source rather than the compact wrapper', async () => {
+  const trace = { steps: [{ name: 'assertion', status: 'FAILED' }], meta: { traceSize: 32 } }
+  const f = fixture({ playwright_get_trace_events: () => trace })
+  const value = compactFailureEvidence(await collectFailureEvidence(input, f.read))
+  const source = value.sources.find(row => row.name === 'playwright_get_trace_events')
+  assert.ok(source.fieldPaths.includes('steps'))
+  assert.ok(source.fieldPaths.includes('steps.0.name'))
+  assert.ok(!source.fieldPaths.includes('trace.steps'))
+  assert.ok(source.fieldPaths.length <= 12)
+  assert.deepEqual(evidencePayload({ structuredContent: trace }), trace)
+  assert.equal(value.gaps.length, 0)
+})
+
 test('pages failures without deduplication and rejects changed totals, short and unbounded collections', async () => {
   const rows = Array.from({ length: 201 }, () => ({ testCaseSlug: 'CASE-1', failureSignature: 'same' }))
   const paged = fixture({ playwright_list_execution_failures: args => ({ ...args, total: rows.length, rows: rows.slice((args.page - 1) * 200, args.page * 200) }) })

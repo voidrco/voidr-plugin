@@ -73,3 +73,12 @@ Current plugin validation passed. The focused failure/Monitor tests passed 31/31
 
 
 The five completed/failed pre-deadline trials were exported as 83 hash-verified private files (4111441 bytes, SHA256 `1c448c99f8fcb84ccbfcfc69796923b0a372434ee2d7539a78c0dfba7a61d879`). A final low-effort tail attempt was launched near the fixture deadline and has no qualified outcome: the original 1800-second pod deadline ended before its raw result export. It is not counted as a latency or quality observation. The adapter advertises low effort; model acceptance for that attempt was not observed. Kubernetes rejected an attempted deadline increase; resources and the original deadline did not change. The owned namespace was deleted; the existing node was retained.
+
+
+### Isolated supported low-effort probe
+
+After preserving and deleting the first fixture, a new owned pod on the same already-provisioned node ran candidate `7097877` with the same controls hash, model, Relace and output budget; only effort changed from high to low. The runtime accepted low, and all five primary outbound requests carried it. The canonical completed final answer took 110.249 seconds over six requests including title generation, versus 165.347 seconds for the high-effort candidate sample (33.3% shorter in this pair). Primary model time was 102.580 seconds with 9015 reasoning tokens. Native CPU accumulated 9.969 seconds and GC 332.628 ms. This is one component sample, not a p95 result or a reliable effect estimate.
+
+The deterministic source-record audit passed. Semantic review rejected the final answer: it definitively excluded an incorrect locator based on one snapshot, added navigation waits without per-record mapping, and asserted a rendering race despite unresolved alternatives. The faster sample therefore does not qualify a useful-answer improvement and no production reasoning change is proposed. Reducing reasoning alone is insufficient; prompt guidance alone also failed to prevent those conclusions.
+
+The low-effort evidence archive has 18 hash-verified files, 503092 bytes, SHA256 `04da549992ef7e816efff5504a96aade51c2f8e9000cc2dd9526eb47601724ee`. Raw model reasoning and organization evidence remain private. The native process exited and owned process inspection found none remaining. The separate owned namespace was removed after export, retaining the same existing node. No production capacity, routing or reasoning setting changed.

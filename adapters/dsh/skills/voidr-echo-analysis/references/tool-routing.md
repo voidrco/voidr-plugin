@@ -209,6 +209,10 @@ playground or Hive session parameters.
   A paused knowledge subrun is distinct from regulatory inconclusiveness.
 - Rejudge: fetch evaluation, explain CURRENT versus ORIGINAL, confirm, then
   `echo_rejudge_session`.
+- Executions without evaluation: a session whose execution ran without judge
+  profiles answers `JUDGE_NOT_REQUESTED`; it is not a failure. Once every test
+  of that execution finished, ask which profiles to use, confirm, then call
+  `echo_evaluate_execution_sessions` with the execution ids.
 - Defect: fetch session diagnosis, show exact title/description, confirm, then
   `echo_create_defect_from_session`.
 
@@ -257,6 +261,18 @@ playground or Hive session parameters.
   both when their pass thresholds differ.
 - Judge semantics and exact attempts: `echo_get_judge_methodology_templates`,
   `echo_get_judge_preview`, `echo_get_judge_run`.
+- Judge profiles: `echo_list_judge_profiles` lists "Padrão Voidr" (immutable
+  default) and the application's custom profiles with their published version
+  and whether they can be selected; `echo_get_judge_profile` reads one profile,
+  its draft and whether its source has a newer version.
+- Per-profile results of one session: `echo_list_session_judge_evaluations`.
+  The official evaluation owns the session verdict; secondary evaluations are
+  other profiles applied to the same session and never change it.
+- Profile authoring, each only after explicit confirmation:
+  `echo_clone_judge_profile` (Padrão Voidr can only be cloned),
+  `echo_update_judge_profile_draft` (send the full content after reading it),
+  `echo_rebase_judge_profile`, `echo_publish_judge_profile`. Publishing affects
+  only executions and schedules started afterwards.
 - Environment readiness: `echo_get_regulatory_status`; global published catalog:
   `echo_list_regulatory_catalog`.
 

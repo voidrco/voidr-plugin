@@ -209,6 +209,10 @@ playground or Hive session parameters.
   A paused knowledge subrun is distinct from regulatory inconclusiveness.
 - Rejudge: fetch evaluation, explain CURRENT versus ORIGINAL, confirm, then
   `echo_rejudge_session`.
+- Executions without evaluation: a session whose execution ran without judge
+  profiles answers `JUDGE_NOT_REQUESTED`; it is not a failure. Once every test
+  of that execution finished, ask which profiles to use, confirm, then call
+  `echo_evaluate_execution_sessions` with the execution ids.
 - Defect: fetch session diagnosis, show exact title/description, confirm, then
   `echo_create_defect_from_session`.
 

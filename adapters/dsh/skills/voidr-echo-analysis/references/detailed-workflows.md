@@ -477,7 +477,9 @@ follows the normal read, explain, confirm rule with the current revision.
    should evaluate the sessions (up to five, "Padrão Voidr" included). The
    first chosen profile gives the official verdict; the others are secondary
    evaluations of the same session. Without custom profiles keep Padrão Voidr
-   and do not ask.
+   and do not ask. Only when the user explicitly asks to run without any
+   evaluation, send an empty `judgeProfileSelections` list; the confirmation
+   card then states that the sessions will not be evaluated.
 3. Call `echo_prepare_execution` once with the exact requested inputs and the
    chosen `judgeProfileSelections`. If it returns
    `ECHO_JUDGE_PROFILE_CHOICE_REQUIRED`, ask with its options and prepare again.

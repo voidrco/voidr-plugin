@@ -213,6 +213,10 @@ playground or Hive session parameters.
   profiles answers `JUDGE_NOT_REQUESTED`; it is not a failure. Once every test
   of that execution finished, ask which profiles to use, confirm, then call
   `echo_evaluate_execution_sessions` with the execution ids.
+- A profile with `verdictMode: SEPARATE` gives no single session verdict
+  (`overall` stays inconclusive); read and report its per-indicator results.
+  Sessions dispatched without evaluation report `not_requested` and can be
+  evaluated later with `echo_evaluate_execution_sessions`.
 - Defect: fetch session diagnosis, show exact title/description, confirm, then
   `echo_create_defect_from_session`.
 

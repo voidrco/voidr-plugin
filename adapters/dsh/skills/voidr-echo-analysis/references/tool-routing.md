@@ -277,6 +277,9 @@ playground or Hive session parameters.
   `echo_update_judge_profile_draft` (send the full content after reading it),
   `echo_rebase_judge_profile`, `echo_publish_judge_profile`. Publishing affects
   only executions and schedules started afterwards.
+- A custom profile evaluates the knowledge base and regulatory compliance only
+  when its content sets `knowledgeEvaluation` / `regulatoryEvaluation` to true;
+  both are off by default, and an off check reads as disabled, never as failed.
 - Environment readiness: `echo_get_regulatory_status`; global published catalog:
   `echo_list_regulatory_catalog`.
 

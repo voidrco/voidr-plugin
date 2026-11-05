@@ -12,6 +12,7 @@ const ECHO_CORE_TOOLS = new Set([
   'mcp__voidr__echo_analyze_scenario_groups', 'mcp__voidr__echo_analyze_judge_criterion',
   'mcp__voidr__echo_list_sessions', 'mcp__voidr__echo_get_session',
   'mcp__voidr__echo_get_session_evaluation', 'mcp__voidr__echo_read_evidence',
+  'mcp__voidr__echo_list_judge_profiles', 'mcp__voidr__echo_list_session_judge_evaluations',
   'mcp__voidr__echo_list_defects', 'mcp__voidr__echo_get_defect',
   'mcp__voidr__echo_get_overview', 'mcp__voidr__echo_get_deviation_summary',
   'mcp__voidr__echo_compare_periods', 'echo_render_deviations',

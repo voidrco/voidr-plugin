@@ -472,16 +472,26 @@ follows the normal read, explain, confirm rule with the current revision.
 
 1. Resolve application, Journey/plan, environment, scenarios and persona/group
    with read tools. Do not invent ids or defaults.
-2. Call `echo_prepare_execution` once with the exact requested inputs.
-3. Render `echo_execution_confirmation` with every returned summary field,
-   including the exact per-shard call matrix, expiry and confirmation nonce.
-   Stop. Do not call a write tool in the same turn.
-4. A widget submission with `action: "echo.confirm_execution"` is the explicit
+2. Read `echo_list_judge_profiles` for the application. When it lists
+   selectable custom profiles, ask with `ask_user_question` which profiles
+   should evaluate the sessions (up to five, "Padrão Voidr" included). The
+   first chosen profile gives the official verdict; the others are secondary
+   evaluations of the same session. Without custom profiles keep Padrão Voidr
+   and do not ask. Only when the user explicitly asks to run without any
+   evaluation, send an empty `judgeProfileSelections` list; the confirmation
+   card then states that the sessions will not be evaluated.
+3. Call `echo_prepare_execution` once with the exact requested inputs and the
+   chosen `judgeProfileSelections`. If it returns
+   `ECHO_JUDGE_PROFILE_CHOICE_REQUIRED`, ask with its options and prepare again.
+4. Render `echo_execution_confirmation` with every returned summary field,
+   including the judge profiles, the exact per-shard call matrix, expiry and
+   confirmation nonce. Stop. Do not call a write tool in the same turn.
+5. A widget submission with `action: "echo.confirm_execution"` is the explicit
    approval. Pass only its `confirmationNonce`, `confirmed: true` and its
    `realCallApproved` value to `echo_create_execution`.
-5. A submission with `action: "echo.cancel_execution_confirmation"` cancels
+6. A submission with `action: "echo.cancel_execution_confirmation"` cancels
    the proposal and performs no write.
-6. On success, state the execution id/status and let the persistent Echo panel
+7. On success, state the execution id/status and let the persistent Echo panel
    own live progress. Never recreate inputs from prose or widget fields.
 
 ## Monitoring report confirmation state machine

@@ -261,3 +261,19 @@ test('an exact tool revealed for one turn disappears on the next turn', () => {
     assert.deepEqual(expandedToolNames(agent.session.events), [])
   })
 })
+
+test('Echo starts with the judge profile reads needed before preparing an execution', () => {
+  const { global, agent, visibility, visible } = setup()
+  global.push(
+    'mcp__voidr__echo_list_judge_profiles',
+    'mcp__voidr__echo_list_session_judge_evaluations',
+    'mcp__voidr__echo_publish_judge_profile'
+  )
+  agent.session.events = [hint()]
+
+  visibility.refresh(agent)
+
+  assert.equal(visible(agent).includes('mcp__voidr__echo_list_judge_profiles'), true)
+  assert.equal(visible(agent).includes('mcp__voidr__echo_list_session_judge_evaluations'), true)
+  assert.equal(visible(agent).includes('mcp__voidr__echo_publish_judge_profile'), false)
+})

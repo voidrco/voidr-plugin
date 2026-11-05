@@ -34,6 +34,8 @@
   persisted sessions remain.
 - Rejudge session: confirm method CURRENT or ORIGINAL; previous judge attempts
   remain and the session lifecycle does not change merely because judging ran.
+- Evaluate execution sessions: confirm the execution ids and the chosen judge
+  profiles (at least one); only sessions that were never evaluated are judged.
 - Create defect: confirmation must show exact title and description; never
   auto-create a defect from feedback-loop output.
 - Schedule triggering/enabling, participant-order creation, knowledge PR

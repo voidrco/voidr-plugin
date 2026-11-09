@@ -57,6 +57,15 @@ on Claude Code.
 To generate an Echo report explicitly, invoke `/copilot:voidr-echo-report` on
 Copilot, or `/voidr:voidr-echo-report` on Claude Code.
 
+## Echo simulation workflow
+
+Use `voidr-echo-simulate` to create journeys, run persona simulations and inspect
+judge evidence without a test repository.
+
+The shared MCP bridge supports journey authoring, publication, data assignment,
+execution preparation and judge-result retrieval. See the [external-harness
+walkthrough](docs/echo-simulation-workflow.md) for the complete sequence and adapter limits.
+
 ## Host support
 
 | | DSH | GitHub Copilot CLI | Claude Code |
@@ -268,8 +277,9 @@ default; the bridge sets `NODE_USE_ENV_PROXY=1` so Node 24+ honors
 
 ## Security
 
-The local MCP bridge exposes a small allowlist of Echo reporting, application,
-Test Plan, execution, Playwright analytics, defect, and governance-tag tools. A
+The local MCP bridge exposes an allowlist of Echo authoring, simulation,
+reporting, application, Test Plan, execution, Playwright analytics, defect,
+and governance-tag tools. A
 `preToolUse` hook independently blocks direct, nested, and shell-based
 attempts to dispatch Hive processes.
 

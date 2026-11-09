@@ -9,7 +9,11 @@ activates.
 Never call a tool that starts a Hive process, directly or through a generic
 or batch tool (`agent_jobs_*`, `system_batch_execute`,
 `test_plan_generation_generate_test_plan_draft`, self-healing triggers). The
-Copilot agent does the work locally.
+Copilot agent does the work locally. This restriction concerns delegated
+authoring and generic job dispatch. Echo's supported prepare, execute and
+rejudge tools are product operations: they run simulations and evaluate their
+evidence when authorized by the user. Use their scoped contracts and required
+confirmations; never substitute direct Hive jobs.
 
 ## Grouped tools
 

@@ -244,3 +244,28 @@ own confirmation and is verified with a `defects_get_defect` read-back.
 The Service owns the template and private storage. Neither tool returns report
 bytes, download tokens or storage URLs. DSH installs report-only delegation in
 memory through a non-recorded host command before the user's prompt.
+
+## Echo simulation authoring and execution
+
+Use the [complete simulation workflow](echo-simulation-workflow.md). These tools
+operate on Echo simulations and do not require a Playwright repository or release.
+
+| Need | Tools |
+|---|---|
+| Understand the product contract | `echo_get_ontology` |
+| Select a plan or journey | `echo_list_journey_plans`, `echo_list_journeys`, `echo_get_journey` |
+| Inspect the published contract | `echo_list_journey_flows`, `echo_get_journey_flow`, `echo_preview_journey_flow_data` |
+| Create a repository-free plan | `echo_journeys_create_plan` |
+| Author with revision control | `echo_journeys_create_draft`, `echo_journeys_list_drafts`, `echo_journeys_get_draft`, `echo_journeys_update_draft` |
+| Publish the reviewed revision | `echo_journeys_publish_draft` |
+| Bind existing data | `echo_journeys_get_data`, `echo_journeys_set_data` |
+| Choose environment and transport | `echo_list_environments`, `echo_get_environment` |
+| Choose personas and regional variation | `echo_list_personas`, `echo_get_persona`, `echo_list_persona_groups`, `echo_preview_persona_selection`, `echo_list_accents` |
+| Choose evaluation methodology | `echo_list_judge_profiles`, `echo_get_judge_profile` |
+| Review and launch the exact matrix | `echo_prepare_execution`, then `echo_create_execution` |
+| Follow or cancel an execution | `echo_list_executions`, `echo_get_execution`, `echo_cancel_execution` |
+| Retry a diagnosed evaluation failure | `echo_get_session_evaluation`, then `echo_rejudge_session` |
+| Compare evaluations | `echo_get_execution_evaluations`, `echo_list_session_judge_evaluations` |
+
+After launch, search `echo_list_sessions` by the returned parent execution ID.
+Read transcripts and criterion evidence before explaining failures or claiming success.

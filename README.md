@@ -35,7 +35,7 @@ Bulk backfill and retest dispatch are not added to this surface.
 Existing installations must update from their configured marketplace or
 checkout, then reload the host/MCP connection. A local checkout change does
 not update another user's installed plugin. MCP initialization reports the
-installed package version, so `0.2.27` identifies a connection with this fix;
+installed package version; `0.2.28` includes the simulation workflow and these tools;
 the available tools should include `echo_begin_defect_investigation` and
 `echo_commit_defect_investigation`. DSH uses its existing Assistant Runtime
 MCP scope and keeps its member visibility and server authorization rules.
@@ -56,6 +56,15 @@ on Claude Code.
 
 To generate an Echo report explicitly, invoke `/copilot:voidr-echo-report` on
 Copilot, or `/voidr:voidr-echo-report` on Claude Code.
+
+## Echo simulation workflow
+
+Version `0.2.28` adds `voidr-echo-simulate` to create journeys, run persona simulations and inspect
+judge evidence without a test repository.
+
+The shared MCP bridge supports journey authoring, publication, data assignment,
+execution preparation and judge-result retrieval. See the [external-harness
+walkthrough](docs/echo-simulation-workflow.md) for the complete sequence and adapter limits.
 
 ## Host support
 
@@ -268,8 +277,9 @@ default; the bridge sets `NODE_USE_ENV_PROXY=1` so Node 24+ honors
 
 ## Security
 
-The local MCP bridge exposes a small allowlist of Echo reporting, application,
-Test Plan, execution, Playwright analytics, defect, and governance-tag tools. A
+The local MCP bridge exposes an allowlist of Echo authoring, simulation,
+reporting, application, Test Plan, execution, Playwright analytics, defect,
+and governance-tag tools. A
 `preToolUse` hook independently blocks direct, nested, and shell-based
 attempts to dispatch Hive processes.
 

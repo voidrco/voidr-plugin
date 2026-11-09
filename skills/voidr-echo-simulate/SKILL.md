@@ -19,7 +19,9 @@ the user; validate platform identities through current tool reads.
 
 Separate the opening utterance, complete customer objective, expected results
 and prohibited behavior. Give each scenario observable success and failure
-endings. Keep a scenario focused enough to make its outcome explainable from
+endings. Error-stop rules belong in the objective and prohibited behavior, never
+in scenario or terminal-node `expectedOutcomes`. Verify this in the saved draft
+before publishing; a terminal node does not itself establish success. Keep a scenario focused enough to make its outcome explainable from
 the transcript. Original scenarios need no invented document references.
 
 Review the graph, scenario matrix and validation before publishing the exact

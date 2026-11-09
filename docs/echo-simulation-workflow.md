@@ -18,9 +18,15 @@ For local development, `VOIDR_MCP_URL` selects the local MCP endpoint and
    explicit failure cutoff in the objective. For example: ask for the listed
    benefit conditions; end once all listed details are delivered; after two
    consecutive technical failures, end without claiming success. The cutoff is
-   scenario-specific, not a universal retry policy. Original scenarios may use `provenance: "ORIGINAL"` without
+   scenario-specific, not a universal retry policy. Put technical-error stop rules
+   in `callerObjective` and the prohibited behavior (for example, do not claim
+   success after unresolved errors). Keep `expectedOutcomes`, including terminal
+   node outcomes, exclusively for successful business results. Reaching a terminal
+   node alone does not mean the goal succeeded. Original scenarios may use `provenance: "ORIGINAL"` without
    invented document references. Document-derived scenarios retain real source codes.
-4. Review validation issues and the scenario matrix. Publish the exact reviewed
+4. Return a review link using the selected platform origin and the actual IDs:
+   `/echo/journeys?app=<applicationId>&plan=<testPlanId>&draft=<draftId>`.
+   Review validation issues and the scenario matrix. Publish the exact reviewed
    revision with `echo_journeys_publish_draft`. Text-only chat scenarios default to
    `buttonPolicy: "ignore"`; scenarios requiring UI interaction must use `"follow"`
    and an appropriate device transport. Read-only intent alone does not prove

@@ -27,7 +27,10 @@ For local development, `VOIDR_MCP_URL` selects the local MCP endpoint and
 4. Return a review link using the selected platform origin and the actual IDs:
    `/echo/journeys?app=<applicationId>&plan=<testPlanId>&draft=<draftId>`.
    Review validation issues and the scenario matrix. Publish the exact reviewed
-   revision with `echo_journeys_publish_draft`. Text-only chat scenarios default to
+   revision with `echo_journeys_publish_draft`. Use the returned canonical
+   `publication.moduleSlug` and scenario IDs for data binding and execution; a
+   new journey slug is derived during publication and may differ from the draft
+   input. Text-only chat scenarios default to
    `buttonPolicy: "ignore"`; scenarios requiring UI interaction must use `"follow"`
    and an appropriate device transport. Read-only intent alone does not prove
    a UI-dependent scenario can run through an API.

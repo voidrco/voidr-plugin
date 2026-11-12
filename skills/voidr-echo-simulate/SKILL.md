@@ -45,6 +45,27 @@ stages. A completed run is not a passing result, and a score is not a guarantee
 against hallucinations. Dialect configuration in text does not prove acoustic
 accent fidelity. Report target, adapter and profile limitations explicitly.
 
+## Existing scenario selections and schedules
+
+For chat across several journeys of the same plan, use
+`voidr_echo_selection_login` with the official browser sign-in. Browser use is
+limited to sign-in. Use `voidr_echo_selection_read` to find the journeys by name,
+fetch eligible scenarios in batches, load a saved selection, or preview the exact scope.
+Use `catalog_page` with `q` and `page` for a large journey, and use `q` on
+`list` or `list_schedules` to find groups or schedules by name.
+Build scope targets from each selected catalog row’s moduleSlug, suiteSlug, and testCaseSlug.
+Use scenario names for user-facing review. Include the persona rule, repetitions,
+account strategy, judge profiles, and approved journey version policy. Use the
+accounts, judge_profiles and personas read operations to discover current options.
+Only Voidr staff can use the devices read operation or select the mobile channel.
+For the whole journey, use catalog_targets with the chosen channel. Pass
+the canonical scope and fingerprint returned by preview to run or schedule.
+Use `voidr_echo_selection_write` to save that scope, save it as a schedule, or
+run it now. Saving a selection or a paused schedule does not start a run. Reuse
+the same request ID if a write response is lost. For a run, give the user the
+returned dispatch ID and track it in Evidence. Preserve the selected
+organization, application and plan throughout.
+
 ## Tool routing
 
 - Discover scope: `echo_list_applications`, `echo_list_environments`,

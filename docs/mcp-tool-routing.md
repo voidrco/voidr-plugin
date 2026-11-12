@@ -19,9 +19,17 @@ Routing invariants:
 
 | Tool | Owner skills | Purpose |
 | --- | --- | --- |
-| `voidr_auth_status` | all flows (first call); `voidr-setup` | Validate the selected local Service Account and list local accounts. Always the first platform call of any flow. |
+| `voidr_auth_status` | all flows (first call); `voidr-setup` | Validate the selected local Service Account and list local accounts. Start service-account workflows here. |
 | `voidr_auth_select_organization` | `voidr-setup`, `voidr-context` | Apply the user's choice among accounts/organizations returned by `voidr_auth_status`. |
 | `voidr_auth_login` | `voidr-setup` only | Official browser login. No other skill may call it; they redirect to `/copilot voidr-setup`. |
+
+## Echo scenario selections
+
+| Tool | Owner skills | Purpose |
+| --- | --- | --- |
+| `voidr_echo_selection_login` | `voidr-echo-simulate` | Sign in as a Voidr user for the current bridge session. |
+| `voidr_echo_selection_read` | `voidr-echo-simulate` | Discover journeys and scenarios, read saved selections or schedules, and preview the exact scope. |
+| `voidr_echo_selection_write` | `voidr-echo-simulate` | Save or edit a selection, schedule direct chat, or start a reviewed execution when requested. |
 
 ## Echo monitoring reports
 

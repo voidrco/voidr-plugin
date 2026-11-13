@@ -100,6 +100,7 @@ export function initialToolDomains(hint) {
 }
 
 export function profileToolVisible(name, domains, { development = false, extraTools = [] } = {}) {
+  if (/^mcp__voidr__kod_/.test(name)) return true
   if (name === 'expand_tool_scope') return true
   if (CORE.has(name)) return true
   if (development && NATIVE_DEVELOPMENT.has(name)) return true

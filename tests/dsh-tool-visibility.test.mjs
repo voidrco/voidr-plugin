@@ -3,6 +3,13 @@ import assert from 'node:assert/strict'
 import { registerToolVisibility, toolVisibilityFilter } from '../adapters/dsh/tool-visibility.mjs'
 import { TOOL_SCOPE_EVENT, expandedToolNames, initialToolDomains, profileToolVisible } from '../adapters/dsh/tool-profiles.mjs'
 
+test('Kod tools remain available for the actor authorization guard without discovery', () => {
+  for (const name of ['desktop_actions', 'windows_command', 'desktop_screenshot', 'workspace_open']) {
+    assert.equal(profileToolVisible(`mcp__voidr__kod_${name}`, []), true)
+  }
+  assert.equal(profileToolVisible('mcp__voidr__other_private_tool', []), false)
+})
+
 const GLOBAL = [
   'bash', 'write', 'render_widget', 'run_code', 'echo_render_deviations', 'echo_propose_overview_change',
   'mcp__voidr__echo_get_overview_view', 'mcp__voidr__echo_share_overview',

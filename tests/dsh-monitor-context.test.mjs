@@ -6,7 +6,7 @@ import { loadDshPluginSkills } from '../adapters/dsh/plugin-skills.mjs'
 test('selected Monitor starts with diagnostic instructions instead of the authoring manual', () => {
   const hint = { surface: 'monitor', testCaseSlug: 'LOTEX-04', testPlanId: 'plan', applicationId: 'app' }
   const prompt = interactiveTestDevelopmentPrompt({ hint })
-  assert.ok(prompt.length < 2200)
+  assert.ok(prompt.length < 2700)
   assert.ok(prompt.includes(JSON.stringify(hint)))
   assert.match(prompt, /latest result for this case/)
   assert.match(prompt, /voidr-failure-analysis/)

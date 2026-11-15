@@ -1,6 +1,6 @@
 import { memberToolVisible } from './echo-member-policy.mjs'
 import { WIDGET_TOOLS, contextChannel } from './whatsapp-channel.mjs'
-import { expandedDomains, expandedToolNames, initialToolDomains, profileToolVisible } from './tool-profiles.mjs'
+import { expandedDomains, expandedToolNames, initialToolDomains, isSelectedMonitor, profileToolVisible } from './tool-profiles.mjs'
 
 const RESERVED = new Set(['run_code'])
 const ECHO_CORE_TOOLS = new Set([
@@ -67,7 +67,8 @@ export function registerToolVisibility(ctx, isRestricted) {
       echo: echoSurface && hint.intent !== 'echo_journey_import',
       discovered: discoveries.get(agent.id) ?? new Set(), domains,
       extraTools: echoSurface ? [] : [...new Set(expandedToolNames(agent.session?.events))].sort(),
-      development: hint?.surface !== 'slack' && hint?.surface !== 'teams' }
+      development: hint?.surface !== 'slack' && hint?.surface !== 'teams' &&
+        (!isSelectedMonitor(hint) || domains?.includes('authoring')) }
     const previous = masks.get(agent)
     if (!previous && !state.restricted && !state.whatsapp && !state.authoring && !state.echo && !domains) return
     const key = maskKey(state, globalNames())

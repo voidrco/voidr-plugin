@@ -11,6 +11,11 @@ const CORE = new Set([
   'mcp__voidr__assistant_help_request', 'mcp__voidr__custom_connectors_list',
 ])
 const DOMAINS = {
+  diagnosis: [
+    'playwright_get_test_history', 'test_plans_get_case', 'executions_get_execution',
+    'playwright_get_execution_analytics', 'playwright_list_execution_failures',
+    'playwright_get_test_timeline', 'defects_list_defects', 'defects_get_defect',
+  ],
   radar: [
     'preventive_monitor_',
     'monitor_', 'custom_connectors_list',
@@ -83,7 +88,11 @@ function matches(name, entries) {
   return entries.some(entry => entry.endsWith('_') ? raw.startsWith(entry) : raw === entry)
 }
 
+export const isSelectedMonitor = hint => hint?.surface === 'monitor' &&
+  Boolean(hint.testPlanId || hint.testCaseSlug || hint.executionId)
+
 export function initialToolDomains(hint) {
+  if (isSelectedMonitor(hint)) return ['diagnosis']
   if (!hint || typeof hint.surface !== 'string') return ['knowledge']
   if (hint.surface === 'slack') return hint.radarSituationId ? ['radar'] : ['knowledge']
   // Echo keeps its existing member and Studio policies; tool profiles are

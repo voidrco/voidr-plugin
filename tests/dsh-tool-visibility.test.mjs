@@ -284,3 +284,24 @@ test('Echo starts with the judge profile reads needed before preparing an execut
   assert.equal(visible(agent).includes('mcp__voidr__echo_list_session_judge_evaluations'), true)
   assert.equal(visible(agent).includes('mcp__voidr__echo_publish_judge_profile'), false)
 })
+
+
+test('selected Monitor starts with evidence reads and expands only when needed', () => {
+  const hint = { surface: 'monitor', testPlanId: 'plan', testCaseSlug: 'case' }
+  const initial = initialToolDomains(hint)
+  assert.deepEqual(initial, ['diagnosis'])
+  assert.equal(profileToolVisible('mcp__voidr__playwright_get_test_history', initial), true)
+  assert.equal(profileToolVisible('mcp__voidr__test_plans_get_case', initial), true)
+  for (const name of ['playwright_get_trace_events', 'defects_create_defect', 'executions_create_execution']) {
+    assert.equal(profileToolVisible(`mcp__voidr__${name}`, initial), false)
+    assert.equal(profileToolVisible(`mcp__voidr__${name}`, [...initial, 'execution']), true)
+  }
+  const { agent, visibility, visible } = setup()
+  agent.session.events = [{ type: 'voidr/project-context-hint', data: hint }]
+  visibility.refresh(agent)
+  assert.equal(visible(agent).includes('bash'), false)
+  assert.equal(visible(agent).includes('write'), false)
+  agent.session.events.push({ type: 'turn/start' }, { type: TOOL_SCOPE_EVENT, data: { domain: 'authoring' } })
+  visibility.refresh(agent)
+  assert.equal(visible(agent).includes('bash'), true)
+})

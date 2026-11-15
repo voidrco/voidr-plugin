@@ -12,7 +12,7 @@ import { echoOverviewQuestionDenial, registerEchoProposeOverviewChange } from '.
 import { whatsappChannelDenial } from './whatsapp-channel.mjs'
 import { registerEchoMemberPolicy } from './echo-member-policy.mjs'
 import { registerToolVisibility } from './tool-visibility.mjs'
-import { TOOL_DOMAINS, TOOL_SCOPE_EVENT, expandedDomains, expandedToolNames, initialToolDomains } from './tool-profiles.mjs'
+import { TOOL_DOMAINS, TOOL_SCOPE_EVENT, expandedDomains, expandedToolNames, initialToolDomains, isSelectedMonitor } from './tool-profiles.mjs'
 import { echoOverviewStudioDenial } from './echo-overview-studio.mjs'
 import { registerObservabilityWidgets } from './observability-widgets.mjs'
 
@@ -133,7 +133,7 @@ export function apply(ctx) {
       journeys: 'voidr-journeys',
       automate: 'voidr-automate',
       performance: 'voidr-performance-setup',
-      monitor: 'voidr-failure-analysis',
+      monitor: isSelectedMonitor(hint) ? undefined : 'voidr-failure-analysis',
       'preventive-monitor': 'blip-preventive-monitor',
       echo: 'voidr-echo-analysis',
       'voidr-gate': 'voidr-gate-analysis'

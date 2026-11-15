@@ -14,6 +14,8 @@ test('selected Monitor starts with diagnostic instructions instead of the author
   const skill = loadDshPluginSkills().find(skill => skill.name === 'voidr-failure-analysis')
   assert.match(skill.content, /This skill diagnoses only/)
   assert.match(skill.content, /Visual analysis is optional/)
+  assert.match(skill.content, /playwright_get_test_history/)
+  assert.match(skill.content, /passed latest result is not a failure/)
 })
 
 test('a Monitor without a selected test retains general task discovery', () => {

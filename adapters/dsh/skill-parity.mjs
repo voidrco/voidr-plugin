@@ -215,6 +215,7 @@ Preserve credential placeholders and all evidence/provenance requirements below.
   const failureAnalysisRules = `DSH HOST CONTRACT (replaces host-specific commands, never the original evidence requirements):
 - The Service supplies the organization Service Account. Never run interactive login or request credentials from the user.
 - Treat Monitor and Home context as lookup hints. Validate execution, application, Test Plan and case with Voidr read tools in this turn.
+- When a Test Plan and testCaseSlug are selected but executionId is absent, resolve that exact case with playwright_get_test_history using planId from the selected testPlanId and a small limit. Use its newest result unless the user specifies another execution or period, then read that execution's analytics. This replaces the generic no-execution branch below: do not list unrelated failed executions or ask the user to choose an execution that the selected case already resolves. A passed latest result is not a failure; describe it and distinguish any earlier failure. An empty indexed history is an evidence gap, not proof that the case never ran.
 - Visual analysis is optional, even for one exact execution and test.
 - Open execution_analysis_viewer only for an explicit visual request or a specific visual question unresolved by initial read tools.
 - If opened, always settle the same widget id with results or the evidence-only fallback.

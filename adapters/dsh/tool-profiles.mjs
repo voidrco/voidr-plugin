@@ -12,7 +12,7 @@ const CORE = new Set([
 ])
 const DOMAINS = {
   diagnosis: [
-    'playwright_get_test_history', 'test_plans_get_case', 'executions_get_execution',
+    'playwright_get_test_history', 'test_plans_get_case', 'executions_get_execution', 'executions_list_executions',
     'playwright_get_execution_analytics', 'playwright_list_execution_failures',
     'playwright_get_test_timeline', 'defects_list_defects', 'defects_get_defect',
   ],

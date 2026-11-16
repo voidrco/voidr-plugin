@@ -1,6 +1,6 @@
 import { memberToolVisible } from './echo-member-policy.mjs'
 import { WIDGET_TOOLS, contextChannel } from './whatsapp-channel.mjs'
-import { expandedDomains, expandedToolNames, initialToolDomains, profileToolVisible } from './tool-profiles.mjs'
+import { expandedDomains, expandedToolNames, initialToolDomains, isSelectedMonitor, profileToolVisible } from './tool-profiles.mjs'
 
 const RESERVED = new Set(['run_code'])
 const ECHO_CORE_TOOLS = new Set([
@@ -44,15 +44,15 @@ export function registerToolVisibility(ctx, isRestricted) {
   const discoveries = new Map()
   let refreshing = false
   // The unmasked registry lets a scope expansion reveal a tool hidden by the
-  // previous mask. Agent schemas are read only after disposing that mask.
-  const globalNames = () => ctx.tools.schemas().map(tool => tool.name).sort()
-  const visibleNames = agent => ctx.tools.schemas(agent).map(tool => tool.name).sort()
+  // previous mask. Read names from the same registry view used by schemas(),
+  // without deep-cloning every parameter schema on every registration/agent.
+  const globalNames = () => [...ctx.tools.view().visible.keys()].sort()
   const maskKey = (state, names) => `${state.restricted}|${state.whatsapp}|${state.authoring}|${state.echo}|${state.development}|${state.domains?.join(',')}|${state.extraTools.join(',')}|${[...state.discovered].sort().join(',')}|${names.join(',')}`
   function install(agent, state, key) {
     masks.get(agent)?.dispose()
     masks.delete(agent)
-    const restrictable = ctx.tools.view(agent).restrictableNames
-    const filter = toolVisibilityFilter(visibleNames(agent).filter(name => restrictable.has(name)), state)
+    const view = ctx.tools.view(agent)
+    const filter = toolVisibilityFilter([...view.visible.keys()].filter(name => view.restrictableNames.has(name)).sort(), state)
     const dispose = filter ? agent.ctx.tools.restrict(filter) : () => {}
     masks.set(agent, { dispose, key })
   }
@@ -67,7 +67,8 @@ export function registerToolVisibility(ctx, isRestricted) {
       echo: echoSurface && hint.intent !== 'echo_journey_import',
       discovered: discoveries.get(agent.id) ?? new Set(), domains,
       extraTools: echoSurface ? [] : [...new Set(expandedToolNames(agent.session?.events))].sort(),
-      development: hint?.surface !== 'slack' && hint?.surface !== 'teams' }
+      development: hint?.surface !== 'slack' && hint?.surface !== 'teams' &&
+        (!isSelectedMonitor(hint) || domains?.includes('authoring')) }
     const previous = masks.get(agent)
     if (!previous && !state.restricted && !state.whatsapp && !state.authoring && !state.echo && !domains) return
     const key = maskKey(state, globalNames())

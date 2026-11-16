@@ -125,10 +125,18 @@ correlation as evidence, never as proof of causation by itself.
 
 Separate observed evidence from inference.
 
+Distinguish unique cases and their final verdicts from individual attempt rows,
+which include retries. Label counts with their unit; do not present attempt
+totals as case totals. Compare the selected case across runs before broadening
+to related cases. A shared error or temporal sequence does not prove a causal
+chain between failures.
+
 Use these cause labels in the response:
 
-- **Application defect**: the application returned an erroneous response,
-  exception, or behavior contradicted by the expected result.
+- **Application defect**: evidence establishes a violated product contract
+  with valid input and prerequisites. A failed assertion, business error state,
+  successful HTTP lookup, or matching UI error confirms the symptom but cannot
+  by itself exclude invalid test data or establish a product defect.
 - **Outdated test**: the test expectation or selector no longer matches an
   intentional application change.
 - **Test-data gap**: required data or account state was absent, expired, or
@@ -136,6 +144,11 @@ Use these cause labels in the response:
 - **Environment instability**: network, dependency, authentication, or timing
   failed outside the product behavior under test.
 - **Indeterminate**: available evidence does not support one cause.
+
+If test-data validity or required account state remains an open explanation,
+use **Indeterminate**, name the observed symptom and missing evidence, and do
+not also assert "not a test problem" or "product defect with high confidence".
+Confidence in the observed error is separate from confidence in its cause.
 
 Do not classify a missing selector as an outdated test unless DOM or trace
 evidence shows the intended element changed or moved. Do not call a failure

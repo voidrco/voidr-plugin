@@ -202,7 +202,7 @@ export async function startLocalBrowserAuthServer({
   }
 }
 
-export async function connectWithBrowser({
+export async function connectHumanWithBrowser({
   fetchImpl = globalThis.fetch,
   openBrowserImpl = openBrowser,
   timeoutMs = Number(process.env.VOIDR_BROWSER_AUTH_TIMEOUT_MS) || 300000,
@@ -251,6 +251,14 @@ export async function connectWithBrowser({
       'Voidr did not return an active organization for this login.'
     )
   }
+
+  return { accessToken, organizationId, organization, identity, apiUrl: normalizedApiUrl }
+}
+
+export async function connectWithBrowser(options = {}) {
+  const fetchImpl = options.fetchImpl ?? globalThis.fetch
+  const { accessToken, organizationId, organization, identity, apiUrl: normalizedApiUrl } =
+    await connectHumanWithBrowser(options)
 
   const suffix = randomBytes(3).toString('hex')
   const userName = String(identity.name || 'Voidr user').trim()

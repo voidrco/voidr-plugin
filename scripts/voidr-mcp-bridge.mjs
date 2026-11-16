@@ -9,6 +9,7 @@ import {
 } from './lib/credentials.mjs'
 import { canonicalToolName, isWriteTool, loadPolicy } from './lib/policy.mjs'
 import { PLUGIN_VERSION } from './lib/plugin-version.mjs'
+import { EchoSelectionApi, echoSelectionReadSchema, echoSelectionWriteSchema } from './lib/echo-selection-api.mjs'
 import { RemoteMcpClient } from './lib/remote-mcp.mjs'
 import { bootstrapTestRepository } from './lib/bootstrap.mjs'
 import {
@@ -54,6 +55,7 @@ const policy = loadPolicy()
 const safeRemote = new Set(policy.safeRemoteTools)
 const localNames = new Set(policy.localTools)
 const remote = new RemoteMcpClient()
+const echoSelectionApi = new EchoSelectionApi()
 const provisionedTestPlans = new Set()
 let negotiatedProtocol = '2024-11-05'
 let selectedTestPlanId = null
@@ -95,6 +97,21 @@ let countsReadAt = null
 let executionNeedsDeploy = false
 
 const localTools = [
+  {
+    name: 'voidr_echo_selection_login',
+    description: 'Connect a human Voidr user through official sign-in for direct chat runs, saved selections and Echo schedules. Stores the access token only for this bridge session. Report the active organization before proceeding.',
+    inputSchema: { type: 'object', additionalProperties: false }
+  },
+  {
+    name: 'voidr_echo_selection_read',
+    description: 'Find Echo journeys, scenarios, personas and available devices, read saved selections and schedules, or preview one explicit selection. Use catalog_page with q and page for search, or catalog_targets for a whole journey. For catalog use planId and either moduleSlug or moduleSlugs (up to 50). For get use id. Preview takes scope and returns canonical targets, persona mode, counts and a fingerprint. It does not dispatch.',
+    inputSchema: echoSelectionReadSchema
+  },
+  {
+    name: 'voidr_echo_selection_write',
+    description: 'Save, edit or delete a named selection, run a reviewed selection now, or create, edit, pause, resume or delete an Echo schedule. Use a stable UUID requestId for save, run and schedule. Use the exact preview scope and fingerprint for run, schedule and edit_schedule. Supply name for the execution title in Evidence. Only run when the user requests immediate execution. Scheduling defaults to paused unless enabled=true is requested. For edit use the current revision. For toggle_schedule use explicit enabled.',
+    inputSchema: echoSelectionWriteSchema
+  },
   {
     name: 'voidr_environment_doctor',
     description:
@@ -609,7 +626,7 @@ async function callTool(params) {
   }
   enforceBridgeTestPlanIdentity(name, args)
 
-  if (isWriteTool(name) && !authStatus().canWrite) {
+  if (name !== 'voidr_echo_selection_write' && isWriteTool(name) && !authStatus().canWrite) {
     throw new Error(
       'The selected Voidr Service Account does not declare the write scope. Platform mutation was blocked.'
     )
@@ -1778,6 +1795,12 @@ async function runContextOperation(args, operation) {
 
 async function callLocal(name, args) {
   switch (name) {
+    case 'voidr_echo_selection_login':
+      return textResult(await echoSelectionApi.login())
+    case 'voidr_echo_selection_read':
+      return textResult(await echoSelectionApi.read(args))
+    case 'voidr_echo_selection_write':
+      return textResult(await echoSelectionApi.write(args))
     case 'voidr_environment_doctor':
       // Both paths stay optional: canonicalizing an absent one would throw
       // before the doctor could resolve the workspace itself.

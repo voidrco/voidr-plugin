@@ -29,13 +29,20 @@ function setup(surface, intent) {
     tools: {
       register(tool) { registered.set(tool.name, tool); global.add(tool.name) },
       schemas() { return [...global].map(name => ({ name, description: '' })) },
-      view() { return { restrictableNames: new Set(global) } },
+      view(scope) { return { restrictableNames: new Set(global), visible: new Map(this.schemas(scope).map(tool => [tool.name, tool])) } },
     },
     agents: { list: () => [agent] },
     commands: { register() {} },
     skills: { register() {} },
     systemPrompt: { variable(name, value) { variables.set(name, value) }, section() {} },
-    on(event, handler) { hooks.set(event, handler) },
+    on(event, handler, options) {
+      const previous = hooks.get(event)
+      if (event === 'agent/pre-step' && previous) {
+        hooks.set(event, (payload, next) => options?.prepend
+          ? handler(payload, () => previous(payload, next))
+          : previous(payload, () => handler(payload, next)))
+      } else hooks.set(event, handler)
+    },
   }
   apply(ctx)
   hooks.get('agent/created')({ agent })
@@ -53,7 +60,7 @@ test('Monitor begins with failure tools and reveals a named report tool for one 
   assert.deepEqual(result.activeTools, [tool])
   assert.equal(visible(tool), true)
   agent.session.append('turn/start', { turn: 2 })
-  await hooks.get('agent/pre-step')({ agent }, () => {})
+  await hooks.get('agent/pre-step')({ agent }, async () => ({ kind: 'enter', messages: [] }))
   assert.equal(visible(tool), false)
   await assert.rejects(expansion.execute({ toolName: 'missing_capability' }, { agent }),
     /not available/)

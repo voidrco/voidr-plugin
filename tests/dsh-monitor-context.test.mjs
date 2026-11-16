@@ -7,6 +7,8 @@ test('selected Monitor starts with diagnostic instructions instead of the author
   const hint = { surface: 'monitor', testCaseSlug: 'LOTEX-04', testPlanId: 'plan', applicationId: 'app' }
   const prompt = interactiveTestDevelopmentPrompt({ hint })
   assert.ok(prompt.length < 3000)
+  assert.match(prompt, /playwright_get_case_summary/)
+  assert.match(prompt, /two to four short sentences/)
   assert.ok(prompt.includes(JSON.stringify(hint)))
   assert.match(prompt, /latest result for this case/)
   assert.match(prompt, /voidr-failure-analysis/)

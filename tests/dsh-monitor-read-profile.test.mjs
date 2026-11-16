@@ -65,6 +65,17 @@ test('restores the original effort for deeper work even after a process resume',
   assert.deepEqual(await resumed.request(fast, 2), initial)
 })
 
+test('keeps low effort when native model selection reapplies high on the next step', async () => {
+  const { request, agent } = setup()
+  assert.equal((await request(initial, 1)).reasoningEffort, 'low')
+  agent.session.events.push({ type: 'tool/call', data: { turn: 1, name: 'mcp__voidr__playwright_get_case_summary' } })
+  assert.equal((await request(initial, 1)).reasoningEffort, 'low')
+  assert.deepEqual(agent.session.events.filter(event => event.type === 'voidr/monitor-read-effort').map(event => event.data.state), ['active'])
+  agent.session.events.push(question('Investigue a causa raiz com o trace'))
+  assert.equal((await request(initial, 2)).reasoningEffort, 'high')
+  assert.equal(agent.session.events.at(-1).data.state, 'restored')
+})
+
 test('restores effort on surface navigation and preserves explicit configuration changes', async () => {
   const first = setup()
   const fast = await first.request()

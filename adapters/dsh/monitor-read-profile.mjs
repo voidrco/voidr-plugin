@@ -61,7 +61,10 @@ export function registerMonitorReadProfile(ctx) {
     const active = prior?.state === 'active' ? prior : null
     const fast = simpleMonitorRead(events) && !needsFullReasoning(events, turn) && flashConfig(config)
     const sameModel = active?.provider === config.provider && active?.model === config.model
-    if (active && (!fast || !sameModel || config.reasoningEffort !== 'low')) {
+    // Native model selection reapplies the selected original effort on every
+    // step. That is not an explicit user change away from this read profile.
+    const compatibleEffort = config.reasoningEffort === 'low' || config.reasoningEffort === active?.reasoningEffort
+    if (active && (!fast || !sameModel || !compatibleEffort)) {
       agent.session.append(EVENT, { state: 'restored', turn })
       // Preserve a model/effort change made elsewhere instead of overwriting it.
       if (sameModel && config.reasoningEffort === 'low') return { ...config, reasoningEffort: active.reasoningEffort }
@@ -69,7 +72,7 @@ export function registerMonitorReadProfile(ctx) {
     }
     if (!fast || config.reasoningEffort !== 'high') return config
     // Persist the original setting so resuming on another process restores it too.
-    agent.session.append(EVENT, { state: 'active', turn, provider: config.provider, model: config.model,
+    if (!active) agent.session.append(EVENT, { state: 'active', turn, provider: config.provider, model: config.model,
       reasoningEffort: config.reasoningEffort })
     return { ...config, reasoningEffort: 'low' }
   })

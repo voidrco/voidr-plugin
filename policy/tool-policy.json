@@ -158,6 +158,7 @@
     "echo_rejudge_session"
   ],
   "writeLocalTools": [
+    "voidr_echo_selection_write",
     "voidr_context_bootstrap",
     "voidr_workspace_prepare_test_repository",
     "voidr_workspace_scaffold_test_cases",
@@ -171,6 +172,9 @@
   "localTools": [
     "voidr_environment_doctor",
     "voidr_auth_status",
+    "voidr_echo_selection_login",
+    "voidr_echo_selection_read",
+    "voidr_echo_selection_write",
     "voidr_reset_test_plan_creation",
     "voidr_select_test_plan",
     "voidr_auth_select_organization",

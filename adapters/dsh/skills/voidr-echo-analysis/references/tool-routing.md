@@ -206,7 +206,7 @@ playground or Hive session parameters.
   and unfiltered inventory are not evidence of counts inside the selected period.
 - `echo_get_regulatory_status` is static knowledge readiness. For compliance
   in a specific conversation, read the session evaluation and regulatory subrun.
-  A paused knowledge subrun is distinct from regulatory inconclusiveness.
+  Regulatory inconclusiveness is independent of knowledge evidence.
 - Rejudge: fetch evaluation, explain CURRENT versus ORIGINAL, confirm, then
   `echo_rejudge_session`.
 - Executions without evaluation: a session whose execution ran without judge
@@ -264,7 +264,7 @@ playground or Hive session parameters.
   active for new evaluations; a draft is only a pending change. Always state
   both when their pass thresholds differ.
 - Judge semantics and exact attempts: `echo_get_judge_methodology_templates`,
-  `echo_get_judge_preview`, `echo_get_judge_run`.
+  `echo_get_judge_run`.
 - Judge profiles: `echo_list_judge_profiles` lists "Padrão Voidr" (immutable
   default) and the application's custom profiles with their published version
   and whether they can be selected; `echo_get_judge_profile` reads one profile,
@@ -277,9 +277,9 @@ playground or Hive session parameters.
   `echo_update_judge_profile_draft` (send the full content after reading it),
   `echo_rebase_judge_profile`, `echo_publish_judge_profile`. Publishing affects
   only executions and schedules started afterwards.
-- A custom profile evaluates the knowledge base and regulatory compliance only
-  when its content sets `knowledgeEvaluation` / `regulatoryEvaluation` to true;
-  both are off by default, and an off check reads as disabled, never as failed.
+- A custom profile can select knowledge evidence per criterion and configure
+  published editions for retrieval. A pinned scenario document takes precedence.
+  The optional `regulatoryEvaluation` setting controls regulatory compliance.
 - Environment readiness: `echo_get_regulatory_status`; global published catalog:
   `echo_list_regulatory_catalog`.
 

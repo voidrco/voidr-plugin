@@ -47,13 +47,44 @@ function setup() {
     tools: {
       register(tool) { global.push(tool.name) },
       schemas: scope => visible(scope).map(name => ({ name, description: '' })),
-      view: () => ({ restrictableNames: new Set(global) }),
+      view: scope => ({ restrictableNames: new Set(global), visible: new Map(visible(scope).map(name => [name, { name }])) }),
     },
     agents: { list: () => [agent] }
   }
   const visibility = registerToolVisibility(ctx, value => restricted.has(value.id))
-  return { hooks, global, masks, restricted, agent, visibility, visible }
+  return { ctx, hooks, global, masks, restricted, agent, visibility, visible }
 }
+
+test('catalog registration applies restrictions immediately without cloning schemas', () => {
+  const { ctx, hooks, global, restricted, agent, visibility, visible } = setup()
+  ctx.tools.schemas = () => { throw new Error('visibility must not copy parameter schemas') }
+  restricted.add(agent.id)
+  visibility.refresh(agent)
+  for (let i = 0; i < 100; i++) {
+    const name = `mcp__voidr__private_operation_${i}`
+    global.push(name)
+    hooks.get('tools/change')()
+    assert.equal(visible(agent).includes(name), false)
+  }
+  assert.equal(visible(agent).includes('mcp__voidr__echo_get_session'), false)
+  global.push('mcp__voidr__echo_get_session')
+  hooks.get('tools/change')()
+  assert.equal(visible(agent).includes('mcp__voidr__echo_get_session'), true)
+})
+
+test('visibility leaves scope-owned tools exempt from inherited restrictions', () => {
+  const { ctx, restricted, agent, visibility, masks } = setup()
+  const originalView = ctx.tools.view
+  ctx.tools.view = scope => {
+    const view = originalView(scope)
+    if (scope === agent) view.visible.set('child_report', { name: 'child_report' })
+    return view
+  }
+  restricted.add(agent.id)
+  visibility.refresh(agent)
+  assert.ok(masks.length > 0)
+  assert.equal(masks.at(-1).filter.deny.includes('child_report'), false)
+})
 
 test('masks follow Echo discovery, member policy, WhatsApp, and registry changes', () => {
   const { hooks, global, masks, restricted, agent, visibility, visible } = setup()

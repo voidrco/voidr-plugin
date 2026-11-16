@@ -73,8 +73,9 @@ evidence, label causal hypotheses explicitly, and do not invent a persona or
 human participant when provenance is unavailable. An evaluated assistant's
 deviation is not automatically feedback for the tester persona's learning.
 
-Session knowledge evaluation is currently paused by policy:
-`KNOWLEDGE_EVALUATION_PAUSED` with a `SKIPPED` subrun is not an operational error.
+The session judge uses a pinned scenario document when present and otherwise
+retrieves knowledge evidence from the profile-selected published editions for
+criteria that require it. Completed legacy reports remain available in history.
 Static knowledge quality, snapshots, retrieval, proposals and regulatory
 readiness remain separate. Session regulatory compliance is independent of
 attendance; never describe a passing attendance score as regulatory approval.

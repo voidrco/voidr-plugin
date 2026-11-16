@@ -10,7 +10,7 @@
 
 `Execution → Shard → Session → Turn | Evidence | Deviation | JudgeRun`
 
-`JudgeRun → BehavioralEvaluation | KnowledgeEvaluation | RegulatoryEvaluation | OfficialResult`
+`JudgeRun → BehavioralEvaluation | RegulatoryEvaluation | OfficialResult`
 
 `KnowledgeBinding → Source → Snapshot → RetrievalManifest → Proposal`
 
@@ -98,9 +98,9 @@
 - `judgeSummary` is persisted text, with `judgeSummarySource` and
   `judgeCompletedAt`; it is not a new evaluation. Pending, failed or skipped
   evaluations can omit an older summary from the current compact view.
-- Session knowledge evaluation is currently paused:
-  `KNOWLEDGE_EVALUATION_PAUSED` / `SKIPPED` does not mean infrastructure failure.
-  Historical attempts retain their frozen configuration and evidence.
+- Knowledge evidence is part of the behavioral evaluation. A pinned scenario
+  document takes precedence over retrieval from published editions. Historical
+  attempts retain their frozen configuration and evidence.
 - An Echo deviation record is a classified observation. A platform Defect is a
   separate remediation entity, created only through its confirmed diagnosis
   flow. A knowledge finding with kind `DEFECT` is not a platform Defect id.

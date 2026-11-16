@@ -44,15 +44,15 @@ export function registerToolVisibility(ctx, isRestricted) {
   const discoveries = new Map()
   let refreshing = false
   // The unmasked registry lets a scope expansion reveal a tool hidden by the
-  // previous mask. Agent schemas are read only after disposing that mask.
-  const globalNames = () => ctx.tools.schemas().map(tool => tool.name).sort()
-  const visibleNames = agent => ctx.tools.schemas(agent).map(tool => tool.name).sort()
+  // previous mask. Read names from the same registry view used by schemas(),
+  // without deep-cloning every parameter schema on every registration/agent.
+  const globalNames = () => [...ctx.tools.view().visible.keys()].sort()
   const maskKey = (state, names) => `${state.restricted}|${state.whatsapp}|${state.authoring}|${state.echo}|${state.development}|${state.domains?.join(',')}|${state.extraTools.join(',')}|${[...state.discovered].sort().join(',')}|${names.join(',')}`
   function install(agent, state, key) {
     masks.get(agent)?.dispose()
     masks.delete(agent)
-    const restrictable = ctx.tools.view(agent).restrictableNames
-    const filter = toolVisibilityFilter(visibleNames(agent).filter(name => restrictable.has(name)), state)
+    const view = ctx.tools.view(agent)
+    const filter = toolVisibilityFilter([...view.visible.keys()].filter(name => view.restrictableNames.has(name)).sort(), state)
     const dispose = filter ? agent.ctx.tools.restrict(filter) : () => {}
     masks.set(agent, { dispose, key })
   }

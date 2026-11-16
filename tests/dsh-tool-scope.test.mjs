@@ -29,7 +29,7 @@ function setup(surface, intent) {
     tools: {
       register(tool) { registered.set(tool.name, tool); global.add(tool.name) },
       schemas() { return [...global].map(name => ({ name, description: '' })) },
-      view() { return { restrictableNames: new Set(global) } },
+      view(scope) { return { restrictableNames: new Set(global), visible: new Map(this.schemas(scope).map(tool => [tool.name, tool])) } },
     },
     agents: { list: () => [agent] },
     commands: { register() {} },

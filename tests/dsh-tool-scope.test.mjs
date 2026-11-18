@@ -2,9 +2,11 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { apply } from '../adapters/dsh/index.mjs'
 
-function setup(surface, intent) {
+function setup(surface, intent, options = {}) {
   const registered = new Map()
+  const commands = new Map()
   const global = new Set([
+    'load_capability_context',
     'mcp__voidr__playwright_get_execution_analytics',
     'mcp__voidr__preventive_monitor_get_radar_situation',
     'mcp__voidr__evidence_reports_get',
@@ -32,7 +34,7 @@ function setup(surface, intent) {
       view(scope) { return { restrictableNames: new Set(global), visible: new Map(this.schemas(scope).map(tool => [tool.name, tool])) } },
     },
     agents: { list: () => [agent] },
-    commands: { register() {} },
+    commands: { register(command) { commands.set(command.name, command) } },
     skills: { register() {} },
     systemPrompt: { variable(name, value) { variables.set(name, value) }, section() {} },
     on(event, handler, options) {
@@ -44,11 +46,97 @@ function setup(surface, intent) {
       } else hooks.set(event, handler)
     },
   }
-  apply(ctx)
+  const adapter = apply(ctx, options)
   hooks.get('agent/created')({ agent })
   const visible = name => masks.every(mask => mask.disposed || !mask.filter.deny.includes(name))
-  return { agent, registered, hooks, variables, visible }
+  return { agent, registered, hooks, variables, visible, adapter, commands }
 }
+
+test('the Home context handshake requires a mounted central provider and suppresses legacy injection', () => {
+  const rawInput = Buffer.from(JSON.stringify({ surface: 'home', contextVersion: 1, locale: 'en' })).toString('base64url')
+  const legacy = setup('home')
+  assert.equal(legacy.commands.get('assistant-context').handler({ agent: legacy.agent, rawInput }).kind, 'error')
+  assert.equal(legacy.agent.session.events.length, 1)
+  assert.equal(legacy.visible('load_capability_context'), false)
+  const bound = []
+  const central = setup('home', undefined, { assistantContextVersion: 1, bindHomeSkills: agent => bound.push(agent) })
+  const result = central.commands.get('assistant-context').handler({ agent: central.agent, rawInput })
+  assert.deepEqual(result, { kind: 'success', text: 'Assistant context registered: capabilities-v1' })
+  assert.equal(central.variables.get('voidr_interactive_test_development')({ agent: central.agent }), '')
+  assert.equal(central.agent.session.events.at(-1).data.locale, 'en')
+  assert.equal(central.visible('load_capability_context'), true)
+  assert.deepEqual(bound, [central.agent])
+  const other = Buffer.from(JSON.stringify({ surface: 'echo' })).toString('base64url')
+  central.commands.get('assistant-context').handler({ agent: central.agent, rawInput: other })
+  assert.deepEqual(bound, [central.agent, central.agent])
+})
+
+test('Home does not infer complete tool profiles from legacy domain labels alone', async () => {
+  let domains = []
+  const { agent, visible, hooks, adapter } = setup('home', undefined, { assistantContextVersion: 1, capabilityDomains: () => domains })
+  agent.session.events[0].data.contextVersion = 1
+  const tool = 'mcp__voidr__evidence_reports_get'
+  assert.equal(visible(tool), false)
+  domains = ['reports']
+  adapter.refreshToolVisibility(agent)
+  assert.equal(visible(tool), false)
+  agent.session.append('turn/start', { turn: 2 })
+  await hooks.get('agent/pre-step')({ agent }, async () => ({ kind: 'enter', messages: [] }))
+  assert.equal(visible(tool), false)
+  domains = []
+  adapter.refreshToolVisibility(agent)
+  assert.equal(visible(tool), false)
+})
+
+test('Home combines complete profile tool sets and unloading one preserves the others', async () => {
+  let selectors = []
+  const { agent, visible, hooks, adapter } = setup('home', undefined,
+    { assistantContextVersion: 1, profileTools: () => selectors })
+  agent.session.events[0].data.contextVersion = 1
+  const report = 'mcp__voidr__evidence_reports_get'
+  const radar = 'mcp__voidr__preventive_monitor_get_radar_situation'
+  assert.equal(visible(report), false)
+  selectors = ['evidence_reports_', 'preventive_monitor_']
+  adapter.refreshToolVisibility(agent)
+  assert.equal(visible(report), true)
+  assert.equal(visible(radar), true)
+  agent.session.append('turn/start', { turn: 2 })
+  await hooks.get('agent/pre-step')({ agent }, async () => ({ kind: 'enter', messages: [] }))
+  assert.equal(visible(report), true)
+  assert.equal(visible(radar), true)
+  selectors = ['preventive_monitor_']
+  adapter.refreshToolVisibility(agent)
+  assert.equal(visible(report), false)
+  assert.equal(visible(radar), true)
+})
+
+test('Home retains exact tools across turns and restoration until an explicit reset', async () => {
+  const options = { assistantContextVersion: 1 }
+  const { agent, visible, registered, hooks, adapter } = setup('home', undefined, options)
+  agent.session.events[0].data.contextVersion = 1
+  adapter.refreshToolVisibility(agent)
+  const expansion = registered.get('expand_tool_scope')
+  const tool = 'mcp__voidr__evidence_reports_get'
+  assert.equal(visible(tool), false)
+  await expansion.execute({ toolName: 'evidence_reports_get' }, { agent })
+  assert.equal(visible(tool), true)
+  agent.session.append('turn/start', { turn: 2 })
+  await hooks.get('agent/pre-step')({ agent }, async () => ({ kind: 'enter', messages: [] }))
+  assert.equal(visible(tool), true)
+  const restored = setup('home', undefined, options)
+  restored.agent.session.events = structuredClone(agent.session.events)
+  restored.adapter.refreshToolVisibility(restored.agent)
+  assert.equal(restored.visible(tool), true)
+  const reset = await expansion.execute({ reset: true }, { agent })
+  assert.deepEqual(reset, { activeDomains: [], activeTools: [] })
+  assert.equal(visible(tool), false)
+})
+
+test('only central Home accepts persistent scope reset', async () => {
+  const { agent, registered } = setup('monitor')
+  await assert.rejects(registered.get('expand_tool_scope').execute({ reset: true }, { agent }),
+    /requires central Home/)
+})
 
 test('Monitor begins with failure tools and reveals a named report tool for one turn', async () => {
   const { agent, registered, hooks, visible } = setup('monitor')

@@ -4,13 +4,20 @@ export const TOOL_SCOPE_EVENT = 'voidr/tool-scope-expanded'
 // existing DSH approval policy still decide whether a call may execute.
 const CORE = new Set([
   'skill', 'read', 'todo_write', 'ask_user_question', 'render_widget',
+  'load_capability_context',
   'mcp__voidr__system_search_tools', 'mcp__voidr__system_call_tool',
   'mcp__voidr__system_batch_execute',
   'mcp__voidr__artifacts_read', 'mcp__voidr__artifacts_query',
   'mcp__voidr__artifacts_aggregate', 'mcp__voidr__files_analyze_uploaded_file',
   'mcp__voidr__assistant_help_request', 'mcp__voidr__custom_connectors_list',
 ])
+const HOME_CORE = new Set([
+  'skill', 'ask_user_question', 'load_capability_context', 'expand_tool_scope',
+  'mcp__voidr__system_search_tools', 'mcp__voidr__system_call_tool',
+  'mcp__voidr__system_batch_execute',
+])
 const DOMAINS = {
+  kod: ['kod_workspace_', 'kod_desktop_', 'kod_windows_command', 'kod_ask_user', 'kod_record_result'],
   diagnosis: [
     'playwright_get_case_summary',
     'playwright_get_test_history', 'test_plans_get_case', 'executions_get_execution', 'executions_list_executions',
@@ -109,7 +116,15 @@ export function initialToolDomains(hint) {
   }[hint.surface] ?? null
 }
 
-export function profileToolVisible(name, domains, { development = false, extraTools = [] } = {}) {
+export function profileToolVisible(name, domains, { development = false, extraTools = [], centralHome = false, capabilityDomains = [], profileTools = [] } = {}) {
+  if (centralHome) {
+    if (HOME_CORE.has(name) || extraTools.includes(name)) return true
+    if (matches(name, profileTools)) return true
+    if (development && (NATIVE_DEVELOPMENT.has(name) || name === 'todo_write')) return true
+    if (capabilityDomains.length && name === 'render_widget') return true
+    if (capabilityDomains.includes('kod') && matches(name, DOMAINS.kod)) return true
+    return domains.some(domain => matches(name, DOMAINS[domain] ?? []))
+  }
   if (/^mcp__voidr__kod_/.test(name)) return true
   if (name === 'expand_tool_scope') return true
   if (CORE.has(name)) return true
@@ -118,19 +133,23 @@ export function profileToolVisible(name, domains, { development = false, extraTo
   return domains.some(domain => matches(name, DOMAINS[domain] ?? []))
 }
 
-function currentTurnEvents(events) {
+function scopeEvents(events, { persistent = false } = {}) {
   const history = events ?? []
+  if (persistent) {
+    const reset = history.findLastIndex(event => event.type === TOOL_SCOPE_EVENT && event.data?.reset === true)
+    return history.slice(reset + 1).filter(event => event.type === TOOL_SCOPE_EVENT)
+  }
   const currentTurn = history.findLastIndex(event => event.type === 'turn/start')
   return history.slice(currentTurn + 1).filter(event => event.type === TOOL_SCOPE_EVENT)
 }
 
-export function expandedDomains(events) {
-  return currentTurnEvents(events)
+export function expandedDomains(events, options) {
+  return scopeEvents(events, options)
     .map(event => event.data?.domain).filter(domain => TOOL_DOMAINS.includes(domain))
 }
 
-export function expandedToolNames(events) {
-  return currentTurnEvents(events)
+export function expandedToolNames(events, options) {
+  return scopeEvents(events, options)
     .map(event => event.data?.toolName)
     .filter(name => typeof name === 'string' && name.length > 0)
 }

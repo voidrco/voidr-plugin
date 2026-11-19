@@ -30,16 +30,17 @@ const AUTHORING_TOOLS = new Set([
 ])
 
 export function toolVisibilityFilter(names, { restricted, whatsapp, authoring, echo, discovered = new Set(),
-  domains = null, development = false, extraTools = [] }) {
+  domains = null, development = false, extraTools = [], centralHome = false, capabilityDomains = [], profileTools = [] }) {
   const deny = names.filter(name => !RESERVED.has(name) &&
-    ((restricted && !memberToolVisible(name)) || (whatsapp && WIDGET_TOOLS.has(name)) ||
+    ((name === 'load_capability_context' && !centralHome) ||
+      (restricted && !memberToolVisible(name)) || (whatsapp && WIDGET_TOOLS.has(name)) ||
       (authoring && !AUTHORING_TOOLS.has(name)) ||
       (echo && !ECHO_CORE_TOOLS.has(name) && !name.startsWith('mcp__voidr__artifacts_') && !discovered.has(name)) ||
-      (domains && !profileToolVisible(name, domains, { development, extraTools }))))
+      (domains && !profileToolVisible(name, domains, { development, extraTools, centralHome, capabilityDomains, profileTools }))))
   return deny.length ? { deny } : null
 }
 
-export function registerToolVisibility(ctx, isRestricted) {
+export function registerToolVisibility(ctx, isRestricted, options = {}) {
   const masks = new Map()
   const discoveries = new Map()
   let refreshing = false
@@ -47,7 +48,7 @@ export function registerToolVisibility(ctx, isRestricted) {
   // previous mask. Read names from the same registry view used by schemas(),
   // without deep-cloning every parameter schema on every registration/agent.
   const globalNames = () => [...ctx.tools.view().visible.keys()].sort()
-  const maskKey = (state, names) => `${state.restricted}|${state.whatsapp}|${state.authoring}|${state.echo}|${state.development}|${state.domains?.join(',')}|${state.extraTools.join(',')}|${[...state.discovered].sort().join(',')}|${names.join(',')}`
+  const maskKey = (state, names) => `${state.restricted}|${state.whatsapp}|${state.authoring}|${state.echo}|${state.development}|${state.centralHome}|${state.capabilityDomains.join(',')}|${state.profileTools.join(',')}|${state.domains?.join(',')}|${state.extraTools.join(',')}|${[...state.discovered].sort().join(',')}|${names.join(',')}`
   function install(agent, state, key) {
     masks.get(agent)?.dispose()
     masks.delete(agent)
@@ -61,16 +62,21 @@ export function registerToolVisibility(ctx, isRestricted) {
     const hint = agent.session?.events.findLast(event => event.type === 'voidr/project-context-hint')?.data
     const echoSurface = hint?.surface === 'echo'
     const initial = echoSurface ? null : initialToolDomains(hint)
-    const domains = initial ? [...new Set([...initial, ...expandedDomains(agent.session?.events)])].sort() : null
+    const centralHome = hint?.surface === 'home' && !hint.channel && hint.contextVersion === 1 && options.assistantContextVersion === 1
+    const capabilityDomains = centralHome ? options.capabilityDomains?.(agent.session?.events) ?? [] : []
+    const persistent = { persistent: centralHome }
+    const domains = centralHome ? [...new Set(expandedDomains(agent.session?.events, persistent))].sort()
+      : initial ? [...new Set([...initial, ...expandedDomains(agent.session?.events)])].sort() : null
     const state = { restricted: isRestricted(agent), whatsapp: contextChannel(agent.session?.events) === 'whatsapp',
       authoring: echoSurface && hint.intent === 'echo_journey_import',
       echo: echoSurface && hint.intent !== 'echo_journey_import',
-      discovered: discoveries.get(agent.id) ?? new Set(), domains,
-      extraTools: echoSurface ? [] : [...new Set(expandedToolNames(agent.session?.events))].sort(),
-      development: hint?.surface !== 'slack' && hint?.surface !== 'teams' &&
+      discovered: discoveries.get(agent.id) ?? new Set(), domains, centralHome, capabilityDomains,
+      profileTools: centralHome ? options.profileTools?.(agent.session?.events) ?? [] : [],
+      extraTools: echoSurface ? [] : [...new Set(expandedToolNames(agent.session?.events, persistent))].sort(),
+      development: centralHome ? capabilityDomains.includes('authoring') : hint?.surface !== 'slack' && hint?.surface !== 'teams' &&
         (!isSelectedMonitor(hint) || domains?.includes('authoring')) }
     const previous = masks.get(agent)
-    if (!previous && !state.restricted && !state.whatsapp && !state.authoring && !state.echo && !domains) return
+    if (!previous && !state.restricted && !state.whatsapp && !state.authoring && !state.echo && !domains && !globalNames().includes('load_capability_context')) return
     const key = maskKey(state, globalNames())
     if (!force && previous?.key === key) return
     refreshing = true

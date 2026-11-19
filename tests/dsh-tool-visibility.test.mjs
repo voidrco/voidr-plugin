@@ -10,6 +10,22 @@ test('Kod tools remain available for the actor authorization guard without disco
   assert.equal(profileToolVisible('mcp__voidr__other_private_tool', []), false)
 })
 
+test('central Home starts with a stable discovery core and no knowledge or Kod schemas', () => {
+  const core = ['skill', 'ask_user_question', 'load_capability_context', 'expand_tool_scope',
+    'mcp__voidr__system_search_tools', 'mcp__voidr__system_call_tool', 'mcp__voidr__system_batch_execute']
+  const other = ['render_widget', 'read', 'bash', 'todo_write', 'mcp__voidr__knowledge_search',
+    'mcp__voidr__kod_workspace_open', 'mcp__voidr__test_plans_get_case']
+  const state = { centralHome: true }
+  assert.deepEqual([...core, ...other].filter(name => profileToolVisible(name, [], state)), core)
+  assert.equal(profileToolVisible('mcp__voidr__test_plans_get_case', [],
+    { ...state, capabilityDomains: ['authoring'] }), false)
+  assert.equal(profileToolVisible('mcp__voidr__test_plans_get_case', [],
+    { ...state, extraTools: ['mcp__voidr__test_plans_get_case'] }), true)
+  assert.equal(profileToolVisible('mcp__voidr__kod_workspace_open', [],
+    { ...state, capabilityDomains: ['kod'] }), true)
+  assert.equal(profileToolVisible('bash', [], { ...state, development: true }), true)
+})
+
 const GLOBAL = [
   'bash', 'write', 'render_widget', 'run_code', 'echo_render_deviations', 'echo_propose_overview_change',
   'mcp__voidr__echo_get_overview_view', 'mcp__voidr__echo_share_overview',

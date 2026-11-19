@@ -68,7 +68,7 @@ export function registerKnownEvents(knownEventTypes) {
 export const name = 'voidr-agent-plugin-dsh'
 export const inject = ['agents', 'commands', 'skills', 'systemPrompt', 'tools']
 
-export function apply(ctx) {
+export function apply(ctx, options = {}) {
   registerObservabilityWidgets(ctx)
   const callEchoTool = registerEchoActor(ctx)
   registerChannelActor(ctx)
@@ -76,14 +76,15 @@ export function apply(ctx) {
   registerEchoRenderRegulatoryControls(ctx, callEchoTool)
   registerEchoRenderDeviationGroup(ctx, callEchoTool)
   registerEchoProposeOverviewChange(ctx, callEchoTool)
-  const visibility = registerToolVisibility(ctx, agent => memberPolicy.restricted(agent))
+  const visibility = registerToolVisibility(ctx, agent => memberPolicy.restricted(agent), options)
   const memberPolicy = registerEchoMemberPolicy(ctx, visibility.refresh)
   ctx.tools.register({
     name: 'expand_tool_scope',
-    description: 'Expose one Voidr tool domain or one available Service tool by exact name when the current question needs capabilities outside the active surface. This changes visibility only for the current turn; Service permissions and approval rules still apply. Use an exact toolName for a capability omitted from the named domains instead of opening the whole catalog.',
+    description: 'Expose one available Service tool by exact name, or a needed domain. In central Home, selections persist until reset:true; other surfaces keep selections for one turn. Prefer exact names and reuse selected tools. Home reset clears explicit selections when the task changes. Service authorization and approvals still apply.',
     parameters: { type: 'object', additionalProperties: false, properties: {
       domain: { type: 'string', enum: TOOL_DOMAINS },
       toolName: { type: 'string' },
+      reset: { type: 'boolean', const: true },
     }, minProperties: 1, maxProperties: 1 },
     output: { schema: { type: 'object', additionalProperties: false, properties: {
       activeDomains: { type: 'array', items: { type: 'string' } },
@@ -94,12 +95,16 @@ export function apply(ctx) {
     execute: async (args, exec) => {
       const domain = args?.domain
       const requestedTool = args?.toolName
-      if ((domain === undefined) === (requestedTool === undefined))
-        throw new Error('Choose one domain or one toolName')
+      const reset = args?.reset === true
+      if ([domain !== undefined, requestedTool !== undefined, reset].filter(Boolean).length !== 1)
+        throw new Error('Choose one domain, one toolName, or reset:true')
       if (domain !== undefined && !TOOL_DOMAINS.includes(domain)) throw new Error('Unknown tool domain')
       const agent = exec.agent
       const hint = contextHint(agent?.session?.events ?? [])
+      const centralHome = hint?.surface === 'home' && !hint.channel && hint.contextVersion === 1 && options.assistantContextVersion === 1
+      const scopeOptions = { persistent: centralHome }
       if (hint?.surface === 'echo') throw new Error('Tool scope expansion is not available on Echo')
+      if (reset && !centralHome) throw new Error('Persistent tool scope reset requires central Home')
       const initial = initialToolDomains(hint)
       if (!initial) throw new Error('No expandable tool profile is active')
       let toolName
@@ -110,14 +115,15 @@ export function apply(ctx) {
         if (!ctx.tools.schemas().some(tool => tool.name === toolName))
           throw new Error('Voidr tool is not available in this session')
       }
-      if (domain && !expandedDomains(agent.session.events).includes(domain))
+      if (reset) agent.session.append(TOOL_SCOPE_EVENT, { reset: true })
+      if (domain && !expandedDomains(agent.session.events, scopeOptions).includes(domain))
         agent.session.append(TOOL_SCOPE_EVENT, { domain })
-      if (toolName && !expandedToolNames(agent.session.events).includes(toolName))
+      if (toolName && !expandedToolNames(agent.session.events, scopeOptions).includes(toolName))
         agent.session.append(TOOL_SCOPE_EVENT, { toolName })
       visibility.refresh(agent)
       return {
-        activeDomains: [...new Set([...initial, ...expandedDomains(agent.session.events)])].sort(),
-        activeTools: [...new Set(expandedToolNames(agent.session.events))].sort(),
+        activeDomains: [...new Set([...(centralHome ? [] : initial), ...expandedDomains(agent.session.events, scopeOptions)])].sort(),
+        activeTools: [...new Set(expandedToolNames(agent.session.events, scopeOptions))].sort(),
       }
     },
   })
@@ -128,6 +134,7 @@ export function apply(ctx) {
   ctx.systemPrompt.variable('voidr_interactive_test_development', context => {
     const events = context.agent?.session?.events ?? []
     const hint = contextHint(events)
+    if (hint?.surface === 'home' && !hint.channel) return ''
     const authoring = hint?.surface === 'echo' && hint.intent === 'echo_journey_import'
     const skillName = authoring
       ? 'voidr-echo-journey-authoring' : {
@@ -176,7 +183,7 @@ export function apply(ctx) {
         const value = JSON.parse(Buffer.from(rawInput.trim(), 'base64url').toString('utf8'))
         const hint = Object.fromEntries(
           [
-            'assistantSessionId', 'applicationId', 'testPlanId', 'testCaseSlug', 'moduleSlug',
+            'assistantSessionId', 'contextVersion', 'locale', 'applicationId', 'testPlanId', 'testCaseSlug', 'moduleSlug',
             'suiteSlug', 'executionId', 'journeyId', 'journeyName', 'testName', 'productType',
             'environment', 'errorType', 'errorMessage', 'stackTrace', 'filePath', 'line',
             'browser', 'os', 'branch', 'commitSha', 'currentState', 'severity', 'targetType', 'analysisMode',
@@ -189,10 +196,14 @@ export function apply(ctx) {
             .filter(key => value[key] !== undefined && value[key] !== null)
             .map(key => [key, value[key]])
         )
+        const centralized = hint.surface === 'home' && !hint.channel && hint.contextVersion === 1
+        if (centralized && options.assistantContextVersion !== 1)
+          return { kind: 'error', text: 'Assistant capability context v1 is unavailable' }
         if (Object.keys(hint).length > 0) agent.session.append(CONTEXT_EVENT_TYPE, hint)
+        options.bindHomeSkills?.(agent)
         registerSpendContext(agent.id, hint)
         visibility.refresh(agent)
-        return { kind: 'success', text: 'Assistant context registered' }
+        return { kind: 'success', text: centralized ? 'Assistant context registered: capabilities-v1' : 'Assistant context registered' }
       } catch {
         return { kind: 'error', text: 'Invalid assistant context' }
       }
@@ -226,4 +237,5 @@ export function apply(ctx) {
     })
     return denial ? { kind: 'deny', reason: denial } : decision
   })
+  return { refreshToolVisibility: visibility.refresh }
 }

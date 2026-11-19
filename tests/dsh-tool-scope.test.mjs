@@ -71,6 +71,18 @@ test('the Home context handshake requires a mounted central provider and suppres
   assert.deepEqual(bound, [central.agent, central.agent])
 })
 
+test('Home keeps legacy guidance until the session and provider both support central context', () => {
+  const unversioned = setup('home', undefined, { assistantContextVersion: 1 })
+  const withoutProvider = setup('home')
+  withoutProvider.agent.session.events[0].data.contextVersion = 1
+  withoutProvider.adapter.refreshToolVisibility(withoutProvider.agent)
+
+  for (const { agent, variables, visible } of [unversioned, withoutProvider]) {
+    assert.match(variables.get('voidr_interactive_test_development')({ agent }), /expand_tool_scope/)
+    assert.equal(visible('load_capability_context'), false)
+  }
+})
+
 test('Home does not infer complete tool profiles from legacy domain labels alone', async () => {
   let domains = []
   const { agent, visible, hooks, adapter } = setup('home', undefined, { assistantContextVersion: 1, capabilityDomains: () => domains })

@@ -13,7 +13,7 @@ import { whatsappChannelDenial } from './whatsapp-channel.mjs'
 import { registerEchoMemberPolicy } from './echo-member-policy.mjs'
 import { registerToolVisibility } from './tool-visibility.mjs'
 import { registerMonitorReadProfile } from './monitor-read-profile.mjs'
-import { TOOL_DOMAINS, TOOL_SCOPE_EVENT, expandedDomains, expandedToolNames, initialToolDomains, isSelectedMonitor } from './tool-profiles.mjs'
+import { TOOL_DOMAINS, TOOL_SCOPE_EVENT, expandedDomains, expandedToolNames, initialToolDomains, isSelectedMonitor, usesCentralHomeContext } from './tool-profiles.mjs'
 import { echoOverviewStudioDenial } from './echo-overview-studio.mjs'
 import { registerObservabilityWidgets } from './observability-widgets.mjs'
 
@@ -101,7 +101,7 @@ export function apply(ctx, options = {}) {
       if (domain !== undefined && !TOOL_DOMAINS.includes(domain)) throw new Error('Unknown tool domain')
       const agent = exec.agent
       const hint = contextHint(agent?.session?.events ?? [])
-      const centralHome = hint?.surface === 'home' && !hint.channel && hint.contextVersion === 1 && options.assistantContextVersion === 1
+      const centralHome = usesCentralHomeContext(hint, options.assistantContextVersion)
       const scopeOptions = { persistent: centralHome }
       if (hint?.surface === 'echo') throw new Error('Tool scope expansion is not available on Echo')
       if (reset && !centralHome) throw new Error('Persistent tool scope reset requires central Home')
@@ -134,7 +134,7 @@ export function apply(ctx, options = {}) {
   ctx.systemPrompt.variable('voidr_interactive_test_development', context => {
     const events = context.agent?.session?.events ?? []
     const hint = contextHint(events)
-    if (hint?.surface === 'home' && !hint.channel) return ''
+    if (usesCentralHomeContext(hint, options.assistantContextVersion)) return ''
     const authoring = hint?.surface === 'echo' && hint.intent === 'echo_journey_import'
     const skillName = authoring
       ? 'voidr-echo-journey-authoring' : {

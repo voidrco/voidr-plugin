@@ -1,6 +1,6 @@
 import { memberToolVisible } from './echo-member-policy.mjs'
 import { WIDGET_TOOLS, contextChannel } from './whatsapp-channel.mjs'
-import { expandedDomains, expandedToolNames, initialToolDomains, isSelectedMonitor, profileToolVisible } from './tool-profiles.mjs'
+import { expandedDomains, expandedToolNames, initialToolDomains, isSelectedMonitor, profileToolVisible, usesCentralHomeContext } from './tool-profiles.mjs'
 
 const RESERVED = new Set(['run_code'])
 const ECHO_CORE_TOOLS = new Set([
@@ -62,7 +62,7 @@ export function registerToolVisibility(ctx, isRestricted, options = {}) {
     const hint = agent.session?.events.findLast(event => event.type === 'voidr/project-context-hint')?.data
     const echoSurface = hint?.surface === 'echo'
     const initial = echoSurface ? null : initialToolDomains(hint)
-    const centralHome = hint?.surface === 'home' && !hint.channel && hint.contextVersion === 1 && options.assistantContextVersion === 1
+    const centralHome = usesCentralHomeContext(hint, options.assistantContextVersion)
     const capabilityDomains = centralHome ? options.capabilityDomains?.(agent.session?.events) ?? [] : []
     const persistent = { persistent: centralHome }
     const domains = centralHome ? [...new Set(expandedDomains(agent.session?.events, persistent))].sort()

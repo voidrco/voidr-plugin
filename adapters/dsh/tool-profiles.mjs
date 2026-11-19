@@ -1,5 +1,9 @@
 export const TOOL_SCOPE_EVENT = 'voidr/tool-scope-expanded'
 
+export function usesCentralHomeContext(hint, providerVersion) {
+  return hint?.surface === 'home' && !hint.channel && hint.contextVersion === 1 && providerVersion === 1
+}
+
 // Visibility is a prompt-size optimization. Service authorization and the
 // existing DSH approval policy still decide whether a call may execute.
 const CORE = new Set([
